@@ -1,9 +1,6 @@
-#![allow(unused_variables, dead_code)]
+#![allow(unused_variables, dead_code, unused_imports)]
 
-/// The primitive gate. All other gates must be built from this.
-pub fn nand(a: bool, b: bool) -> bool {
-    !(a && b)
-}
+use simulator::nand;
 
 pub fn not(a: bool) -> bool {
     todo!()

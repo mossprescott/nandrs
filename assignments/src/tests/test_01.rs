@@ -1,3 +1,4 @@
+use simulator::nand;
 use crate::project_01::*;
 
 #[test]
