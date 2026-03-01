@@ -1,10 +1,44 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use simulator::nand;
+use simulator::{self, Assembly, Component, ConnectionWidth::{ self, * }};
+use std::collections::HashMap;
 
-pub fn not(a: bool) -> bool {
-    todo!()
+/// The single primitive
+/* TODO: syntax
+struct Nand {
+    A: in,
+    B: in,
+    OUT: out,
 }
+ */
+pub struct Nand_ {}
+impl Component for Nand_ {
+    fn inputs(&self) -> HashMap<String, ConnectionWidth> {
+        HashMap::from(
+            [("a".into(), Wire), ("b".into(), Wire)])
+    }
+
+    fn outputs(&self) -> HashMap<String, ConnectionWidth> {
+        HashMap::from(
+            [("out".into(), Wire)])
+    }
+}
+
+pub const Nand: Nand_ = Nand_ {};
+
+// pub fn nand(a: Wire, b: Wire) -> Assembly {
+//     simulator::nand(a, b)
+// }
+
+// pub struct Not {
+//     pub a: Wire,
+//     pub b: Wire,
+// }
+// impl Component for Not {
+//     fn build(&self) -> Assembly {
+//         Assembly {}
+//     }
+// }
 
 pub fn and(a: bool, b: bool) -> bool {
     todo!()
