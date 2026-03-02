@@ -3,14 +3,28 @@
 use simulator::{self, Assembly, Component, ConnectionWidth::{ self, * }};
 use std::collections::HashMap;
 
-/// The single primitive gate.
-simulator::component! {
-    pub struct Nand {
-        a: in,
-        b: in,
-        out: out,
+/// The single primitive
+/* TODO: syntax
+struct Nand {
+    A: in,
+    B: in,
+    OUT: out,
+}
+ */
+pub struct Nand_ {}
+impl Component for Nand_ {
+    fn inputs(&self) -> HashMap<String, ConnectionWidth> {
+        HashMap::from(
+            [("a".into(), Wire), ("b".into(), Wire)])
+    }
+
+    fn outputs(&self) -> HashMap<String, ConnectionWidth> {
+        HashMap::from(
+            [("out".into(), Wire)])
     }
 }
+
+pub const Nand: Nand_ = Nand_ {};
 
 // pub fn nand(a: Wire, b: Wire) -> Assembly {
 //     simulator::nand(a, b)

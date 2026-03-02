@@ -28,63 +28,9 @@ pub trait Component {
     fn outputs(&self) -> HashMap<String, ConnectionWidth>;
 }
 
-/// Declare a component type from a concise description of its input and output connections.
-///
-/// # Example
-/// ```
-/// # use simulator::component;
-/// component! {
-///     pub struct Nand {
-///         a: in,
-///         b: in,
-///         out: out,
-///     }
-/// }
-/// ```
-/// Generates a unit struct and a `Component` impl mapping each field name to a `Wire` connection.
-#[macro_export]
-macro_rules! component {
-    // Entry point: strip visibility and delegate to accumulator
-    ($vis:vis struct $name:ident { $($rest:tt)* }) => {
-        $crate::component! {@collect $vis $name [] [] $($rest)*}
-    };
+// Some commonly-used connection names:
 
-    // `field: in,`
-    (@collect $vis:vis $name:ident [$($ins:ident)*] [$($outs:ident)*]
-        $field:ident : in , $($rest:tt)*) => {
-        $crate::component! {@collect $vis $name [$($ins)* $field] [$($outs)*] $($rest)*}
-    };
-    // // `field: in`  (last field, no trailing comma)
-    // (@collect $vis:vis $name:ident [$($ins:ident)*] [$($outs:ident)*]
-    //     $field:ident : in) => {
-    //     $crate::component! {@collect $vis $name [$($ins)* $field] [$($outs)*]}
-    // };
-
-    // `field: out,`
-    (@collect $vis:vis $name:ident [$($ins:ident)*] [$($outs:ident)*]
-        $field:ident : out , $($rest:tt)*) => {
-        $crate::component! {@collect $vis $name [$($ins)*] [$($outs)* $field] $($rest)*}
-    };
-    // // `field: out`  (last field, no trailing comma)
-    // (@collect $vis:vis $name:ident [$($ins:ident)*] [$($outs:ident)*]
-    //     $field:ident : out) => {
-    //     $crate::component! {@collect $vis $name [$($ins)*] [$($outs)* $field]}
-    // };
-
-    // Terminal: emit the struct and impl
-    (@collect $vis:vis $name:ident [$($in_field:ident)*] [$($out_field:ident)*]) => {
-        $vis struct $name;
-        impl $crate::Component for $name {
-            fn inputs(&self) -> ::std::collections::HashMap<::std::string::String, $crate::ConnectionWidth> {
-                ::std::collections::HashMap::from([
-                    $( (::std::string::String::from(stringify!($in_field)), $crate::ConnectionWidth::Wire) ),*
-                ])
-            }
-            fn outputs(&self) -> ::std::collections::HashMap<::std::string::String, $crate::ConnectionWidth> {
-                ::std::collections::HashMap::from([
-                    $( (::std::string::String::from(stringify!($out_field)), $crate::ConnectionWidth::Wire) ),*
-                ])
-            }
-        }
-    };
-}
+// const IN: String = String::from("in");
+// const A: String = String::from("a");
+// const B: String = String::from("b");
+// const OUT: String = String::from("out");
