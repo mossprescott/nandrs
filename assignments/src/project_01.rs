@@ -35,36 +35,44 @@ pub enum Project01Component {
     Nand(Nand),
     Not(Not),
     And(And),
+    Or(Or),
+    Xor(Xor),
+    Mux(Mux),
+    Dmux(Dmux),
 }
 
-impl From<Nand> for Project01Component {
-    fn from(c: Nand) -> Self { Project01Component::Nand(c) }
-}
-
-impl From<Not> for Project01Component {
-    fn from(c: Not) -> Self { Project01Component::Not(c) }
-}
-
-impl From<And> for Project01Component {
-    fn from(c: And) -> Self { Project01Component::And(c) }
-}
+impl From<Nand> for Project01Component { fn from(c: Nand) -> Self { Project01Component::Nand(c) } }
+impl From<Not>  for Project01Component { fn from(c: Not)  -> Self { Project01Component::Not(c)  } }
+impl From<And>  for Project01Component { fn from(c: And)  -> Self { Project01Component::And(c)  } }
+impl From<Or>   for Project01Component { fn from(c: Or)   -> Self { Project01Component::Or(c)   } }
+impl From<Xor>  for Project01Component { fn from(c: Xor)  -> Self { Project01Component::Xor(c)  } }
+impl From<Mux>  for Project01Component { fn from(c: Mux)  -> Self { Project01Component::Mux(c)  } }
+impl From<Dmux> for Project01Component { fn from(c: Dmux) -> Self { Project01Component::Dmux(c) } }
 
 impl Component for Project01Component {
     type Target = Project01Component;
 
     fn expand(&self) -> Option<Vec<Project01Component>> {
         match self {
-            Project01Component::Nand(c) => c.expand().map(|v| v.into_iter().map(Into::into).collect()),
-            Project01Component::Not(c)  => c.expand(),
-            Project01Component::And(c)  => c.expand(),
+            Project01Component::Nand(c)  => c.expand().map(|v| v.into_iter().map(Into::into).collect()),
+            Project01Component::Not(c)   => c.expand(),
+            Project01Component::And(c)   => c.expand(),
+            Project01Component::Or(c)    => c.expand(),
+            Project01Component::Xor(c)   => c.expand(),
+            Project01Component::Mux(c)   => c.expand(),
+            Project01Component::Dmux(c)  => c.expand(),
         }
     }
 
     fn reflect(&self) -> simulator::Interface {
         match self {
-            Project01Component::Nand(c) => c.reflect(),
-            Project01Component::Not(c)  => c.reflect(),
-            Project01Component::And(c)  => c.reflect(),
+            Project01Component::Nand(c)  => c.reflect(),
+            Project01Component::Not(c)   => c.reflect(),
+            Project01Component::And(c)   => c.reflect(),
+            Project01Component::Or(c)    => c.reflect(),
+            Project01Component::Xor(c)   => c.reflect(),
+            Project01Component::Mux(c)   => c.reflect(),
+            Project01Component::Dmux(c)  => c.reflect(),
         }
     }
 }
@@ -77,6 +85,10 @@ pub struct Not {
 impl Component for Not {
     type Target = Project01Component;
 
+    /*
+      let nand = Nand { a: inputs.a, b: inputs.b }
+      outputs.out = nand.out
+     */
     fn expand(&self) -> Option<Vec<Project01Component>> {
         let nand = Nand {
             a: self.a.clone(),
@@ -106,18 +118,14 @@ pub struct And {
 impl Component for And {
     type Target = Project01Component;
 
+   /*
+      let nand = Nand { a: inputs.a, b: inputs.a }
+      let not = Not { a: nand.out }
+      outputs.out = not.out
+     */
     fn expand(&self) -> Option<Vec<Project01Component>> {
-        // Use an intermediate wire so nand.out isn't moved before nand is moved into the vec.
-        let wire = Output::new();
-        let nand = Nand {
-            a: self.a.clone(),
-            b: self.b.clone(),
-            out: wire.clone(),
-        };
-        let not = Not {
-            a: wire.into(),
-            out: self.out.clone(),
-        };
+        let nand = Nand { a: self.a.clone(), b: self.b.clone(), out: Output::new() };
+        let not  = Not  { a: nand.out.clone().into(),            out: self.out.clone() };
         Option::Some(vec![nand.into(), not.into()])
     }
 
@@ -134,22 +142,147 @@ impl Component for And {
     }
 }
 
-pub fn or(a: bool, b: bool) -> bool {
-    todo!()
+pub struct Or {
+    pub a: Input,
+    pub b: Input,
+    pub out: Output,
+}
+impl Component for Or {
+    type Target = Project01Component;
+
+    /*
+      let not_a = Not { a: inputs.a }
+      let not_b = Not { a: inputs.b }
+      let nand = Nand { a: not_a.out, b: not_b.out}
+      outputs.out = nand.out
+     */
+    fn expand(&self) -> Option<Vec<Project01Component>> {
+        let not_a = Not  { a: self.a.clone(), out: Output::new() };
+        let not_b = Not  { a: self.b.clone(), out: Output::new() };
+        let nand  = Nand { a: not_a.out.clone().into(), b: not_b.out.clone().into(), out: self.out.clone() };
+        Some(vec![not_a.into(), not_b.into(), nand.into()])
+    }
+
+    fn reflect(&self) -> simulator::Interface {
+        simulator::Interface {
+            inputs: HashMap::from([
+                ("a".to_string(), self.a.clone().into()),
+                ("b".to_string(), self.b.clone().into()),
+            ]),
+            outputs: HashMap::from([
+                ("out".to_string(), self.out.clone().into()),
+            ]),
+        }
+    }
 }
 
-pub fn xor(a: bool, b: bool) -> bool {
-    todo!()
+pub struct Xor {
+    pub a: Input,
+    pub b: Input,
+    pub out: Output,
+}
+impl Component for Xor {
+    type Target = Project01Component;
+
+    /*
+      let or  = Or   { a: inputs.a, b: inputs.b }
+      let nab = Nand { a: inputs.a, b: inputs.b }
+      let and = And  { a: or.out,   b: nab.out  }
+      outputs.out = and.out
+     */
+    fn expand(&self) -> Option<Vec<Project01Component>> {
+        let or  = Or   { a: self.a.clone(), b: self.b.clone(), out: Output::new() };
+        let nab = Nand { a: self.a.clone(), b: self.b.clone(), out: Output::new() };
+        let and = And  { a: or.out.clone().into(), b: nab.out.clone().into(), out: self.out.clone() };
+        Some(vec![or.into(), nab.into(), and.into()])
+    }
+
+    fn reflect(&self) -> simulator::Interface {
+        simulator::Interface {
+            inputs: HashMap::from([
+                ("a".to_string(), self.a.clone().into()),
+                ("b".to_string(), self.b.clone().into()),
+            ]),
+            outputs: HashMap::from([
+                ("out".to_string(), self.out.clone().into()),
+            ]),
+        }
+    }
 }
 
-/// If sel is false, output a. If sel is true, output b.
-pub fn mux(a: bool, b: bool, sel: bool) -> bool {
-    todo!()
+pub struct Mux {
+    pub a: Input,
+    pub b: Input,
+    pub sel: Input,
+    pub out: Output,
+}
+impl Component for Mux {
+    type Target = Project01Component;
+
+    /*
+      let not_sel = Not { a: inputs.sel }
+      let and_a   = And { a: inputs.a,   b: not_sel.out }
+      let and_b   = And { a: inputs.b,   b: inputs.sel  }
+      let or      = Or  { a: and_a.out,  b: and_b.out   }
+      outputs.out = or.out
+     */
+    fn expand(&self) -> Option<Vec<Project01Component>> {
+        let not_sel = Not { a: self.sel.clone(), out: Output::new() };
+        let and_a   = And { a: self.a.clone(),   b: not_sel.out.clone().into(), out: Output::new() };
+        let and_b   = And { a: self.b.clone(),   b: self.sel.clone(),           out: Output::new() };
+        let or      = Or  { a: and_a.out.clone().into(), b: and_b.out.clone().into(), out: self.out.clone() };
+        Some(vec![not_sel.into(), and_a.into(), and_b.into(), or.into()])
+    }
+
+    fn reflect(&self) -> simulator::Interface {
+        simulator::Interface {
+            inputs: HashMap::from([
+                ("a".to_string(),   self.a.clone().into()),
+                ("b".to_string(),   self.b.clone().into()),
+                ("sel".to_string(), self.sel.clone().into()),
+            ]),
+            outputs: HashMap::from([
+                ("out".to_string(), self.out.clone().into()),
+            ]),
+        }
+    }
 }
 
-/// If sel is false, output (a, false). If sel is true, output (false, b).
-pub fn dmux(input: bool, sel: bool) -> (bool, bool) {
-    todo!()
+pub struct Dmux {
+    pub input: Input,
+    pub sel: Input,
+    pub a: Output,
+    pub b: Output,
+}
+impl Component for Dmux {
+    type Target = Project01Component;
+
+    /*
+      let not_sel = Not { a: inputs.sel }
+      let and_a   = And { a: inputs.input, b: not_sel.out }
+      let and_b   = And { a: inputs.input, b: inputs.sel  }
+      outputs.a = and_a.out
+      outputs.b = and_b.out
+     */
+    fn expand(&self) -> Option<Vec<Project01Component>> {
+        let not_sel = Not { a: self.sel.clone(),   out: Output::new() };
+        let and_a   = And { a: self.input.clone(), b: not_sel.out.clone().into(),   out: self.a.clone() };
+        let and_b   = And { a: self.input.clone(), b: self.sel.clone(),   out: self.b.clone() };
+        Some(vec![not_sel.into(), and_a.into(), and_b.into()])
+    }
+
+    fn reflect(&self) -> simulator::Interface {
+        simulator::Interface {
+            inputs: HashMap::from([
+                ("input".to_string(), self.input.clone().into()),
+                ("sel".to_string(),   self.sel.clone().into()),
+            ]),
+            outputs: HashMap::from([
+                ("a".to_string(), self.a.clone().into()),
+                ("b".to_string(), self.b.clone().into()),
+            ]),
+        }
+    }
 }
 
 pub fn not16(a: [bool; 16]) -> [bool; 16] {
