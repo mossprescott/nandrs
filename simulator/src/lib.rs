@@ -1,8 +1,11 @@
-#![allow(unused_variables, dead_code)]
-
+pub mod bool;
 pub mod declare;
-pub use declare::*;
+pub mod eval;
+pub mod nat;
 
+pub use eval::eval;
+
+pub use declare::*;
 
 /// A collection of components which forms a unit of circuit construction. Provides output signals
 /// (wires/buses), and accepts signals from elsewhere as inputs.
@@ -39,16 +42,16 @@ pub struct Chip {
     // TODO
 }
 
-impl Chip {
-    pub fn set(&mut self, name: &str, value: bool) {
-        // TODO
-    }
+// impl Chip {
+//     pub fn set(&mut self, name: &str, value: bool) {
+//         // TODO
+//     }
 
-    pub fn get(&self, name: &str) -> bool {
-        // TODO
-        false
-    }
-}
+//     pub fn get(&self, name: &str) -> bool {
+//         // TODO
+//         false
+//     }
+// }
 
 
 // TODO: ClockedChip, providing clock signal and tick/tock operations

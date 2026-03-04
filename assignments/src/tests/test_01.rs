@@ -1,48 +1,55 @@
-// use simulator::nand;
-use simulator::Component;
-use simulator::ConnectionWidth::Wire;
-use crate::project_01::*;
+use simulator::{Component, Input, Output};
+use simulator::eval::eval;
+use crate::project_01::{Nand, Not, And};
 
 #[test]
-fn nand_inputs() {
-    let inputs = Nand.inputs();
-    assert_eq!(inputs.len(), 2);
-    assert_eq!(inputs["a"], Wire);
-    assert_eq!(inputs["b"], Wire);
+fn nand_reflect() {
+    let chip = Nand { a: Input::new(), b: Input::new(), out: Output::new() };
+    let intf = chip.reflect();
+    assert_eq!(intf.inputs.len(), 2);
+    assert_eq!(intf.inputs["a"].width, 1);
+    assert_eq!(intf.inputs["b"].width, 1);
+    assert_eq!(intf.outputs.len(), 1);
+    assert_eq!(intf.outputs["out"].width, 1);
+}
 
-    let outputs = Nand.outputs();
-    assert_eq!(outputs.len(), 1);
-    assert_eq!(outputs["out"], Wire);
+#[test]
+fn nand_truth_table() {
+    let chip = Nand { a: Input::new(), b: Input::new(), out: Output::new() };
+    assert_eq!(eval(&chip, [("a", false), ("b", false)])["out"], true);
+    assert_eq!(eval(&chip, [("a", false), ("b", true) ])["out"], true);
+    assert_eq!(eval(&chip, [("a", true),  ("b", false)])["out"], true);
+    assert_eq!(eval(&chip, [("a", true),  ("b", true) ])["out"], false);
 }
 
 
-// #[test]
-// fn nand_truth_table() {
-//     // let a =
-//     // // let chip = nand()
-//     // assert_eq!(nand(false, false), true);
-//     // assert_eq!(nand(false, true),  true);
-//     // assert_eq!(nand(true,  false), true);
-//     // assert_eq!(nand(true,  true),  false);
-// }
+#[test]
+fn not_truth_table() {
+    let chip = Not { a: Input::new(), out: Output::new() };
+    assert_eq!(eval(&chip, [("a", false)])["out"], true);
+    assert_eq!(eval(&chip, [("a", true) ])["out"], false);
+}
 
-// #[test]
-// fn not_truth_table() {
-//     let a_in = Wire {}
-//     let b_in = Wire {}
-//     let chip = Not { a = a_in, b = b_in }.build()
+#[test]
+fn not_optimal() {
+    let chip = Not { a: Input::new(), out: Output::new() };
+    assert_eq!(chip.expand().unwrap().len(), 1);
+}
 
-//     assert_eq!(not(false), true);
-//     assert_eq!(not(true),  false);
-// }
+#[test]
+fn and_truth_table() {
+    let chip = And { a: Input::new(), b: Input::new(), out: Output::new() };
+    assert_eq!(eval(&chip, [("a", false), ("b", false)])["out"], false);
+    assert_eq!(eval(&chip, [("a", false), ("b", true) ])["out"], false);
+    assert_eq!(eval(&chip, [("a", true),  ("b", false)])["out"], false);
+    assert_eq!(eval(&chip, [("a", true),  ("b", true) ])["out"], true);
+}
 
-// #[test]
-// fn and_truth_table() {
-//     assert_eq!(and(false, false), false);
-//     assert_eq!(and(false, true),  false);
-//     assert_eq!(and(true,  false), false);
-//     assert_eq!(and(true,  true),  true);
-// }
+#[test]
+fn and_optimal() {
+    let chip = And { a: Input::new(), b: Input::new(), out: Output::new() };
+    assert_eq!(chip.expand().unwrap().len(), 2);
+}
 
 // #[test]
 // fn or_truth_table() {

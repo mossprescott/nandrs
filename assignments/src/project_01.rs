@@ -1,47 +1,137 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use simulator::{self, Assembly, Component, ConnectionWidth::{ self, * }};
+use simulator::{self, Assembly, Component, Input, Output};
 use std::collections::HashMap;
 
 /// The single primitive
-/* TODO: syntax
-struct Nand {
-    A: in,
-    B: in,
-    OUT: out,
+pub struct Nand {
+    pub a: Input,
+    pub b: Input,
+    pub out: Output,
 }
- */
-pub struct Nand_ {}
-impl Component for Nand_ {
-    fn inputs(&self) -> HashMap<String, ConnectionWidth> {
-        HashMap::from(
-            [("a".into(), Wire), ("b".into(), Wire)])
+/// Nothing to expand; Nand is Nand.
+impl Component for Nand {
+    type Target = Nand;
+
+    fn expand(&self) -> Option<Vec<Nand>> {
+       Option::None
     }
 
-    fn outputs(&self) -> HashMap<String, ConnectionWidth> {
-        HashMap::from(
-            [("out".into(), Wire)])
+    fn reflect(&self) -> simulator::Interface {
+        simulator::Interface {
+            inputs: HashMap::from([
+                ("a".to_string(),   self.a.clone().into()),
+                ("b".to_string(),   self.b.clone().into()),
+            ]),
+            outputs: HashMap::from([
+                ("out".to_string(), self.out.clone().into()),
+            ]),
+        }
     }
 }
 
-pub const Nand: Nand_ = Nand_ {};
+/// Components implemented in this project: simple, logical components for 1 and 16 bits.
+pub enum Project01Component {
+    Nand(Nand),
+    Not(Not),
+    And(And),
+}
 
-// pub fn nand(a: Wire, b: Wire) -> Assembly {
-//     simulator::nand(a, b)
-// }
+impl From<Nand> for Project01Component {
+    fn from(c: Nand) -> Self { Project01Component::Nand(c) }
+}
 
-// pub struct Not {
-//     pub a: Wire,
-//     pub b: Wire,
-// }
-// impl Component for Not {
-//     fn build(&self) -> Assembly {
-//         Assembly {}
-//     }
-// }
+impl From<Not> for Project01Component {
+    fn from(c: Not) -> Self { Project01Component::Not(c) }
+}
 
-pub fn and(a: bool, b: bool) -> bool {
-    todo!()
+impl From<And> for Project01Component {
+    fn from(c: And) -> Self { Project01Component::And(c) }
+}
+
+impl Component for Project01Component {
+    type Target = Project01Component;
+
+    fn expand(&self) -> Option<Vec<Project01Component>> {
+        match self {
+            Project01Component::Nand(c) => c.expand().map(|v| v.into_iter().map(Into::into).collect()),
+            Project01Component::Not(c)  => c.expand(),
+            Project01Component::And(c)  => c.expand(),
+        }
+    }
+
+    fn reflect(&self) -> simulator::Interface {
+        match self {
+            Project01Component::Nand(c) => c.reflect(),
+            Project01Component::Not(c)  => c.reflect(),
+            Project01Component::And(c)  => c.reflect(),
+        }
+    }
+}
+
+
+pub struct Not {
+    pub a: Input,
+    pub out: Output,
+}
+impl Component for Not {
+    type Target = Project01Component;
+
+    fn expand(&self) -> Option<Vec<Project01Component>> {
+        let nand = Nand {
+            a: self.a.clone(),
+            b: self.a.clone(),
+            out: self.out.clone(),
+        };
+        Option::Some(vec![nand.into()])
+    }
+
+    fn reflect(&self) -> simulator::Interface {
+        simulator::Interface {
+            inputs: HashMap::from([
+                ("a".to_string(), self.a.clone().into()),
+            ]),
+            outputs: HashMap::from([
+                ("out".to_string(), self.out.clone().into()),
+            ]),
+        }
+    }
+}
+
+pub struct And {
+    pub a: Input,
+    pub b: Input,
+    pub out: Output,
+}
+impl Component for And {
+    type Target = Project01Component;
+
+    fn expand(&self) -> Option<Vec<Project01Component>> {
+        // Use an intermediate wire so nand.out isn't moved before nand is moved into the vec.
+        let wire = Output::new();
+        let nand = Nand {
+            a: self.a.clone(),
+            b: self.b.clone(),
+            out: wire.clone(),
+        };
+        let not = Not {
+            a: wire.into(),
+            out: self.out.clone(),
+        };
+        Option::Some(vec![nand.into(), not.into()])
+    }
+
+    fn reflect(&self) -> simulator::Interface {
+        simulator::Interface {
+            inputs: HashMap::from([
+                ("a".to_string(), self.a.clone().into()),
+                ("b".to_string(), self.b.clone().into()),
+            ]),
+            outputs: HashMap::from([
+                ("out".to_string(), self.out.clone().into()),
+            ]),
+        }
+    }
 }
 
 pub fn or(a: bool, b: bool) -> bool {
