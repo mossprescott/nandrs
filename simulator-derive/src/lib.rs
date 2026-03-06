@@ -7,6 +7,35 @@ use syn::{Data, DeriveInput, Fields, Type, parse_macro_input};
 /// Fields whose type name starts with `Input` are treated as input ports.
 /// Fields whose type name starts with `Output` are treated as output ports.
 /// All other fields are ignored.
+///
+/// # Example
+///
+/// ```ignore
+/// #[derive(Reflect)]
+/// pub struct And {
+///     pub a: Input,
+///     pub b: Input,
+///     pub out: Output,
+/// }
+/// ```
+///
+/// expands to:
+///
+/// ```ignore
+/// impl simulator::Reflect for And {
+///     fn reflect(&self) -> simulator::Interface {
+///         simulator::Interface {
+///             inputs: HashMap::from([
+///                 ("a".to_string(), self.a.clone().into()),
+///                 ("b".to_string(), self.b.clone().into()),
+///             ]),
+///             outputs: HashMap::from([
+///                 ("out".to_string(), self.out.clone().into()),
+///             ]),
+///         }
+///     }
+/// }
+/// ```
 #[proc_macro_derive(Reflect)]
 pub fn derive_reflect(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
