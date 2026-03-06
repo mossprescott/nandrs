@@ -176,8 +176,8 @@ impl Component for Xor {
 
 #[derive(Reflect)]
 pub struct Mux {
-    pub a: Input,
-    pub b: Input,
+    pub a0: Input,
+    pub a1: Input,
     pub sel: Input,
     pub out: Output,
 }
@@ -186,15 +186,15 @@ impl Component for Mux {
 
     /*
       let not_sel = Not { a: inputs.sel }
-      let and_a   = And { a: inputs.a,   b: not_sel.out }
-      let and_b   = And { a: inputs.b,   b: inputs.sel  }
+      let and_a   = And { a: inputs.a0,  b: not_sel.out }
+      let and_b   = And { a: inputs.a1,  b: inputs.sel  }
       let or      = Or  { a: and_a.out,  b: and_b.out   }
       outputs.out = or.out
      */
     fn expand(&self) -> Option<Vec<Project01Component>> {
         let not_sel = Not { a: self.sel.clone(), out: Output::new() };
-        let and_a   = And { a: self.a.clone(),   b: not_sel.out.clone().into(), out: Output::new() };
-        let and_b   = And { a: self.b.clone(),   b: self.sel.clone(),           out: Output::new() };
+        let and_a   = And { a: self.a0.clone(),  b: not_sel.out.clone().into(), out: Output::new() };
+        let and_b   = And { a: self.a1.clone(),  b: self.sel.clone(),           out: Output::new() };
         let or      = Or  { a: and_a.out.clone().into(), b: and_b.out.clone().into(), out: self.out.clone() };
         Some(vec![not_sel.into(), and_a.into(), and_b.into(), or.into()])
     }
@@ -289,8 +289,8 @@ impl Component for Or16 {
 
 #[derive(Reflect)]
 pub struct Mux16 {
-    pub a: Input16,
-    pub b: Input16,
+    pub a0: Input16,
+    pub a1: Input16,
     pub sel: Input,
     pub out: Output16,
 }
@@ -299,12 +299,12 @@ impl Component for Mux16 {
 
     /*
       for i in 0..16:
-        let mux = Mux { a: inputs.a[i], b: inputs.b[i], sel: inputs.sel }
+        let mux = Mux { a0: inputs.a0[i], a1: inputs.a1[i], sel: inputs.sel }
         outputs.out[i] = mux.out
      */
     fn expand(&self) -> Option<Vec<Project01Component>> {
         Some((0..16).map(|i| {
-            Mux { a: self.a.bit(i), b: self.b.bit(i), sel: self.sel.clone(), out: self.out.bit(i) }.into()
+            Mux { a0: self.a0.bit(i), a1: self.a1.bit(i), sel: self.sel.clone(), out: self.out.bit(i) }.into()
         }).collect())
     }
 }

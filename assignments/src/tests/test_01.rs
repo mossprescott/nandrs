@@ -83,20 +83,20 @@ fn xor_optimal() {
 
 #[test]
 fn mux_truth_table() {
-    let chip = Mux { a: Input::new(), b: Input::new(), sel: Input::new(), out: Output::new() };
-    assert_eq!(eval(&chip, [("a", 0), ("b", 0), ("sel", 0)])["out"], 0);
-    assert_eq!(eval(&chip, [("a", 0), ("b", 1), ("sel", 0)])["out"], 0);
-    assert_eq!(eval(&chip, [("a", 1), ("b", 0), ("sel", 0)])["out"], 1);
-    assert_eq!(eval(&chip, [("a", 1), ("b", 1), ("sel", 0)])["out"], 1);
-    assert_eq!(eval(&chip, [("a", 0), ("b", 0), ("sel", 1)])["out"], 0);
-    assert_eq!(eval(&chip, [("a", 0), ("b", 1), ("sel", 1)])["out"], 1);
-    assert_eq!(eval(&chip, [("a", 1), ("b", 0), ("sel", 1)])["out"], 0);
-    assert_eq!(eval(&chip, [("a", 1), ("b", 1), ("sel", 1)])["out"], 1);
+    let chip = Mux { a0: Input::new(), a1: Input::new(), sel: Input::new(), out: Output::new() };
+    assert_eq!(eval(&chip, [("a0", 0), ("a1", 0), ("sel", 0)])["out"], 0);
+    assert_eq!(eval(&chip, [("a0", 0), ("a1", 1), ("sel", 0)])["out"], 0);
+    assert_eq!(eval(&chip, [("a0", 1), ("a1", 0), ("sel", 0)])["out"], 1);
+    assert_eq!(eval(&chip, [("a0", 1), ("a1", 1), ("sel", 0)])["out"], 1);
+    assert_eq!(eval(&chip, [("a0", 0), ("a1", 0), ("sel", 1)])["out"], 0);
+    assert_eq!(eval(&chip, [("a0", 0), ("a1", 1), ("sel", 1)])["out"], 1);
+    assert_eq!(eval(&chip, [("a0", 1), ("a1", 0), ("sel", 1)])["out"], 0);
+    assert_eq!(eval(&chip, [("a0", 1), ("a1", 1), ("sel", 1)])["out"], 1);
 }
 
 #[test]
 fn mux_optimal() {
-    let chip = Mux { a: Input::new(), b: Input::new(), sel: Input::new(), out: Output::new() };
+    let chip = Mux { a0: Input::new(), a1: Input::new(), sel: Input::new(), out: Output::new() };
     assert_eq!(chip.expand().unwrap().len(), 4);
 }
 
@@ -166,15 +166,15 @@ fn or16_optimal() {
 
 #[test]
 fn mux16_truth_table() {
-    let chip = Mux16 { a: Input16::new(), b: Input16::new(), sel: Input::new(), out: Output::new() };
-    assert_eq!(eval(&chip, [("a", 0xAAAA), ("b", 0x5555), ("sel", 0)])["out"], 0xAAAA);
-    assert_eq!(eval(&chip, [("a", 0xAAAA), ("b", 0x5555), ("sel", 1)])["out"], 0x5555);
-    assert_eq!(eval(&chip, [("a", 0x1234), ("b", 0x5678), ("sel", 0)])["out"], 0x1234);
-    assert_eq!(eval(&chip, [("a", 0x1234), ("b", 0x5678), ("sel", 1)])["out"], 0x5678);
+    let chip = Mux16 { a0: Input16::new(), a1: Input16::new(), sel: Input::new(), out: Output::new() };
+    assert_eq!(eval(&chip, [("a0", 0xAAAA), ("a1", 0x5555), ("sel", 0)])["out"], 0xAAAA);
+    assert_eq!(eval(&chip, [("a0", 0xAAAA), ("a1", 0x5555), ("sel", 1)])["out"], 0x5555);
+    assert_eq!(eval(&chip, [("a0", 0x1234), ("a1", 0x5678), ("sel", 0)])["out"], 0x1234);
+    assert_eq!(eval(&chip, [("a0", 0x1234), ("a1", 0x5678), ("sel", 1)])["out"], 0x5678);
 }
 
 #[test]
 fn mux16_optimal() {
-    let chip = Mux16 { a: Input16::new(), b: Input16::new(), sel: Input::new(), out: Output::new() };
+    let chip = Mux16 { a0: Input16::new(), a1: Input16::new(), sel: Input::new(), out: Output::new() };
     assert_eq!(chip.expand().unwrap().len(), 16);
 }
