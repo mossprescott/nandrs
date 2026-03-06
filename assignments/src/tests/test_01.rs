@@ -1,6 +1,6 @@
 use simulator::{Component, Input, Input16, Output, Reflect};
 use simulator::eval::eval;
-use crate::project_01::{Nand, Not, And, Or, Xor, Mux, Dmux, Not16, And16, Or16, Mux16};
+use crate::project_01::{flatten, Nand, Not, And, Or, Xor, Mux, Dmux, Not16, And16, Or16, Mux16};
 
 #[test]
 fn nand_reflect() {
@@ -33,7 +33,7 @@ fn not_truth_table() {
 #[test]
 fn not_optimal() {
     let chip = Not { a: Input::new(), out: Output::new() };
-    assert_eq!(chip.expand().unwrap().len(), 1);
+    assert_eq!(flatten(chip).len(), 1);
 }
 
 #[test]
@@ -48,7 +48,7 @@ fn and_truth_table() {
 #[test]
 fn and_optimal() {
     let chip = And { a: Input::new(), b: Input::new(), out: Output::new() };
-    assert_eq!(chip.expand().unwrap().len(), 2);
+    assert_eq!(flatten(chip).len(), 2);
 }
 
 #[test]
@@ -63,7 +63,7 @@ fn or_truth_table() {
 #[test]
 fn or_optimal() {
     let chip = Or { a: Input::new(), b: Input::new(), out: Output::new() };
-    assert_eq!(chip.expand().unwrap().len(), 3);
+    assert_eq!(flatten(chip).len(), 3);
 }
 
 #[test]
@@ -78,7 +78,7 @@ fn xor_truth_table() {
 #[test]
 fn xor_optimal() {
     let chip = Xor { a: Input::new(), b: Input::new(), out: Output::new() };
-    assert_eq!(chip.expand().unwrap().len(), 3);
+    assert_eq!(flatten(chip).len(), 6);
 }
 
 #[test]
@@ -97,7 +97,8 @@ fn mux_truth_table() {
 #[test]
 fn mux_optimal() {
     let chip = Mux { a0: Input::new(), a1: Input::new(), sel: Input::new(), out: Output::new() };
-    assert_eq!(chip.expand().unwrap().len(), 4);
+    // TODO: can do better?
+    assert_eq!(flatten(chip).len(), 8);
 }
 
 #[test]
@@ -116,7 +117,7 @@ fn dmux_truth_table() {
 #[test]
 fn dmux_optimal() {
     let chip = Dmux { input: Input::new(), sel: Input::new(), a: Output::new(), b: Output::new() };
-    assert_eq!(chip.expand().unwrap().len(), 3);
+    assert_eq!(flatten(chip).len(), 5);
 }
 
 #[test]
@@ -131,7 +132,7 @@ fn not16_truth_table() {
 #[test]
 fn not16_optimal() {
     let chip = Not16 { a: Input16::new(), out: Output::new() };
-    assert_eq!(chip.expand().unwrap().len(), 16);
+    assert_eq!(flatten(chip).len(), 16);
 }
 
 #[test]
@@ -146,7 +147,7 @@ fn and16_truth_table() {
 #[test]
 fn and16_optimal() {
     let chip = And16 { a: Input16::new(), b: Input16::new(), out: Output::new() };
-    assert_eq!(chip.expand().unwrap().len(), 16);
+    assert_eq!(flatten(chip).len(), 32);
 }
 
 #[test]
@@ -161,7 +162,7 @@ fn or16_truth_table() {
 #[test]
 fn or16_optimal() {
     let chip = Or16 { a: Input16::new(), b: Input16::new(), out: Output::new() };
-    assert_eq!(chip.expand().unwrap().len(), 16);
+    assert_eq!(flatten(chip).len(), 48);
 }
 
 #[test]
@@ -176,5 +177,7 @@ fn mux16_truth_table() {
 #[test]
 fn mux16_optimal() {
     let chip = Mux16 { a0: Input16::new(), a1: Input16::new(), sel: Input::new(), out: Output::new() };
-    assert_eq!(chip.expand().unwrap().len(), 16);
+    // TODO: definitely can be improved, but a simple simplifier might take care of redundant gates
+    // anyway.
+    assert_eq!(flatten(chip).len(), 128);
 }

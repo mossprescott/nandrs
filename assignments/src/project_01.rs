@@ -1,6 +1,6 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use simulator::{self, Assembly, Component, Input, Input16, Output, Output16, Reflect};
+use simulator::{self, Component, Input, Input16, Output, Output16, Reflect};
 use simulator::Reflect as _; // ensure the derive macro is in scope
 use std::collections::HashMap;
 
@@ -82,6 +82,20 @@ impl Reflect for Project01Component {
             Project01Component::Mux16(c) => c.reflect(),
         }
     }
+}
+
+/// Recursively expand() until only Nands are left.
+pub fn flatten<C: Into<Project01Component>>(chip: C) -> Vec<Nand> {
+    fn go(comp: Project01Component) -> Vec<Nand> {
+        match comp.expand() {
+            None => match comp {
+                Project01Component::Nand(nand) => vec![nand],
+                _ => unreachable!(),
+            },
+            Some(subs) => subs.into_iter().flat_map(go).collect(),
+        }
+    }
+    go(chip.into())
 }
 
 
