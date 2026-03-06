@@ -97,8 +97,7 @@ fn mux_truth_table() {
 #[test]
 fn mux_optimal() {
     let chip = Mux { a0: Input::new(), a1: Input::new(), sel: Input::new(), out: Output::new() };
-    // TODO: can do better?
-    assert_eq!(flatten(chip).len(), 8);
+    assert_eq!(flatten(chip).len(), 4);
 }
 
 #[test]

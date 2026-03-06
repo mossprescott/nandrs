@@ -219,18 +219,17 @@ impl Component for Mux {
     type Target = Project01Component;
 
     /*
-      let not_sel = Not { a: inputs.sel }
-      let and_a   = And { a: inputs.a0,  b: not_sel.out }
-      let and_b   = And { a: inputs.a1,  b: inputs.sel  }
-      let or      = Or  { a: and_a.out,  b: and_b.out   }
-      outputs.out = or.out
+      let not_sel = Not { a: sel }
+      let nand0   = Nand { a: not_sel.out,  b: a0 }
+      let nand1   = Nand { a: sel,          b: a1 }
+      outputs.out = Nand { a: nand0.out, b: nand1.out }
      */
     fn expand(&self) -> Option<Vec<Project01Component>> {
-        let not_sel = Not { a: self.sel.clone(), out: Output::new() };
-        let and_a   = And { a: self.a0.clone(),  b: not_sel.out.clone().into(), out: Output::new() };
-        let and_b   = And { a: self.a1.clone(),  b: self.sel.clone(),           out: Output::new() };
-        let or      = Or  { a: and_a.out.clone().into(), b: and_b.out.clone().into(), out: self.out.clone() };
-        Some(vec![not_sel.into(), and_a.into(), and_b.into(), or.into()])
+        let not_sel = Not  { a: self.sel.clone(),             out: Output::new() };
+        let nand0   = Nand { a: not_sel.out.clone().into(),   b: self.a0.clone(),       out: Output::new() };
+        let nand1   = Nand { a: self.sel.clone(),             b: self.a1.clone(),       out: Output::new() };
+        let out     = Nand { a: nand0.out.clone().into(),     b: nand1.out.clone().into(), out: self.out.clone() };
+        Some(vec![not_sel.into(), nand0.into(), nand1.into(), out.into()])
     }
 }
 
