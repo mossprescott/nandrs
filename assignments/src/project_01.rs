@@ -4,7 +4,7 @@ use simulator::{self, Assembly, Component, Input, Input16, Output, Output16, Ref
 use simulator::Reflect as _; // ensure the derive macro is in scope
 use std::collections::HashMap;
 
-/// The single primitive
+/// The single primitive: true if either input is false.
 #[derive(Reflect)]
 pub struct Nand {
     pub a: Input,
@@ -85,6 +85,7 @@ impl Reflect for Project01Component {
 }
 
 
+/// Inverts its input.
 #[derive(Reflect)]
 pub struct Not {
     pub a: Input,
@@ -107,6 +108,7 @@ impl Component for Not {
     }
 }
 
+/// True only when both inputs are true.
 #[derive(Reflect)]
 pub struct And {
     pub a: Input,
@@ -128,6 +130,7 @@ impl Component for And {
     }
 }
 
+/// True when at least one input is true.
 #[derive(Reflect)]
 pub struct Or {
     pub a: Input,
@@ -151,6 +154,7 @@ impl Component for Or {
     }
 }
 
+/// True when inputs differ.
 #[derive(Reflect)]
 pub struct Xor {
     pub a: Input,
@@ -174,6 +178,7 @@ impl Component for Xor {
     }
 }
 
+/// Passes a0 through when sel is 0, a1 when sel is 1.
 #[derive(Reflect)]
 pub struct Mux {
     pub a0: Input,
@@ -200,6 +205,7 @@ impl Component for Mux {
     }
 }
 
+/// Routes input to a when sel is 0, or b when sel is 1; the unused output is zero.
 #[derive(Reflect)]
 pub struct Dmux {
     pub input: Input,
@@ -225,6 +231,7 @@ impl Component for Dmux {
     }
 }
 
+/// Inverts each bit of a 16-bit input.
 #[derive(Reflect)]
 pub struct Not16 {
     pub a: Input16,
@@ -245,6 +252,7 @@ impl Component for Not16 {
     }
 }
 
+/// Bitwise `And` across two 16-bit inputs.
 #[derive(Reflect)]
 pub struct And16 {
     pub a: Input16,
@@ -266,6 +274,7 @@ impl Component for And16 {
     }
 }
 
+/// Bitwise `Or` across two 16-bit inputs.
 #[derive(Reflect)]
 pub struct Or16 {
     pub a: Input16,
@@ -287,6 +296,7 @@ impl Component for Or16 {
     }
 }
 
+/// Selects between two 16-bit inputs bit-by-bit, using a single sel bit.
 #[derive(Reflect)]
 pub struct Mux16 {
     pub a0: Input16,
