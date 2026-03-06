@@ -1,6 +1,6 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use simulator::{self, Assembly, Component, Input, Output};
+use simulator::{self, Assembly, Component, Input, Input16, Output, Output16};
 use std::collections::HashMap;
 
 /// The single primitive
@@ -39,15 +39,17 @@ pub enum Project01Component {
     Xor(Xor),
     Mux(Mux),
     Dmux(Dmux),
+    Not16(Not16),
 }
 
-impl From<Nand> for Project01Component { fn from(c: Nand) -> Self { Project01Component::Nand(c) } }
-impl From<Not>  for Project01Component { fn from(c: Not)  -> Self { Project01Component::Not(c)  } }
-impl From<And>  for Project01Component { fn from(c: And)  -> Self { Project01Component::And(c)  } }
-impl From<Or>   for Project01Component { fn from(c: Or)   -> Self { Project01Component::Or(c)   } }
-impl From<Xor>  for Project01Component { fn from(c: Xor)  -> Self { Project01Component::Xor(c)  } }
-impl From<Mux>  for Project01Component { fn from(c: Mux)  -> Self { Project01Component::Mux(c)  } }
-impl From<Dmux> for Project01Component { fn from(c: Dmux) -> Self { Project01Component::Dmux(c) } }
+impl From<Nand>  for Project01Component { fn from(c: Nand)  -> Self { Project01Component::Nand(c)  } }
+impl From<Not>   for Project01Component { fn from(c: Not)   -> Self { Project01Component::Not(c)   } }
+impl From<And>   for Project01Component { fn from(c: And)   -> Self { Project01Component::And(c)   } }
+impl From<Or>    for Project01Component { fn from(c: Or)    -> Self { Project01Component::Or(c)    } }
+impl From<Xor>   for Project01Component { fn from(c: Xor)   -> Self { Project01Component::Xor(c)   } }
+impl From<Mux>   for Project01Component { fn from(c: Mux)   -> Self { Project01Component::Mux(c)   } }
+impl From<Dmux>  for Project01Component { fn from(c: Dmux)  -> Self { Project01Component::Dmux(c)  } }
+impl From<Not16> for Project01Component { fn from(c: Not16) -> Self { Project01Component::Not16(c) } }
 
 impl Component for Project01Component {
     type Target = Project01Component;
@@ -61,6 +63,7 @@ impl Component for Project01Component {
             Project01Component::Xor(c)   => c.expand(),
             Project01Component::Mux(c)   => c.expand(),
             Project01Component::Dmux(c)  => c.expand(),
+            Project01Component::Not16(c) => c.expand(),
         }
     }
 
@@ -73,6 +76,7 @@ impl Component for Project01Component {
             Project01Component::Xor(c)   => c.reflect(),
             Project01Component::Mux(c)   => c.reflect(),
             Project01Component::Dmux(c)  => c.reflect(),
+            Project01Component::Not16(c) => c.reflect(),
         }
     }
 }
@@ -285,8 +289,34 @@ impl Component for Dmux {
     }
 }
 
-pub fn not16(a: [bool; 16]) -> [bool; 16] {
-    todo!()
+pub struct Not16 {
+    pub a: Input16,
+    pub out: Output16,
+}
+impl Component for Not16 {
+    type Target = Project01Component;
+
+    /*
+      for i in 0..16:
+        let not = Not { a: inputs.a[i] }
+        outputs.out[i] = not.out
+     */
+    fn expand(&self) -> Option<Vec<Project01Component>> {
+        Some((0..16).map(|i| {
+            Not { a: self.a.bit(i), out: self.out.bit(i) }.into()
+        }).collect())
+    }
+
+    fn reflect(&self) -> simulator::Interface {
+        simulator::Interface {
+            inputs: HashMap::from([
+                ("a".to_string(), self.a.clone().into()),
+            ]),
+            outputs: HashMap::from([
+                ("out".to_string(), self.out.clone().into()),
+            ]),
+        }
+    }
 }
 
 pub fn and16(a: [bool; 16], b: [bool; 16]) -> [bool; 16] {

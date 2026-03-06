@@ -1,6 +1,6 @@
-use simulator::{Component, Input, Output};
+use simulator::{Component, Input, Input16, Output};
 use simulator::eval::eval;
-use crate::project_01::{Nand, Not, And, Or, Xor, Mux, Dmux};
+use crate::project_01::{Nand, Not, And, Or, Xor, Mux, Dmux, Not16};
 
 #[test]
 fn nand_reflect() {
@@ -16,18 +16,18 @@ fn nand_reflect() {
 #[test]
 fn nand_truth_table() {
     let chip = Nand { a: Input::new(), b: Input::new(), out: Output::new() };
-    assert_eq!(eval(&chip, [("a", false), ("b", false)])["out"], true);
-    assert_eq!(eval(&chip, [("a", false), ("b", true) ])["out"], true);
-    assert_eq!(eval(&chip, [("a", true),  ("b", false)])["out"], true);
-    assert_eq!(eval(&chip, [("a", true),  ("b", true) ])["out"], false);
+    assert_eq!(eval(&chip, [("a", 0), ("b", 0)])["out"], 1);
+    assert_eq!(eval(&chip, [("a", 0), ("b", 1)])["out"], 1);
+    assert_eq!(eval(&chip, [("a", 1), ("b", 0)])["out"], 1);
+    assert_eq!(eval(&chip, [("a", 1), ("b", 1)])["out"], 0);
 }
 
 
 #[test]
 fn not_truth_table() {
     let chip = Not { a: Input::new(), out: Output::new() };
-    assert_eq!(eval(&chip, [("a", false)])["out"], true);
-    assert_eq!(eval(&chip, [("a", true) ])["out"], false);
+    assert_eq!(eval(&chip, [("a", 0)])["out"], 1);
+    assert_eq!(eval(&chip, [("a", 1)])["out"], 0);
 }
 
 #[test]
@@ -39,10 +39,10 @@ fn not_optimal() {
 #[test]
 fn and_truth_table() {
     let chip = And { a: Input::new(), b: Input::new(), out: Output::new() };
-    assert_eq!(eval(&chip, [("a", false), ("b", false)])["out"], false);
-    assert_eq!(eval(&chip, [("a", false), ("b", true) ])["out"], false);
-    assert_eq!(eval(&chip, [("a", true),  ("b", false)])["out"], false);
-    assert_eq!(eval(&chip, [("a", true),  ("b", true) ])["out"], true);
+    assert_eq!(eval(&chip, [("a", 0), ("b", 0)])["out"], 0);
+    assert_eq!(eval(&chip, [("a", 0), ("b", 1)])["out"], 0);
+    assert_eq!(eval(&chip, [("a", 1), ("b", 0)])["out"], 0);
+    assert_eq!(eval(&chip, [("a", 1), ("b", 1)])["out"], 1);
 }
 
 #[test]
@@ -54,10 +54,10 @@ fn and_optimal() {
 #[test]
 fn or_truth_table() {
     let chip = Or { a: Input::new(), b: Input::new(), out: Output::new() };
-    assert_eq!(eval(&chip, [("a", false), ("b", false)])["out"], false);
-    assert_eq!(eval(&chip, [("a", false), ("b", true) ])["out"], true);
-    assert_eq!(eval(&chip, [("a", true),  ("b", false)])["out"], true);
-    assert_eq!(eval(&chip, [("a", true),  ("b", true) ])["out"], true);
+    assert_eq!(eval(&chip, [("a", 0), ("b", 0)])["out"], 0);
+    assert_eq!(eval(&chip, [("a", 0), ("b", 1)])["out"], 1);
+    assert_eq!(eval(&chip, [("a", 1), ("b", 0)])["out"], 1);
+    assert_eq!(eval(&chip, [("a", 1), ("b", 1)])["out"], 1);
 }
 
 #[test]
@@ -69,10 +69,10 @@ fn or_optimal() {
 #[test]
 fn xor_truth_table() {
     let chip = Xor { a: Input::new(), b: Input::new(), out: Output::new() };
-    assert_eq!(eval(&chip, [("a", false), ("b", false)])["out"], false);
-    assert_eq!(eval(&chip, [("a", false), ("b", true) ])["out"], true);
-    assert_eq!(eval(&chip, [("a", true),  ("b", false)])["out"], true);
-    assert_eq!(eval(&chip, [("a", true),  ("b", true) ])["out"], false);
+    assert_eq!(eval(&chip, [("a", 0), ("b", 0)])["out"], 0);
+    assert_eq!(eval(&chip, [("a", 0), ("b", 1)])["out"], 1);
+    assert_eq!(eval(&chip, [("a", 1), ("b", 0)])["out"], 1);
+    assert_eq!(eval(&chip, [("a", 1), ("b", 1)])["out"], 0);
 }
 
 #[test]
@@ -84,14 +84,14 @@ fn xor_optimal() {
 #[test]
 fn mux_truth_table() {
     let chip = Mux { a: Input::new(), b: Input::new(), sel: Input::new(), out: Output::new() };
-    assert_eq!(eval(&chip, [("a", false), ("b", false), ("sel", false)])["out"], false);
-    assert_eq!(eval(&chip, [("a", false), ("b", true),  ("sel", false)])["out"], false);
-    assert_eq!(eval(&chip, [("a", true),  ("b", false), ("sel", false)])["out"], true);
-    assert_eq!(eval(&chip, [("a", true),  ("b", true),  ("sel", false)])["out"], true);
-    assert_eq!(eval(&chip, [("a", false), ("b", false), ("sel", true) ])["out"], false);
-    assert_eq!(eval(&chip, [("a", false), ("b", true),  ("sel", true) ])["out"], true);
-    assert_eq!(eval(&chip, [("a", true),  ("b", false), ("sel", true) ])["out"], false);
-    assert_eq!(eval(&chip, [("a", true),  ("b", true),  ("sel", true) ])["out"], true);
+    assert_eq!(eval(&chip, [("a", 0), ("b", 0), ("sel", 0)])["out"], 0);
+    assert_eq!(eval(&chip, [("a", 0), ("b", 1), ("sel", 0)])["out"], 0);
+    assert_eq!(eval(&chip, [("a", 1), ("b", 0), ("sel", 0)])["out"], 1);
+    assert_eq!(eval(&chip, [("a", 1), ("b", 1), ("sel", 0)])["out"], 1);
+    assert_eq!(eval(&chip, [("a", 0), ("b", 0), ("sel", 1)])["out"], 0);
+    assert_eq!(eval(&chip, [("a", 0), ("b", 1), ("sel", 1)])["out"], 1);
+    assert_eq!(eval(&chip, [("a", 1), ("b", 0), ("sel", 1)])["out"], 0);
+    assert_eq!(eval(&chip, [("a", 1), ("b", 1), ("sel", 1)])["out"], 1);
 }
 
 #[test]
@@ -103,18 +103,33 @@ fn mux_optimal() {
 #[test]
 fn dmux_truth_table() {
     let chip = Dmux { input: Input::new(), sel: Input::new(), a: Output::new(), b: Output::new() };
-    let r = eval(&chip, [("input", false), ("sel", false)]);
-    assert_eq!((r["a"], r["b"]), (false, false));
-    let r = eval(&chip, [("input", true),  ("sel", false)]);
-    assert_eq!((r["a"], r["b"]), (true,  false));
-    let r = eval(&chip, [("input", false), ("sel", true) ]);
-    assert_eq!((r["a"], r["b"]), (false, false));
-    let r = eval(&chip, [("input", true),  ("sel", true) ]);
-    assert_eq!((r["a"], r["b"]), (false, true));
+    let r = eval(&chip, [("input", 0), ("sel", 0)]);
+    assert_eq!((r["a"], r["b"]), (0, 0));
+    let r = eval(&chip, [("input", 1), ("sel", 0)]);
+    assert_eq!((r["a"], r["b"]), (1, 0));
+    let r = eval(&chip, [("input", 0), ("sel", 1)]);
+    assert_eq!((r["a"], r["b"]), (0, 0));
+    let r = eval(&chip, [("input", 1), ("sel", 1)]);
+    assert_eq!((r["a"], r["b"]), (0, 1));
 }
 
 #[test]
 fn dmux_optimal() {
     let chip = Dmux { input: Input::new(), sel: Input::new(), a: Output::new(), b: Output::new() };
     assert_eq!(chip.expand().unwrap().len(), 3);
+}
+
+#[test]
+fn not16_truth_table() {
+    let chip = Not16 { a: Input16::new(), out: Output::new() };
+    assert_eq!(eval(&chip, [("a", 0x0000)])["out"], 0xFFFF);
+    assert_eq!(eval(&chip, [("a", 0xFFFF)])["out"], 0x0000);
+    assert_eq!(eval(&chip, [("a", 0xAAAA)])["out"], 0x5555);
+    assert_eq!(eval(&chip, [("a", 0x1234)])["out"], 0xEDCB);
+}
+
+#[test]
+fn not16_optimal() {
+    let chip = Not16 { a: Input16::new(), out: Output::new() };
+    assert_eq!(chip.expand().unwrap().len(), 16);
 }
