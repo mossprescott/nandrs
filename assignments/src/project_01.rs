@@ -1,9 +1,11 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use simulator::{self, Assembly, Component, Input, Input16, Output, Output16};
+use simulator::{self, Assembly, Component, Input, Input16, Output, Output16, Reflect};
+use simulator::Reflect as _; // ensure the derive macro is in scope
 use std::collections::HashMap;
 
 /// The single primitive
+#[derive(Reflect)]
 pub struct Nand {
     pub a: Input,
     pub b: Input,
@@ -15,18 +17,6 @@ impl Component for Nand {
 
     fn expand(&self) -> Option<Vec<Nand>> {
        Option::None
-    }
-
-    fn reflect(&self) -> simulator::Interface {
-        simulator::Interface {
-            inputs: HashMap::from([
-                ("a".to_string(),   self.a.clone().into()),
-                ("b".to_string(),   self.b.clone().into()),
-            ]),
-            outputs: HashMap::from([
-                ("out".to_string(), self.out.clone().into()),
-            ]),
-        }
     }
 }
 
@@ -66,7 +56,8 @@ impl Component for Project01Component {
             Project01Component::Not16(c) => c.expand(),
         }
     }
-
+}
+impl Reflect for Project01Component {
     fn reflect(&self) -> simulator::Interface {
         match self {
             Project01Component::Nand(c)  => c.reflect(),
@@ -82,6 +73,7 @@ impl Component for Project01Component {
 }
 
 
+#[derive(Reflect)]
 pub struct Not {
     pub a: Input,
     pub out: Output,
@@ -101,19 +93,9 @@ impl Component for Not {
         };
         Option::Some(vec![nand.into()])
     }
-
-    fn reflect(&self) -> simulator::Interface {
-        simulator::Interface {
-            inputs: HashMap::from([
-                ("a".to_string(), self.a.clone().into()),
-            ]),
-            outputs: HashMap::from([
-                ("out".to_string(), self.out.clone().into()),
-            ]),
-        }
-    }
 }
 
+#[derive(Reflect)]
 pub struct And {
     pub a: Input,
     pub b: Input,
@@ -123,7 +105,7 @@ impl Component for And {
     type Target = Project01Component;
 
    /*
-      let nand = Nand { a: inputs.a, b: inputs.a }
+      let nand = Nand { a: inputs.a, b: inputs.b }
       let not = Not { a: nand.out }
       outputs.out = not.out
      */
@@ -132,20 +114,9 @@ impl Component for And {
         let not  = Not  { a: nand.out.clone().into(),            out: self.out.clone() };
         Option::Some(vec![nand.into(), not.into()])
     }
-
-    fn reflect(&self) -> simulator::Interface {
-        simulator::Interface {
-            inputs: HashMap::from([
-                ("a".to_string(), self.a.clone().into()),
-                ("b".to_string(), self.b.clone().into()),
-            ]),
-            outputs: HashMap::from([
-                ("out".to_string(), self.out.clone().into()),
-            ]),
-        }
-    }
 }
 
+#[derive(Reflect)]
 pub struct Or {
     pub a: Input,
     pub b: Input,
@@ -166,20 +137,9 @@ impl Component for Or {
         let nand  = Nand { a: not_a.out.clone().into(), b: not_b.out.clone().into(), out: self.out.clone() };
         Some(vec![not_a.into(), not_b.into(), nand.into()])
     }
-
-    fn reflect(&self) -> simulator::Interface {
-        simulator::Interface {
-            inputs: HashMap::from([
-                ("a".to_string(), self.a.clone().into()),
-                ("b".to_string(), self.b.clone().into()),
-            ]),
-            outputs: HashMap::from([
-                ("out".to_string(), self.out.clone().into()),
-            ]),
-        }
-    }
 }
 
+#[derive(Reflect)]
 pub struct Xor {
     pub a: Input,
     pub b: Input,
@@ -200,20 +160,9 @@ impl Component for Xor {
         let and = And  { a: or.out.clone().into(), b: nab.out.clone().into(), out: self.out.clone() };
         Some(vec![or.into(), nab.into(), and.into()])
     }
-
-    fn reflect(&self) -> simulator::Interface {
-        simulator::Interface {
-            inputs: HashMap::from([
-                ("a".to_string(), self.a.clone().into()),
-                ("b".to_string(), self.b.clone().into()),
-            ]),
-            outputs: HashMap::from([
-                ("out".to_string(), self.out.clone().into()),
-            ]),
-        }
-    }
 }
 
+#[derive(Reflect)]
 pub struct Mux {
     pub a: Input,
     pub b: Input,
@@ -237,21 +186,9 @@ impl Component for Mux {
         let or      = Or  { a: and_a.out.clone().into(), b: and_b.out.clone().into(), out: self.out.clone() };
         Some(vec![not_sel.into(), and_a.into(), and_b.into(), or.into()])
     }
-
-    fn reflect(&self) -> simulator::Interface {
-        simulator::Interface {
-            inputs: HashMap::from([
-                ("a".to_string(),   self.a.clone().into()),
-                ("b".to_string(),   self.b.clone().into()),
-                ("sel".to_string(), self.sel.clone().into()),
-            ]),
-            outputs: HashMap::from([
-                ("out".to_string(), self.out.clone().into()),
-            ]),
-        }
-    }
 }
 
+#[derive(Reflect)]
 pub struct Dmux {
     pub input: Input,
     pub sel: Input,
@@ -274,21 +211,9 @@ impl Component for Dmux {
         let and_b   = And { a: self.input.clone(), b: self.sel.clone(),   out: self.b.clone() };
         Some(vec![not_sel.into(), and_a.into(), and_b.into()])
     }
-
-    fn reflect(&self) -> simulator::Interface {
-        simulator::Interface {
-            inputs: HashMap::from([
-                ("input".to_string(), self.input.clone().into()),
-                ("sel".to_string(),   self.sel.clone().into()),
-            ]),
-            outputs: HashMap::from([
-                ("a".to_string(), self.a.clone().into()),
-                ("b".to_string(), self.b.clone().into()),
-            ]),
-        }
-    }
 }
 
+#[derive(Reflect)]
 pub struct Not16 {
     pub a: Input16,
     pub out: Output16,
@@ -305,17 +230,6 @@ impl Component for Not16 {
         Some((0..16).map(|i| {
             Not { a: self.a.bit(i), out: self.out.bit(i) }.into()
         }).collect())
-    }
-
-    fn reflect(&self) -> simulator::Interface {
-        simulator::Interface {
-            inputs: HashMap::from([
-                ("a".to_string(), self.a.clone().into()),
-            ]),
-            outputs: HashMap::from([
-                ("out".to_string(), self.out.clone().into()),
-            ]),
-        }
     }
 }
 

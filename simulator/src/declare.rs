@@ -70,7 +70,6 @@ impl Output {
 /// A multi-bit output signal; that is, an outgoing 16-bit bus.
 pub type Output16 = OutputBus<N16>;
 
-
 pub trait Component {
     type Target;
 
@@ -80,12 +79,13 @@ pub trait Component {
     ///
     /// If the component is already primitive, then None.
     fn expand(&self) -> Option<Vec<Self::Target>>;
-
-    /// Enumerate the inputs and outputs of the component for reference from the outside. This is
-    /// needed for any component to be analyzed or simulated in a generic way.
-    fn reflect(&self) -> Interface;
 }
 
+/// Enumerate the inputs and outputs of a component for reference from the outside.
+/// Needed for any component to be analyzed or simulated in a generic way.
+pub trait Reflect {
+    fn reflect(&self) -> Interface;
+}
 
 /// Type-erased bus reference, for use in Interface where the width is only known at runtime.
 /// The `id` field carries the wire identity: two BusRefs with the same `id` pointer refer to

@@ -7,6 +7,8 @@ pub use eval::eval;
 
 pub use declare::*;
 
+pub use simulator_derive::Reflect;
+
 /// A collection of components which forms a unit of circuit construction. Provides output signals
 /// (wires/buses), and accepts signals from elsewhere as inputs.
 pub struct Assembly {

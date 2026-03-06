@@ -1,4 +1,4 @@
-use simulator::{Component, Input, Input16, Output};
+use simulator::{Component, Input, Input16, Output, Reflect};
 use simulator::eval::eval;
 use crate::project_01::{Nand, Not, And, Or, Xor, Mux, Dmux, Not16};
 

@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::declare::{BusRef, Component};
+use crate::declare::{BusRef, Component, Reflect};
 
 /// Evaluate a component given named input values, returning named output values.
 ///
@@ -16,8 +16,8 @@ use crate::declare::{BusRef, Component};
 /// components. A component that returns `None` from `expand()` is the NAND primitive.
 pub fn eval<'a, C, I>(chip: &C, inputs: I) -> HashMap<String, u64>
 where
-    C: Component,
-    C::Target: Component<Target = C::Target>,
+    C: Component + Reflect,
+    C::Target: Component<Target = C::Target> + Reflect,
     I: IntoIterator<Item = (&'a str, u64)>,
 {
     let intf = chip.reflect();
@@ -61,8 +61,8 @@ fn bus_mask(busref: &BusRef) -> u64 {
 
 fn eval_component<C>(component: &C, wire_state: &mut HashMap<usize, u64>)
 where
-    C: Component,
-    C::Target: Component<Target = C::Target>,
+    C: Component + Reflect,
+    C::Target: Component<Target = C::Target> + Reflect,
 {
     let intf = component.reflect();
 
