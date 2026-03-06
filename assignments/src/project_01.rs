@@ -194,16 +194,17 @@ impl Component for Xor {
     type Target = Project01Component;
 
     /*
-      let or  = Or   { a: inputs.a, b: inputs.b }
-      let nab = Nand { a: inputs.a, b: inputs.b }
-      let and = And  { a: or.out,   b: nab.out  }
-      outputs.out = and.out
+      let n1  = Nand { a: a, b: b     }
+      let n2  = Nand { a: a, b: n1.out }
+      let n3  = Nand { a: b, b: n1.out }
+      outputs.out = Nand { a: n2.out, b: n3.out }
      */
     fn expand(&self) -> Option<Vec<Project01Component>> {
-        let or  = Or   { a: self.a.clone(), b: self.b.clone(), out: Output::new() };
-        let nab = Nand { a: self.a.clone(), b: self.b.clone(), out: Output::new() };
-        let and = And  { a: or.out.clone().into(), b: nab.out.clone().into(), out: self.out.clone() };
-        Some(vec![or.into(), nab.into(), and.into()])
+        let n1  = Nand { a: self.a.clone(),        b: self.b.clone(),        out: Output::new() };
+        let n2  = Nand { a: self.a.clone(),        b: n1.out.clone().into(), out: Output::new() };
+        let n3  = Nand { a: self.b.clone(),        b: n1.out.clone().into(), out: Output::new() };
+        let out = Nand { a: n2.out.clone().into(), b: n3.out.clone().into(), out: self.out.clone() };
+        Some(vec![n1.into(), n2.into(), n3.into(), out.into()])
     }
 }
 

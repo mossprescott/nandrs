@@ -78,7 +78,7 @@ fn xor_truth_table() {
 #[test]
 fn xor_optimal() {
     let chip = Xor { a: Input::new(), b: Input::new(), out: Output::new() };
-    assert_eq!(flatten(chip).len(), 6);
+    assert_eq!(flatten(chip).len(), 4);
 }
 
 #[test]
@@ -195,7 +195,6 @@ fn and_graph() {
 #[test]
 fn mux16_graph() {
     let chip = Mux16 { a0: Input16::new(), a1: Input16::new(), sel: Input::new(), out: Output16::new() };
-    print!("{}", print_graph(&chip));
     assert_eq!(
         print_graph(&chip),
         "Mux16:\n\
