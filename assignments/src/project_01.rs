@@ -31,7 +31,7 @@ pub enum Project01Component {
     Dmux(Dmux),
     Not16(Not16),
     And16(And16),
-    Or16(Or16),
+    // Or16(Or16),
     Mux16(Mux16),
 }
 
@@ -44,7 +44,7 @@ impl From<Mux>   for Project01Component { fn from(c: Mux)   -> Self { Project01C
 impl From<Dmux>  for Project01Component { fn from(c: Dmux)  -> Self { Project01Component::Dmux(c)  } }
 impl From<Not16> for Project01Component { fn from(c: Not16) -> Self { Project01Component::Not16(c) } }
 impl From<And16> for Project01Component { fn from(c: And16) -> Self { Project01Component::And16(c) } }
-impl From<Or16>  for Project01Component { fn from(c: Or16)  -> Self { Project01Component::Or16(c)  } }
+// impl From<Or16>  for Project01Component { fn from(c: Or16)  -> Self { Project01Component::Or16(c)  } }
 impl From<Mux16> for Project01Component { fn from(c: Mux16) -> Self { Project01Component::Mux16(c) } }
 
 impl Component for Project01Component {
@@ -61,7 +61,6 @@ impl Component for Project01Component {
             Project01Component::Dmux(c)  => c.expand(),
             Project01Component::Not16(c) => c.expand(),
             Project01Component::And16(c) => c.expand(),
-            Project01Component::Or16(c)  => c.expand(),
             Project01Component::Mux16(c) => c.expand(),
         }
     }
@@ -78,7 +77,6 @@ impl Reflect for Project01Component {
             Project01Component::Dmux(c)  => c.reflect(),
             Project01Component::Not16(c) => c.reflect(),
             Project01Component::And16(c) => c.reflect(),
-            Project01Component::Or16(c)  => c.reflect(),
             Project01Component::Mux16(c) => c.reflect(),
         }
     }
@@ -93,7 +91,6 @@ impl Reflect for Project01Component {
             Project01Component::Dmux(c)  => c.name(),
             Project01Component::Not16(c) => c.name(),
             Project01Component::And16(c) => c.name(),
-            Project01Component::Or16(c)  => c.name(),
             Project01Component::Mux16(c) => c.name(),
         }
     }
@@ -303,27 +300,27 @@ impl Component for And16 {
     }
 }
 
-/// Bitwise `Or` across two 16-bit inputs.
-#[derive(Reflect)]
-pub struct Or16 {
-    pub a: Input16,
-    pub b: Input16,
-    pub out: Output16,
-}
-impl Component for Or16 {
-    type Target = Project01Component;
+// /// Bitwise `Or` across two 16-bit inputs.
+// #[derive(Reflect)]
+// pub struct Or16 {
+//     pub a: Input16,
+//     pub b: Input16,
+//     pub out: Output16,
+// }
+// impl Component for Or16 {
+//     type Target = Project01Component;
 
-    /*
-      for i in 0..16:
-        let or = Or { a: inputs.a[i], b: inputs.b[i] }
-        outputs.out[i] = or.out
-     */
-    fn expand(&self) -> Option<Vec<Project01Component>> {
-        Some((0..16).map(|i| {
-            Or { a: self.a.bit(i), b: self.b.bit(i), out: self.out.bit(i) }.into()
-        }).collect())
-    }
-}
+//     /*
+//       for i in 0..16:
+//         let or = Or { a: inputs.a[i], b: inputs.b[i] }
+//         outputs.out[i] = or.out
+//      */
+//     fn expand(&self) -> Option<Vec<Project01Component>> {
+//         Some((0..16).map(|i| {
+//             Or { a: self.a.bit(i), b: self.b.bit(i), out: self.out.bit(i) }.into()
+//         }).collect())
+//     }
+// }
 
 /// Selects between two 16-bit inputs bit-by-bit, using a single sel bit.
 #[derive(Reflect)]
@@ -358,27 +355,9 @@ impl Component for Mux16 {
     }
 }
 
-/// True if any bit in the input is true.
-pub fn or8way(input: [bool; 8]) -> bool {
-    todo!()
-}
 
-pub fn mux4way16(a: [bool; 16], b: [bool; 16], c: [bool; 16], d: [bool; 16], sel: [bool; 2]) -> [bool; 16] {
-    todo!()
-}
-
-pub fn mux8way16(
-    a: [bool; 16], b: [bool; 16], c: [bool; 16], d: [bool; 16],
-    e: [bool; 16], f: [bool; 16], g: [bool; 16], h: [bool; 16],
-    sel: [bool; 3],
-) -> [bool; 16] {
-    todo!()
-}
-
-pub fn dmux4way(input: bool, sel: [bool; 2]) -> (bool, bool, bool, bool) {
-    todo!()
-}
-
-pub fn dmux8way(input: bool, sel: [bool; 3]) -> (bool, bool, bool, bool, bool, bool, bool, bool) {
-    todo!()
-}
+// These are needed for RAMs, maybe? Nevermind that stuff.
+//   mux4way16
+//   mux8way16
+//   dmux4way
+//   dmux8way
