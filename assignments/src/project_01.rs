@@ -30,6 +30,9 @@ pub enum Project01Component {
     Mux(Mux),
     Dmux(Dmux),
     Not16(Not16),
+    And16(And16),
+    Or16(Or16),
+    Mux16(Mux16),
 }
 
 impl From<Nand>  for Project01Component { fn from(c: Nand)  -> Self { Project01Component::Nand(c)  } }
@@ -40,6 +43,9 @@ impl From<Xor>   for Project01Component { fn from(c: Xor)   -> Self { Project01C
 impl From<Mux>   for Project01Component { fn from(c: Mux)   -> Self { Project01Component::Mux(c)   } }
 impl From<Dmux>  for Project01Component { fn from(c: Dmux)  -> Self { Project01Component::Dmux(c)  } }
 impl From<Not16> for Project01Component { fn from(c: Not16) -> Self { Project01Component::Not16(c) } }
+impl From<And16> for Project01Component { fn from(c: And16) -> Self { Project01Component::And16(c) } }
+impl From<Or16>  for Project01Component { fn from(c: Or16)  -> Self { Project01Component::Or16(c)  } }
+impl From<Mux16> for Project01Component { fn from(c: Mux16) -> Self { Project01Component::Mux16(c) } }
 
 impl Component for Project01Component {
     type Target = Project01Component;
@@ -54,6 +60,9 @@ impl Component for Project01Component {
             Project01Component::Mux(c)   => c.expand(),
             Project01Component::Dmux(c)  => c.expand(),
             Project01Component::Not16(c) => c.expand(),
+            Project01Component::And16(c) => c.expand(),
+            Project01Component::Or16(c)  => c.expand(),
+            Project01Component::Mux16(c) => c.expand(),
         }
     }
 }
@@ -68,6 +77,9 @@ impl Reflect for Project01Component {
             Project01Component::Mux(c)   => c.reflect(),
             Project01Component::Dmux(c)  => c.reflect(),
             Project01Component::Not16(c) => c.reflect(),
+            Project01Component::And16(c) => c.reflect(),
+            Project01Component::Or16(c)  => c.reflect(),
+            Project01Component::Mux16(c) => c.reflect(),
         }
     }
 }
@@ -233,16 +245,68 @@ impl Component for Not16 {
     }
 }
 
-pub fn and16(a: [bool; 16], b: [bool; 16]) -> [bool; 16] {
-    todo!()
+#[derive(Reflect)]
+pub struct And16 {
+    pub a: Input16,
+    pub b: Input16,
+    pub out: Output16,
+}
+impl Component for And16 {
+    type Target = Project01Component;
+
+    /*
+      for i in 0..16:
+        let and = And { a: inputs.a[i], b: inputs.b[i] }
+        outputs.out[i] = and.out
+     */
+    fn expand(&self) -> Option<Vec<Project01Component>> {
+        Some((0..16).map(|i| {
+            And { a: self.a.bit(i), b: self.b.bit(i), out: self.out.bit(i) }.into()
+        }).collect())
+    }
 }
 
-pub fn or16(a: [bool; 16], b: [bool; 16]) -> [bool; 16] {
-    todo!()
+#[derive(Reflect)]
+pub struct Or16 {
+    pub a: Input16,
+    pub b: Input16,
+    pub out: Output16,
+}
+impl Component for Or16 {
+    type Target = Project01Component;
+
+    /*
+      for i in 0..16:
+        let or = Or { a: inputs.a[i], b: inputs.b[i] }
+        outputs.out[i] = or.out
+     */
+    fn expand(&self) -> Option<Vec<Project01Component>> {
+        Some((0..16).map(|i| {
+            Or { a: self.a.bit(i), b: self.b.bit(i), out: self.out.bit(i) }.into()
+        }).collect())
+    }
 }
 
-pub fn mux16(a: [bool; 16], b: [bool; 16], sel: bool) -> [bool; 16] {
-    todo!()
+#[derive(Reflect)]
+pub struct Mux16 {
+    pub a: Input16,
+    pub b: Input16,
+    pub sel: Input,
+    pub out: Output16,
+}
+impl Component for Mux16 {
+    type Target = Project01Component;
+
+    /*
+      for i in 0..16:
+        let mux = Mux { a: inputs.a[i], b: inputs.b[i], sel: inputs.sel }
+        outputs.out[i] = mux.out
+     */
+    fn expand(&self) -> Option<Vec<Project01Component>> {
+        Some((0..16).map(|i| {
+            Mux { a: self.a.bit(i), b: self.b.bit(i), sel: self.sel.clone(), out: self.out.bit(i) }.into()
+        }).collect())
+    }
 }
 
 /// True if any bit in the input is true.
