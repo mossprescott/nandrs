@@ -50,6 +50,11 @@ impl<Width: Nat> From<OutputBus<Width>> for InputBus<Width> {
     }
 }
 impl<Width: Nat> OutputBus<Width> {
+    /// Make a new wire of any width.
+    pub fn new<N: Nat>() -> OutputBus<N> {
+        OutputBus { width: PhantomData, id: Rc::new(()), offset: 0 }
+    }
+
     /// Select a single bit from this output bus, returning a 1-bit OutputBus that
     /// shares the same underlying wire identity but refers only to bit `i`.
     pub fn bit(&self, i: usize) -> Output {
@@ -60,12 +65,6 @@ impl<Width: Nat> OutputBus<Width> {
 
 /// A simple, single-valued output signal; that is, an outgoing 1-bit wire.
 pub type Output = OutputBus<N1>;
-impl Output {
-    /// Make a new wire of any width.
-    pub fn new<N: Nat>() -> OutputBus<N> {
-        OutputBus { width: PhantomData, id: Rc::new(()), offset: 0 }
-    }
-}
 
 /// A multi-bit output signal; that is, an outgoing 16-bit bus.
 pub type Output16 = OutputBus<N16>;
