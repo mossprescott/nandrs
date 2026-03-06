@@ -82,6 +82,21 @@ impl Reflect for Project01Component {
             Project01Component::Mux16(c) => c.reflect(),
         }
     }
+    fn name(&self) -> &'static str {
+        match self {
+            Project01Component::Nand(c)  => c.name(),
+            Project01Component::Not(c)   => c.name(),
+            Project01Component::And(c)   => c.name(),
+            Project01Component::Or(c)    => c.name(),
+            Project01Component::Xor(c)   => c.name(),
+            Project01Component::Mux(c)   => c.name(),
+            Project01Component::Dmux(c)  => c.name(),
+            Project01Component::Not16(c) => c.name(),
+            Project01Component::And16(c) => c.name(),
+            Project01Component::Or16(c)  => c.name(),
+            Project01Component::Mux16(c) => c.name(),
+        }
+    }
 }
 
 /// Recursively expand() until only Nands are left.

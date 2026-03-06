@@ -66,6 +66,7 @@ pub fn derive_reflect(input: TokenStream) -> TokenStream {
         }
     }
 
+    let name_str = name.to_string();
     quote! {
         impl ::simulator::Reflect for #name {
             fn reflect(&self) -> ::simulator::Interface {
@@ -74,6 +75,7 @@ pub fn derive_reflect(input: TokenStream) -> TokenStream {
                     outputs: ::std::collections::HashMap::from([#(#outputs),*]),
                 }
             }
+            fn name(&self) -> &'static str { #name_str }
         }
     }
     .into()

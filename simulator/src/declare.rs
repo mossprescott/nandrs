@@ -85,6 +85,7 @@ pub trait Component {
 /// Needed for any component to be analyzed or simulated in a generic way.
 pub trait Reflect {
     fn reflect(&self) -> Interface;
+    fn name(&self) -> &'static str;
 }
 
 /// Type-erased bus reference, for use in Interface where the width is only known at runtime.

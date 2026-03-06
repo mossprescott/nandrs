@@ -9,59 +9,60 @@ pub use declare::*;
 
 pub use simulator_derive::Reflect;
 
-/// A collection of components which forms a unit of circuit construction. Provides output signals
-/// (wires/buses), and accepts signals from elsewhere as inputs.
-pub struct Assembly {
-    // TODO
-}
+/// Show the connections of a chip after one level of expansion.
+///
+/// Each line is `source -> sink`. Chip inputs are sources; chip outputs are sinks.
+/// Sub-component ports are labelled `{typename}{index}.{port}`.
+///
+/// ```ignore
+/// let chip = And { a: Input::new(), b: Input::new(), out: Output::new() };
+/// assert_eq!(print_graph(&chip), "And:\na -> nand0.a\nb -> nand0.b\nnand0.out -> not1.a\nnot1.out -> out");
+/// ```
+pub fn print_graph<C>(chip: &C) -> String
+where
+    C: Component + Reflect,
+    C::Target: Component<Target = C::Target> + Reflect,
+{
+    use std::collections::HashMap;
+    use std::rc::Rc;
 
-// pub trait Component {
-//     fn build(&self) -> Assembly;
-// }
+    let intf = chip.reflect();
+    let subs = match chip.expand() {
+        None    => return String::new(),
+        Some(s) => s,
+    };
 
-/// *The* primitive gate. All other circuits are built from this.
-// pub struct Nand {
-//     a: Wire,
-//     b: Wire,
-// }
-// impl Component for Nand {
-//     pub fn build(&self) -> Assembly {
-//         // TODO: trivially-compose a single Nand for use with other components.
-//         Assembly {}
-//     }
-// }
+    let wire_id = |b: &BusRef| Rc::as_ptr(&b.id) as usize;
 
-/// An assembly with no inputs connected yet; for creating cyclical references.
-pub fn lazy() -> Assembly {
-    // TODO
-    Assembly {}
-}
+    // wire_id -> Vec<(label, is_sink)>
+    let mut wires: HashMap<usize, Vec<(String, bool)>> = HashMap::new();
 
+    for (port, busref) in &intf.inputs {
+        wires.entry(wire_id(busref)).or_default().push((port.clone(), false));
+    }
+    for (port, busref) in &intf.outputs {
+        wires.entry(wire_id(busref)).or_default().push((port.clone(), true));
+    }
+    for (i, sub) in subs.iter().enumerate() {
+        let sub_intf = sub.reflect();
+        let label = format!("{}{}", sub.name().to_lowercase(), i);
+        for (port, busref) in &sub_intf.inputs {
+            wires.entry(wire_id(busref)).or_default().push((format!("{}.{}", label, port), true));
+        }
+        for (port, busref) in &sub_intf.outputs {
+            wires.entry(wire_id(busref)).or_default().push((format!("{}.{}", label, port), false));
+        }
+    }
 
-/// Encapsulates a chip-design, along with the current state of all of its components during
-/// simulation.
-pub struct Chip {
-    // TODO
-}
-
-// impl Chip {
-//     pub fn set(&mut self, name: &str, value: bool) {
-//         // TODO
-//     }
-
-//     pub fn get(&self, name: &str) -> bool {
-//         // TODO
-//         false
-//     }
-// }
-
-
-// TODO: ClockedChip, providing clock signal and tick/tock operations
-// TODO: Computer, providing standard I/O signals also?
-
-
-/// Given a description of all connections, compile the assembly to its ready-to-simulate form.
-pub fn build(chip: Assembly) -> Chip {
-    // TODO
-    Chip {}
+    let mut lines: Vec<String> = wires.values()
+        .flat_map(|endpoints| {
+            let sources: Vec<_> = endpoints.iter().filter(|(_, s)| !s).map(|(n, _)| n.clone()).collect();
+            let sinks:   Vec<_> = endpoints.iter().filter(|(_, s)| *s).map(|(n, _)| n.clone()).collect();
+            sources.iter().flat_map(|src| {
+                sinks.iter().map(|sink| format!("{} -> {}", src, sink)).collect::<Vec<_>>()
+            }).collect::<Vec<_>>()
+        })
+        .collect();
+    lines.sort();
+    format!("{}:\n{}", chip.name(), lines.join("\n"))
 }

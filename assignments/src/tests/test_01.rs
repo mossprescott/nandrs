@@ -1,4 +1,4 @@
-use simulator::{Component, Input, Input16, Output, Reflect};
+use simulator::{Component, Input, Input16, Output, Reflect, print_graph};
 use simulator::eval::eval;
 use crate::project_01::{flatten, Nand, Not, And, Or, Xor, Mux, Dmux, Not16, And16, Or16, Mux16};
 
@@ -180,4 +180,17 @@ fn mux16_optimal() {
     // TODO: definitely can be improved, but a simple simplifier might take care of redundant gates
     // anyway.
     assert_eq!(flatten(chip).len(), 128);
+}
+
+#[test]
+fn and_graph() {
+    let chip = And { a: Input::new(), b: Input::new(), out: Output::new() };
+    assert_eq!(
+        print_graph(&chip),
+        "And:\n\
+         a -> nand0.a\n\
+         b -> nand0.b\n\
+         nand0.out -> not1.a\n\
+         not1.out -> out"
+    );
 }
