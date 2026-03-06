@@ -176,9 +176,7 @@ fn mux16_truth_table() {
 #[test]
 fn mux16_optimal() {
     let chip = Mux16 { a0: Input16::new(), a1: Input16::new(), sel: Input::new(), out: Output::new() };
-    // TODO: definitely can be improved, but a simple simplifier might take care of redundant gates
-    // anyway.
-    assert_eq!(flatten(chip).len(), 128);
+    assert_eq!(flatten(chip).len(), 49);
 }
 
 #[test]
@@ -187,82 +185,132 @@ fn and_graph() {
     assert_eq!(
         print_graph(&chip),
         "And:\n\
-         a -> nand0.a\n\
-         b -> nand0.b\n\
-         nand0.out -> not1.a\n\
-         not1.out -> out"
+         nand0.a <- a\n\
+         nand0.b <- b\n\
+         not1.a <- nand0.out\n\
+         out <- not1.out"
     );
 }
 
 #[test]
 fn mux16_graph() {
     let chip = Mux16 { a0: Input16::new(), a1: Input16::new(), sel: Input::new(), out: Output16::new() };
+    print!("{}", print_graph(&chip));
     assert_eq!(
         print_graph(&chip),
         "Mux16:\n\
-         a0[0] -> mux0.a0\n\
-         a0[1] -> mux1.a0\n\
-         a0[2] -> mux2.a0\n\
-         a0[3] -> mux3.a0\n\
-         a0[4] -> mux4.a0\n\
-         a0[5] -> mux5.a0\n\
-         a0[6] -> mux6.a0\n\
-         a0[7] -> mux7.a0\n\
-         a0[8] -> mux8.a0\n\
-         a0[9] -> mux9.a0\n\
-         a0[10] -> mux10.a0\n\
-         a0[11] -> mux11.a0\n\
-         a0[12] -> mux12.a0\n\
-         a0[13] -> mux13.a0\n\
-         a0[14] -> mux14.a0\n\
-         a0[15] -> mux15.a0\n\
-         a1[0] -> mux0.a1\n\
-         a1[1] -> mux1.a1\n\
-         a1[2] -> mux2.a1\n\
-         a1[3] -> mux3.a1\n\
-         a1[4] -> mux4.a1\n\
-         a1[5] -> mux5.a1\n\
-         a1[6] -> mux6.a1\n\
-         a1[7] -> mux7.a1\n\
-         a1[8] -> mux8.a1\n\
-         a1[9] -> mux9.a1\n\
-         a1[10] -> mux10.a1\n\
-         a1[11] -> mux11.a1\n\
-         a1[12] -> mux12.a1\n\
-         a1[13] -> mux13.a1\n\
-         a1[14] -> mux14.a1\n\
-         a1[15] -> mux15.a1\n\
-         sel -> mux0.sel\n\
-         sel -> mux1.sel\n\
-         sel -> mux2.sel\n\
-         sel -> mux3.sel\n\
-         sel -> mux4.sel\n\
-         sel -> mux5.sel\n\
-         sel -> mux6.sel\n\
-         sel -> mux7.sel\n\
-         sel -> mux8.sel\n\
-         sel -> mux9.sel\n\
-         sel -> mux10.sel\n\
-         sel -> mux11.sel\n\
-         sel -> mux12.sel\n\
-         sel -> mux13.sel\n\
-         sel -> mux14.sel\n\
-         sel -> mux15.sel\n\
-         mux0.out -> out[0]\n\
-         mux1.out -> out[1]\n\
-         mux2.out -> out[2]\n\
-         mux3.out -> out[3]\n\
-         mux4.out -> out[4]\n\
-         mux5.out -> out[5]\n\
-         mux6.out -> out[6]\n\
-         mux7.out -> out[7]\n\
-         mux8.out -> out[8]\n\
-         mux9.out -> out[9]\n\
-         mux10.out -> out[10]\n\
-         mux11.out -> out[11]\n\
-         mux12.out -> out[12]\n\
-         mux13.out -> out[13]\n\
-         mux14.out -> out[14]\n\
-         mux15.out -> out[15]"
+         not0.a <- sel\n\
+         nand1.a <- not0.out\n\
+         nand1.b <- a0[0]\n\
+         nand2.a <- sel\n\
+         nand2.b <- a1[0]\n\
+         nand3.a <- nand1.out\n\
+         nand3.b <- nand2.out\n\
+         nand4.a <- not0.out\n\
+         nand4.b <- a0[1]\n\
+         nand5.a <- sel\n\
+         nand5.b <- a1[1]\n\
+         nand6.a <- nand4.out\n\
+         nand6.b <- nand5.out\n\
+         nand7.a <- not0.out\n\
+         nand7.b <- a0[2]\n\
+         nand8.a <- sel\n\
+         nand8.b <- a1[2]\n\
+         nand9.a <- nand7.out\n\
+         nand9.b <- nand8.out\n\
+         nand10.a <- not0.out\n\
+         nand10.b <- a0[3]\n\
+         nand11.a <- sel\n\
+         nand11.b <- a1[3]\n\
+         nand12.a <- nand10.out\n\
+         nand12.b <- nand11.out\n\
+         nand13.a <- not0.out\n\
+         nand13.b <- a0[4]\n\
+         nand14.a <- sel\n\
+         nand14.b <- a1[4]\n\
+         nand15.a <- nand13.out\n\
+         nand15.b <- nand14.out\n\
+         nand16.a <- not0.out\n\
+         nand16.b <- a0[5]\n\
+         nand17.a <- sel\n\
+         nand17.b <- a1[5]\n\
+         nand18.a <- nand16.out\n\
+         nand18.b <- nand17.out\n\
+         nand19.a <- not0.out\n\
+         nand19.b <- a0[6]\n\
+         nand20.a <- sel\n\
+         nand20.b <- a1[6]\n\
+         nand21.a <- nand19.out\n\
+         nand21.b <- nand20.out\n\
+         nand22.a <- not0.out\n\
+         nand22.b <- a0[7]\n\
+         nand23.a <- sel\n\
+         nand23.b <- a1[7]\n\
+         nand24.a <- nand22.out\n\
+         nand24.b <- nand23.out\n\
+         nand25.a <- not0.out\n\
+         nand25.b <- a0[8]\n\
+         nand26.a <- sel\n\
+         nand26.b <- a1[8]\n\
+         nand27.a <- nand25.out\n\
+         nand27.b <- nand26.out\n\
+         nand28.a <- not0.out\n\
+         nand28.b <- a0[9]\n\
+         nand29.a <- sel\n\
+         nand29.b <- a1[9]\n\
+         nand30.a <- nand28.out\n\
+         nand30.b <- nand29.out\n\
+         nand31.a <- not0.out\n\
+         nand31.b <- a0[10]\n\
+         nand32.a <- sel\n\
+         nand32.b <- a1[10]\n\
+         nand33.a <- nand31.out\n\
+         nand33.b <- nand32.out\n\
+         nand34.a <- not0.out\n\
+         nand34.b <- a0[11]\n\
+         nand35.a <- sel\n\
+         nand35.b <- a1[11]\n\
+         nand36.a <- nand34.out\n\
+         nand36.b <- nand35.out\n\
+         nand37.a <- not0.out\n\
+         nand37.b <- a0[12]\n\
+         nand38.a <- sel\n\
+         nand38.b <- a1[12]\n\
+         nand39.a <- nand37.out\n\
+         nand39.b <- nand38.out\n\
+         nand40.a <- not0.out\n\
+         nand40.b <- a0[13]\n\
+         nand41.a <- sel\n\
+         nand41.b <- a1[13]\n\
+         nand42.a <- nand40.out\n\
+         nand42.b <- nand41.out\n\
+         nand43.a <- not0.out\n\
+         nand43.b <- a0[14]\n\
+         nand44.a <- sel\n\
+         nand44.b <- a1[14]\n\
+         nand45.a <- nand43.out\n\
+         nand45.b <- nand44.out\n\
+         nand46.a <- not0.out\n\
+         nand46.b <- a0[15]\n\
+         nand47.a <- sel\n\
+         nand47.b <- a1[15]\n\
+         nand48.a <- nand46.out\n\
+         nand48.b <- nand47.out\n\
+         out[0] <- nand3.out\n\
+         out[1] <- nand6.out\n\
+         out[2] <- nand9.out\n\
+         out[3] <- nand12.out\n\
+         out[4] <- nand15.out\n\
+         out[5] <- nand18.out\n\
+         out[6] <- nand21.out\n\
+         out[7] <- nand24.out\n\
+         out[8] <- nand27.out\n\
+         out[9] <- nand30.out\n\
+         out[10] <- nand33.out\n\
+         out[11] <- nand36.out\n\
+         out[12] <- nand39.out\n\
+         out[13] <- nand42.out\n\
+         out[14] <- nand45.out\n\
+         out[15] <- nand48.out"
     );
 }

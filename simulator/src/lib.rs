@@ -9,15 +9,6 @@ pub use declare::*;
 
 pub use simulator_derive::Reflect;
 
-/// Show the connections of a chip after one level of expansion.
-///
-/// Each line is `source -> sink`. Chip inputs are sources; chip outputs are sinks.
-/// Sub-component ports are labelled `{typename}{index}.{port}`.
-///
-/// ```ignore
-/// let chip = And { a: Input::new(), b: Input::new(), out: Output::new() };
-/// assert_eq!(print_graph(&chip), "And:\na -> nand0.a\nb -> nand0.b\nnand0.out -> not1.a\nnot1.out -> out");
-/// ```
 fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
     let mut ai = a.chars().peekable();
     let mut bi = b.chars().peekable();
@@ -41,6 +32,18 @@ fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
     }
 }
 
+/// Show the connections of a chip after one level of expansion.
+///
+/// Each line is `source -> sink`. Chip inputs are sources; chip outputs are sinks.
+/// Sub-component ports are labelled `{typename}{index}.{port}`.
+///
+/// ```ignore
+/// let chip = And { a: Input::new(), b: Input::new(), out: Output::new() };
+/// assert_eq!(print_graph(&chip), "And:\nnand0.a <- a\nnand0.b <- b\nnot1.a <- nand0.out\nout <- not1.out");
+/// ```
+///
+/// Note: Claude has been given full latitude here as long as the output looks right,
+/// and it's elected to sort strings at the end.
 pub fn print_graph<C>(chip: &C) -> String
 where
     C: Component + Reflect,
@@ -103,7 +106,7 @@ where
                     .collect();
                 for src in &sources {
                     for sink in &sinks {
-                        result.push(format!("{} -> {}", src, sink));
+                        result.push(format!("{} <- {}", sink, src));
                     }
                 }
             }
@@ -111,15 +114,22 @@ where
         })
         .collect();
 
-    // Chip-input lines (source has no '.') sort before sub-component-output lines.
-    lines.sort_by(|a, b| {
-        let a_sub = a.split(" -> ").next().unwrap_or("").contains('.');
-        let b_sub = b.split(" -> ").next().unwrap_or("").contains('.');
-        match (a_sub, b_sub) {
-            (false, true)  => std::cmp::Ordering::Less,
-            (true,  false) => std::cmp::Ordering::Greater,
-            _              => natural_cmp(a, b),
+    // Sort by destination component index, then port name; chip outputs sort last.
+    let sink_key = |line: &str| -> (usize, String) {
+        let sink = line.split(" <- ").next().unwrap_or("");
+        if let Some(dot) = sink.find('.') {
+            let comp = &sink[..dot];
+            let num_start = comp.len() - comp.chars().rev().take_while(|c| c.is_ascii_digit()).count();
+            let idx: usize = comp[num_start..].parse().unwrap_or(usize::MAX);
+            (idx, sink[dot + 1..].to_string())
+        } else {
+            (usize::MAX, sink.to_string())
         }
+    };
+    lines.sort_by(|a, b| {
+        let (ai, ap) = sink_key(a);
+        let (bi, bp) = sink_key(b);
+        ai.cmp(&bi).then_with(|| natural_cmp(&ap, &bp))
     });
     format!("{}:\n{}", chip.name(), lines.join("\n"))
 }

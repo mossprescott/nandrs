@@ -336,14 +336,24 @@ impl Component for Mux16 {
     type Target = Project01Component;
 
     /*
+      let not_sel = Not { a: sel }
       for i in 0..16:
-        let mux = Mux { a0: inputs.a0[i], a1: inputs.a1[i], sel: inputs.sel }
-        outputs.out[i] = mux.out
+        let nand0      = Nand { a: not_sel.out, b: a0[i]    }
+        let nand1      = Nand { a: sel,         b: a1[i]    }
+        outputs.out[i] = Nand { a: nand0.out,   b: nand1.out }
      */
     fn expand(&self) -> Option<Vec<Project01Component>> {
-        Some((0..16).map(|i| {
-            Mux { a0: self.a0.bit(i), a1: self.a1.bit(i), sel: self.sel.clone(), out: self.out.bit(i) }.into()
-        }).collect())
+        let not_sel = Not { a: self.sel.clone(), out: Output::new() };
+        let not_sel_out: Input = not_sel.out.clone().into();
+
+        let mut result = vec![not_sel.into()];
+        result.extend((0..16).flat_map(|i| {
+            let nand0 = Nand { a: not_sel_out.clone(),       b: self.a0.bit(i),        out: Output::new() };
+            let nand1 = Nand { a: self.sel.clone(),           b: self.a1.bit(i),        out: Output::new() };
+            let out   = Nand { a: nand0.out.clone().into(),  b: nand1.out.clone().into(), out: self.out.bit(i) };
+            vec![nand0.into(), nand1.into(), out.into()]
+        }).collect::<Vec<_>>());
+        Some(result)
     }
 }
 
