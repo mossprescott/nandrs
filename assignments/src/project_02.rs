@@ -2,7 +2,7 @@
 
 use simulator::{self, Component, Input, Input16, Output, Output16, Reflect};
 use simulator::Reflect as _;
-use crate::project_01::{Project01Component, Nand, Not, Xor, And, Or};
+use crate::project_01::{Project01Component, Mux16, Not16, And16, Nand, Not, Xor, And, Or};
 
 pub enum Project02Component {
     Project01(Project01Component),
@@ -316,6 +316,41 @@ impl Component for Alu {
     type Target = Project02Component;
 
     fn expand(&self) -> Option<Vec<Project02Component>> {
-        todo!()
-    }
+        // Hack: unconnected input is initialized to zero at present.
+        let zero = Input16::new();
+
+        let x1 = Mux16 { a0: self.x.clone(), a1: zero.clone(), sel: self.zx.clone(), out: Output16::new() };
+        let xn = Not16 { a: x1.out.clone().into(), out: Output16::new() };
+        let x2 = Mux16 { a0: x1.out.clone().into(), a1: xn.out.clone().into(), sel: self.nx.clone(), out: Output16::new() };
+
+        let y1 = Mux16 { a0: self.y.clone(), a1: zero.clone(), sel: self.zy.clone(), out: Output16::new() };
+        let yn = Not16 { a: y1.out.clone().into(), out: Output16::new() };
+        let y2 = Mux16 { a0: y1.out.clone().into(), a1: yn.out.clone().into(), sel: self.ny.clone(), out: Output16::new() };
+
+        let and = And16 { a: x2.out.clone().into(), b: y2.out.clone().into(), out: Output16::new() };
+        let add = Add16 { a: x2.out.clone().into(), b: y2.out.clone().into(), out: Output16::new() };
+
+        let result = Mux16 { a0: and.out.clone().into(), a1: add.out.clone().into(), sel: self.f.clone(), out: Output16::new() };
+        let rn = Not16 { a: result.out.clone().into(), out: Output16::new() };
+        let out = Mux16 { a0: result.out.clone().into(), a1: rn.out.clone().into(), sel: self.no.clone(), out: self.out.clone() };
+
+        let rz = Zero16 { a: out.out.clone().into(), out: self.zr.clone() };
+        let rneg = Neg16 { a: out.out.clone().into(), out: self.ng.clone() };
+
+        Some(vec![
+            Project01Component::from(x1).into(),
+            Project01Component::from(xn).into(),
+            Project01Component::from(x2).into(),
+            Project01Component::from(y1).into(),
+            Project01Component::from(yn).into(),
+            Project01Component::from(y2).into(),
+            Project01Component::from(and).into(),
+            add.into(),
+            Project01Component::from(result).into(),
+            Project01Component::from(rn).into(),
+            Project01Component::from(out).into(),
+            rz.into(),
+            rneg.into(),
+        ])
+   }
 }

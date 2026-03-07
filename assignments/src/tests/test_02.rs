@@ -1,6 +1,6 @@
 use simulator::{Input, Input16, Output, Output16};
 use simulator::eval::eval;
-use crate::project_02::{flatten, HalfAdder, FullAdder, Inc16, Add16, Zero16, Neg16};
+use crate::project_02::{flatten, HalfAdder, FullAdder, Inc16, Add16, Zero16, Neg16, Alu};
 
 #[test]
 fn half_adder_truth_table() {
@@ -105,3 +105,58 @@ fn neg16_truth_table() {
 //     let chip = Neg16 { a: Input16::new(), out: Output::new() };
 //     assert_eq!(flatten(chip).len(), 0);
 // }
+
+fn alu() -> Alu {
+    Alu {
+        x: Input16::new(), y: Input16::new(),
+        zx: Input::new(), nx: Input::new(),
+        zy: Input::new(), ny: Input::new(),
+        f: Input::new(), no: Input::new(),
+        out: Output16::new(), zr: Output::new(), ng: Output::new(),
+    }
+}
+
+#[test]
+fn alu_truth_table() {
+    // 0 = 0 + 0
+    let r = eval(&alu(), [("x", 0), ("y", 0), ("zx", 1), ("nx", 0), ("zy", 1), ("ny", 0), ("f", 1), ("no", 0)]);
+    assert_eq!(r["out"], 0);      assert_eq!(r["zr"], 1); assert_eq!(r["ng"], 0); // 0
+
+    // 1 = !(-1 + -1)
+    let r = eval(&alu(), [("x", 0), ("y", 0), ("zx", 1), ("nx", 1), ("zy", 1), ("ny", 1), ("f", 1), ("no", 1)]);
+    assert_eq!(r["out"], 1);      assert_eq!(r["zr"], 0); assert_eq!(r["ng"], 0); // 1
+
+    // -1 = -1 + 0
+    let r = eval(&alu(), [("x", 0), ("y", 0), ("zx", 1), ("nx", 1), ("zy", 1), ("ny", 0), ("f", 1), ("no", 0)]);
+    assert_eq!(r["out"], 0xffff); assert_eq!(r["zr"], 0); assert_eq!(r["ng"], 1); // -1
+
+    // x = x and 0xfff
+    let r = eval(&alu(), [("x", 5), ("y", 3), ("zx", 0), ("nx", 0), ("zy", 1), ("ny", 1), ("f", 0), ("no", 0)]);
+    assert_eq!(r["out"], 5);      assert_eq!(r["zr"], 0); assert_eq!(r["ng"], 0); // x
+
+    // y = 0xfff and y
+    let r = eval(&alu(), [("x", 5), ("y", 3), ("zx", 1), ("nx", 1), ("zy", 0), ("ny", 0), ("f", 0), ("no", 0)]);
+    assert_eq!(r["out"], 3);      assert_eq!(r["zr"], 0); assert_eq!(r["ng"], 0); // y
+
+    // x + y
+    let r = eval(&alu(), [("x", 5), ("y", 3), ("zx", 0), ("nx", 0), ("zy", 0), ("ny", 0), ("f", 1), ("no", 0)]);
+    assert_eq!(r["out"], 8);      assert_eq!(r["zr"], 0); assert_eq!(r["ng"], 0); // x + y
+
+    // x - y = !(!x + y)
+    let r = eval(&alu(), [("x", 5), ("y", 3), ("zx", 0), ("nx", 1), ("zy", 0), ("ny", 0), ("f", 1), ("no", 1)]);
+    assert_eq!(r["out"], 2);      assert_eq!(r["zr"], 0); assert_eq!(r["ng"], 0); // x - y
+
+    // x and y
+    let r = eval(&alu(), [("x", 0b1010), ("y", 0b1100), ("zx", 0), ("nx", 0), ("zy", 0), ("ny", 0), ("f", 0), ("no", 0)]);
+    assert_eq!(r["out"], 0b1000); assert_eq!(r["zr"], 0); assert_eq!(r["ng"], 0); // x AND y
+
+    // x or y = !(!x and !y)
+    let r = eval(&alu(), [("x", 0b1010), ("y", 0b0101), ("zx", 0), ("nx", 1), ("zy", 0), ("ny", 1), ("f", 0), ("no", 1)]);
+    assert_eq!(r["out"], 0b1111); assert_eq!(r["zr"], 0); assert_eq!(r["ng"], 0); // x OR y
+}
+
+#[test]
+fn alu_optimal() {
+    // TODO: 560, once Neg16 is reduced to wiring only
+    assert_eq!(flatten(alu()).len(), 562);
+}
