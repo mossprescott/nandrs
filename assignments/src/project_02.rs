@@ -139,7 +139,7 @@ impl Component for FullAdder {
 /// out = in + 1 (16-bit, overflow ignored)
 #[derive(Reflect)]
 pub struct Inc16 {
-    pub in0: Input16,
+    pub a: Input16,
     pub out: Output16,
 }
 
@@ -147,7 +147,17 @@ impl Component for Inc16 {
     type Target = Project02Component;
 
     fn expand(&self) -> Option<Vec<Project02Component>> {
-        todo!()
+        // bit 0: out[0] = NOT(a[0]); carry = a[0] (the carry-in is implicitly 1)
+        let a0   = self.a.bit(0);
+        let not0 = Not { a: a0.clone(), out: self.out.bit(0) };
+        let mut carry: Input = a0;
+        let mut result: Vec<Project02Component> = vec![Project01Component::from(not0).into()];
+        for i in 1..16 {
+            let ha = HalfAdder { a: self.a.bit(i), b: carry, sum: self.out.bit(i), carry: Output::new() };
+            carry = ha.carry.clone().into();
+            result.push(ha.into());
+        }
+        Some(result)
     }
 }
 
@@ -163,7 +173,15 @@ impl Component for Add16 {
     type Target = Project02Component;
 
     fn expand(&self) -> Option<Vec<Project02Component>> {
-        todo!()
+        let ha0 = HalfAdder { a: self.a.bit(0), b: self.b.bit(0), sum: self.out.bit(0), carry: Output::new() };
+        let mut carry: Input = ha0.carry.clone().into();
+        let mut result: Vec<Project02Component> = vec![ha0.into()];
+        for i in 1..16 {
+            let fa = FullAdder { a: self.a.bit(i), b: self.b.bit(i), c: carry, sum: self.out.bit(i), carry: Output::new() };
+            carry = fa.carry.clone().into();
+            result.push(fa.into());
+        }
+        Some(result)
     }
 }
 

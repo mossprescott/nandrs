@@ -41,17 +41,17 @@ fn full_adder_optimal() {
 
 #[test]
 fn inc16_truth_table() {
-    let chip = Inc16 { in0: Input16::new(), out: Output16::new() };
-    assert_eq!(eval(&chip, [("in0", 0)])["out"],     1);
-    assert_eq!(eval(&chip, [("in0", 1)])["out"],     2);
-    assert_eq!(eval(&chip, [("in0", 42)])["out"],    43);
-    assert_eq!(eval(&chip, [("in0", 0xffff)])["out"], 0); // overflow wraps
+    let chip = Inc16 { a: Input16::new(), out: Output16::new() };
+    assert_eq!(eval(&chip, [("a", 0)])["out"],     1);
+    assert_eq!(eval(&chip, [("a", 1)])["out"],     2);
+    assert_eq!(eval(&chip, [("a", 42)])["out"],    43);
+    assert_eq!(eval(&chip, [("a", 0xffff)])["out"], 0); // overflow wraps
 }
 
 #[test]
 fn inc16_optimal() {
     // Not(1) for bit 0 + 15 x HalfAdder(6) = 91
-    let chip = Inc16 { in0: Input16::new(), out: Output16::new() };
+    let chip = Inc16 { a: Input16::new(), out: Output16::new() };
     // TODO: pynand has 76
     assert_eq!(flatten(chip).len(), 91);
 }
