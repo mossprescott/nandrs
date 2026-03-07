@@ -34,6 +34,7 @@ use syn::{Data, DeriveInput, Fields, Type, parse_macro_input};
 ///             ]),
 ///         }
 ///     }
+///     fn name(&self) -> &'static str { "And" }
 /// }
 /// ```
 #[proc_macro_derive(Reflect)]
@@ -54,12 +55,13 @@ pub fn derive_reflect(input: TokenStream) -> TokenStream {
     for field in &named_fields.named {
         let field_name     = field.ident.as_ref().unwrap();
         let field_name_str = field_name.to_string();
+        let field_ty       = &field.ty;
 
-        if type_name_starts_with(&field.ty, "Input") {
+        if type_name_starts_with(field_ty, "Input") {
             inputs.push(quote! {
                 (#field_name_str.to_string(), self.#field_name.clone().into())
             });
-        } else if type_name_starts_with(&field.ty, "Output") {
+        } else if type_name_starts_with(field_ty, "Output") {
             outputs.push(quote! {
                 (#field_name_str.to_string(), self.#field_name.clone().into())
             });
@@ -76,6 +78,58 @@ pub fn derive_reflect(input: TokenStream) -> TokenStream {
                 }
             }
             fn name(&self) -> &'static str { #name_str }
+        }
+    }
+    .into()
+}
+
+/// Derive `simulator::Chip` for a struct whose fields are all `Input*`/`Output*` buses.
+///
+/// Generates a `chip()` constructor that calls `::new()` on every field.
+///
+/// # Example
+///
+/// ```ignore
+/// #[derive(Chip)]
+/// pub struct And {
+///     pub a: Input,
+///     pub b: Input,
+///     pub out: Output,
+/// }
+/// ```
+///
+/// expands to:
+///
+/// ```ignore
+/// impl simulator::Chip for And {
+///     fn chip() -> Self {
+///         Self { a: Input::new(), b: Input::new(), out: Output::new() }
+///     }
+/// }
+/// ```
+#[proc_macro_derive(Chip)]
+pub fn derive_chip(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = &input.ident;
+
+    let Data::Struct(data_struct) = &input.data else {
+        panic!("Chip can only be derived for structs");
+    };
+    let Fields::Named(named_fields) = &data_struct.fields else {
+        panic!("Chip can only be derived for structs with named fields");
+    };
+
+    let chip_fields: Vec<_> = named_fields.named.iter().map(|field| {
+        let field_name = field.ident.as_ref().unwrap();
+        let field_ty   = &field.ty;
+        quote! { #field_name: <#field_ty>::new() }
+    }).collect();
+
+    quote! {
+        impl ::simulator::Chip for #name {
+            fn chip() -> Self {
+                Self { #(#chip_fields),* }
+            }
         }
     }
     .into()

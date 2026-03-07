@@ -1,7 +1,8 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use simulator::{self, Component, Input, Input16, Output, Output16, Reflect};
+use simulator::{self, Component, Input, Input16, Output, Output16, Reflect, Chip};
 use simulator::Reflect as _;
+use simulator::Chip as _;
 use crate::project_01::{Project01Component, Mux16, Not16, And16, Nand, Not, Xor, And, Or};
 
 pub enum Project02Component {
@@ -83,7 +84,7 @@ pub fn flatten<C: Into<Project02Component>>(chip: C) -> Vec<Nand> {
 }
 
 /// sum = 1s-digit of two-bit sum, carry = 2s-digit
-#[derive(Reflect)]
+#[derive(Reflect, Chip)]
 pub struct HalfAdder {
     pub a:     Input,
     pub b:     Input,
@@ -118,7 +119,7 @@ impl Component for HalfAdder {
 }
 
 /// sum = 1s-digit of three-bit sum, carry = 2s-digit
-#[derive(Reflect)]
+#[derive(Reflect, Chip)]
 pub struct FullAdder {
     pub a:     Input,
     pub b:     Input,
@@ -159,7 +160,7 @@ impl Component for FullAdder {
 }
 
 /// out = in + 1 (16-bit, overflow ignored)
-#[derive(Reflect)]
+#[derive(Reflect, Chip)]
 pub struct Inc16 {
     pub a: Input16,
     pub out: Output16,
@@ -184,7 +185,7 @@ impl Component for Inc16 {
 }
 
 /// out = a + b (16-bit, overflow ignored)
-#[derive(Reflect)]
+#[derive(Reflect, Chip)]
 pub struct Add16 {
     pub a:   Input16,
     pub b:   Input16,
@@ -208,7 +209,7 @@ impl Component for Add16 {
 }
 
 /// Returns 1 if all bits of input are 0.
-#[derive(Reflect)]
+#[derive(Reflect, Chip)]
 pub struct Zero16 {
     pub a: Input16,
     pub out: Output,
@@ -261,7 +262,7 @@ impl Component for Zero16 {
 }
 
 /// out = true if the most-significant bit of a is 1 (i.e., input is negative in two's complement).
-#[derive(Reflect)]
+#[derive(Reflect, Chip)]
 pub struct Neg16 {
     pub a: Input16,
     pub out: Output,
@@ -285,7 +286,7 @@ impl Component for Neg16 {
 }
 
 /// Hack ALU: computes one of several functions of x and y selected by control bits.
-#[derive(Reflect)]
+#[derive(Reflect, Chip)]
 pub struct Alu {
     /// "Left" input
     pub x:   Input16,

@@ -87,6 +87,12 @@ pub trait Reflect {
     fn name(&self) -> &'static str;
 }
 
+/// Construct a fresh instance of a chip struct with new Input/Output buses on every port.
+/// This is good for making stand-alone instances, when that's useful for testing.
+pub trait Chip {
+    fn chip() -> Self;
+}
+
 /// Type-erased bus reference, for use in Interface where the width is only known at runtime.
 /// The `id` field carries the wire identity: two BusRefs with the same `id` pointer refer to
 /// the same bus. `offset` is the first bit index within the bus; `width` is the count of bits.
