@@ -14,8 +14,7 @@ fn half_adder_truth_table() {
 #[test]
 fn half_adder_optimal() {
     let chip = HalfAdder { a: Input::new(), b: Input::new(), sum: Output::new(), carry: Output::new() };
-    // TODO: 5, per nandgame
-    assert_eq!(flatten(chip).len(), 6);
+    assert_eq!(flatten(chip).len(), 5);
 }
 
 #[test]
@@ -33,10 +32,8 @@ fn full_adder_truth_table() {
 
 #[test]
 fn full_adder_optimal() {
-    // 2 x HalfAdder(6) + Or(3) = 15
     let chip = FullAdder { a: Input::new(), b: Input::new(), c: Input::new(), sum: Output::new(), carry: Output::new() };
-    // TODO: 9, per nandgame
-    assert_eq!(flatten(chip).len(), 15);
+    assert_eq!(flatten(chip).len(), 9);
 }
 
 #[test]
@@ -52,8 +49,8 @@ fn inc16_truth_table() {
 fn inc16_optimal() {
     // Not(1) for bit 0 + 15 x HalfAdder(6) = 91
     let chip = Inc16 { a: Input16::new(), out: Output16::new() };
-    // TODO: pynand has 76
-    assert_eq!(flatten(chip).len(), 91);
+    // Not(1) + 15 x HalfAdder(5) = 76
+    assert_eq!(flatten(chip).len(), 76);
 }
 
 #[test]
@@ -71,8 +68,8 @@ fn add16_truth_table() {
 fn add16_optimal() {
     // HalfAdder(6) for bit 0 + 15 x FullAdder(15) = 231
     let chip = Add16 { a: Input16::new(), b: Input16::new(), out: Output16::new() };
-    // TODO: pynand has 140
-    assert_eq!(flatten(chip).len(), 231);
+    // HalfAdder(5) + 15 x FullAdder(9) = 140
+    assert_eq!(flatten(chip).len(), 140);
 }
 
 #[test]

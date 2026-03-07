@@ -98,11 +98,19 @@ impl Component for HalfAdder {
     Equivalent to:
       sum = Xor { a = inputs.a, b: inputs.b }
       carry = And {a = inputs.a, b: inputs.b}
+    but flattened to use only 5 Nands.
      */
     fn expand(&self) -> Option<Vec<Project02Component>> {
-        let sum   = Xor { a: self.a.clone(), b: self.b.clone(), out: self.sum.clone() };
-        let carry = And { a: self.a.clone(), b: self.b.clone(), out: self.carry.clone() };
+        // n1 = NAND(a,b) is shared: XOR reuses it, carry = NOT(n1) = NAND(n1,n1)
+        let n1    = Nand { a: self.a.clone(),        b: self.b.clone(),        out: Output::new() };
+        let n2    = Nand { a: self.a.clone(),         b: n1.out.clone().into(), out: Output::new() };
+        let n3    = Nand { a: self.b.clone(),         b: n1.out.clone().into(), out: Output::new() };
+        let sum   = Nand { a: n2.out.clone().into(),  b: n3.out.clone().into(), out: self.sum.clone() };
+        let carry = Nand { a: n1.out.clone().into(),  b: n1.out.clone().into(), out: self.carry.clone() };
         Some(vec![
+            Project01Component::from(n1).into(),
+            Project01Component::from(n2).into(),
+            Project01Component::from(n3).into(),
             Project01Component::from(sum).into(),
             Project01Component::from(carry).into(),
         ])
@@ -122,19 +130,33 @@ pub struct FullAdder {
 impl Component for FullAdder {
     type Target = Project02Component;
 
+    /*
+     Some sharing of common gates to get down to the minimal 9 gates.
+     */
     fn expand(&self) -> Option<Vec<Project02Component>> {
-        let ha1 = HalfAdder { a: self.a.clone(), b: self.b.clone(), sum: Output::new(), carry: Output::new() };
-        let ha2 = HalfAdder { a: ha1.sum.clone().into(), b: self.c.clone(), sum: self.sum.clone(), carry: Output::new() };
-        let out_carry = Or { a: ha1.carry.clone().into(), b: ha2.carry.clone().into(), out: self.carry.clone() };
+        // n4 = XOR(a,b); n5 = NAND(c, n4) shared by sum and carry paths
+        let n1    = Nand { a: self.a.clone(),        b: self.b.clone(),        out: Output::new() };
+        let n2    = Nand { a: self.a.clone(),         b: n1.out.clone().into(), out: Output::new() };
+        let n3    = Nand { a: self.b.clone(),         b: n1.out.clone().into(), out: Output::new() };
+        let n4    = Nand { a: n2.out.clone().into(),  b: n3.out.clone().into(), out: Output::new() }; // XOR(a,b)
+        let n5    = Nand { a: self.c.clone(),         b: n4.out.clone().into(), out: Output::new() }; // shared
+        let n6    = Nand { a: self.c.clone(),         b: n5.out.clone().into(), out: Output::new() };
+        let n7    = Nand { a: n4.out.clone().into(),  b: n5.out.clone().into(), out: Output::new() };
+        let sum   = Nand { a: n6.out.clone().into(),  b: n7.out.clone().into(), out: self.sum.clone() };
+        let carry = Nand { a: n1.out.clone().into(),  b: n5.out.clone().into(), out: self.carry.clone() };
         Some(vec![
-            ha1.into(),
-            ha2.into(),
-            Project01Component::from(out_carry).into(),
+            Project01Component::from(n1).into(),
+            Project01Component::from(n2).into(),
+            Project01Component::from(n3).into(),
+            Project01Component::from(n4).into(),
+            Project01Component::from(n5).into(),
+            Project01Component::from(n6).into(),
+            Project01Component::from(n7).into(),
+            Project01Component::from(sum).into(),
+            Project01Component::from(carry).into(),
         ])
     }
 }
-
-// --- Inc16 ---
 
 /// out = in + 1 (16-bit, overflow ignored)
 #[derive(Reflect)]
@@ -238,7 +260,7 @@ impl Component for Zero16 {
     }
 }
 
-/// out = true if the most-significant bit of in is 1 (i.e., input is negative in two's complement).
+/// out = true if the most-significant bit of a is 1 (i.e., input is negative in two's complement).
 #[derive(Reflect)]
 pub struct Neg16 {
     pub a: Input16,
