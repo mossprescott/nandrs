@@ -2,6 +2,7 @@ use crate::{Component, IC, Input, InputBus, Output, OutputBus, Reflect, Chip, In
 use crate::nat::{Nat, N16};
 
 /// The single primitive: true if either input is false.
+#[derive(Clone)]
 pub struct Nand {
     pub a: Input,
     pub b: Input,
@@ -38,6 +39,7 @@ impl Component for Nand {
     }
 }
 
+#[derive(Clone)]
 pub struct Register<Width: Nat> {
     pub data: InputBus<Width>,
     pub load: Input,
@@ -82,6 +84,7 @@ pub type Combinational = Nand;
 
 /// Type of components that participate in "sequential" circuits of a defined width: only Nand
 /// and Register<Width>.
+#[derive(Clone)]
 pub enum Sequential<Width: Nat> {
     Nand(Nand),
     Register(Register<Width>),
