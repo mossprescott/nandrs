@@ -1,28 +1,5 @@
-use crate::{Component, Input, InputBus, Output, OutputBus, Reflect, Chip, Interface};
+use crate::{Component, IC, Input, InputBus, Output, OutputBus, Reflect, Chip, Interface};
 use crate::nat::{Nat, N16};
-
-/// A circuit composed of inputs, outputs, and zero or more components of a certain type.
-///
-/// Invariant: every input of every component must refer to either: one of the inputs of
-/// self.intf, or an output associated with some other component in the same IC.
-pub struct IC<C> {
-    pub name: String,
-
-    /// The exposed inputs and outputs.
-    pub intf: Interface,
-
-    /// The constituent components.
-    pub components: Vec<C>,
-}
-impl<C> Reflect for IC<C> {
-    fn reflect(&self) -> Interface {
-        self.intf.clone()
-    }
-
-    fn name(&self) -> &str {
-        &self.name
-    }
-}
 
 /// The single primitive: true if either input is false.
 pub struct Nand {
@@ -56,7 +33,7 @@ impl Chip for Nand {
 impl Component for Nand {
     type Target = Nand;
 
-    fn expand(&self) -> Option<Vec<Nand>> {
+    fn expand(&self) -> Option<IC<Nand>> {
         None
     }
 }
@@ -92,7 +69,7 @@ impl<Width: Nat> Chip for Register<Width> {
 impl<Width: Nat> Component for Register<Width> {
     type Target = Register<Width>;
 
-    fn expand(&self) -> Option<Vec<Register<Width>>> {
+    fn expand(&self) -> Option<IC<Register<Width>>> {
         None
     }
 }

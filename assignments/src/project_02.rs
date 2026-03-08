@@ -1,9 +1,9 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use simulator::{self, Component, Input, Input16, Output, Output16, Reflect, Chip};
+use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, Chip};
 use simulator::Reflect as _;
 use simulator::Chip as _;
-use simulator::component::{IC, Nand};
+use simulator::component::Nand;
 use crate::project_01::{Project01Component, Mux16, Not16, And16, Not, Xor, And, Or};
 
 pub enum Project02Component {
@@ -29,9 +29,9 @@ impl From<Alu>       for Project02Component { fn from(c: Alu)       -> Self { Pr
 impl Component for Project02Component {
     type Target = Project02Component;
 
-    fn expand(&self) -> Option<Vec<Project02Component>> {
+    fn expand(&self) -> Option<IC<Project02Component>> {
         match self {
-            Project02Component::Project01(c) => c.expand().map(|v| v.into_iter().map(Into::into).collect()),
+            Project02Component::Project01(c) => c.expand().map(|ic| IC { name: ic.name, intf: ic.intf, components: ic.components.into_iter().map(Into::into).collect() }),
             Project02Component::HalfAdder(c) => c.expand(),
             Project02Component::FullAdder(c) => c.expand(),
             Project02Component::Inc16(c)     => c.expand(),
@@ -76,9 +76,9 @@ pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Nand> {
         match comp.expand() {
             None => match comp {
                 Project02Component::Project01(p) => crate::project_01::flatten(p).components,
-                _ => unreachable!(),
+                _ => panic!("Did not reduce to Nand: {:?}", comp.name()),
             },
-            Some(subs) => subs.into_iter().flat_map(go).collect(),
+            Some(ic) => ic.components.into_iter().flat_map(go).collect(),
         }
     }
     IC {
@@ -106,20 +106,20 @@ impl Component for HalfAdder {
       carry = And {a = inputs.a, b: inputs.b}
     but flattened to use only 5 Nands.
      */
-    fn expand(&self) -> Option<Vec<Project02Component>> {
+    fn expand(&self) -> Option<IC<Project02Component>> {
         // n1 = NAND(a,b) is shared: XOR reuses it, carry = NOT(n1) = NAND(n1,n1)
         let n1    = Nand { a: self.a.clone(),        b: self.b.clone(),        out: Output::new() };
         let n2    = Nand { a: self.a.clone(),         b: n1.out.clone().into(), out: Output::new() };
         let n3    = Nand { a: self.b.clone(),         b: n1.out.clone().into(), out: Output::new() };
         let sum   = Nand { a: n2.out.clone().into(),  b: n3.out.clone().into(), out: self.sum.clone() };
         let carry = Nand { a: n1.out.clone().into(),  b: n1.out.clone().into(), out: self.carry.clone() };
-        Some(vec![
+        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![
             Project01Component::from(n1).into(),
             Project01Component::from(n2).into(),
             Project01Component::from(n3).into(),
             Project01Component::from(sum).into(),
             Project01Component::from(carry).into(),
-        ])
+        ]})
     }
 }
 
@@ -139,7 +139,7 @@ impl Component for FullAdder {
     /*
      Some sharing of common gates to get down to the minimal 9 gates.
      */
-    fn expand(&self) -> Option<Vec<Project02Component>> {
+    fn expand(&self) -> Option<IC<Project02Component>> {
         // n4 = XOR(a,b); n5 = NAND(c, n4) shared by sum and carry paths
         let n1    = Nand { a: self.a.clone(),        b: self.b.clone(),        out: Output::new() };
         let n2    = Nand { a: self.a.clone(),         b: n1.out.clone().into(), out: Output::new() };
@@ -150,7 +150,7 @@ impl Component for FullAdder {
         let n7    = Nand { a: n4.out.clone().into(),  b: n5.out.clone().into(), out: Output::new() };
         let sum   = Nand { a: n6.out.clone().into(),  b: n7.out.clone().into(), out: self.sum.clone() };
         let carry = Nand { a: n1.out.clone().into(),  b: n5.out.clone().into(), out: self.carry.clone() };
-        Some(vec![
+        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![
             Project01Component::from(n1).into(),
             Project01Component::from(n2).into(),
             Project01Component::from(n3).into(),
@@ -160,7 +160,7 @@ impl Component for FullAdder {
             Project01Component::from(n7).into(),
             Project01Component::from(sum).into(),
             Project01Component::from(carry).into(),
-        ])
+        ]})
     }
 }
 
@@ -174,18 +174,18 @@ pub struct Inc16 {
 impl Component for Inc16 {
     type Target = Project02Component;
 
-    fn expand(&self) -> Option<Vec<Project02Component>> {
+    fn expand(&self) -> Option<IC<Project02Component>> {
         // bit 0: out[0] = NOT(a[0]); carry = a[0] (the carry-in is implicitly 1)
         let a0   = self.a.bit(0);
         let not0 = Not { a: a0.clone(), out: self.out.bit(0) };
         let mut carry: Input = a0;
-        let mut result: Vec<Project02Component> = vec![Project01Component::from(not0).into()];
+        let mut components: Vec<Project02Component> = vec![Project01Component::from(not0).into()];
         for i in 1..16 {
             let ha = HalfAdder { a: self.a.bit(i), b: carry, sum: self.out.bit(i), carry: Output::new() };
             carry = ha.carry.clone().into();
-            result.push(ha.into());
+            components.push(ha.into());
         }
-        Some(result)
+        Some(IC { name: self.name().to_string(), intf: self.reflect(), components })
     }
 }
 
@@ -200,16 +200,16 @@ pub struct Add16 {
 impl Component for Add16 {
     type Target = Project02Component;
 
-    fn expand(&self) -> Option<Vec<Project02Component>> {
+    fn expand(&self) -> Option<IC<Project02Component>> {
         let ha0 = HalfAdder { a: self.a.bit(0), b: self.b.bit(0), sum: self.out.bit(0), carry: Output::new() };
         let mut carry: Input = ha0.carry.clone().into();
-        let mut result: Vec<Project02Component> = vec![ha0.into()];
+        let mut components: Vec<Project02Component> = vec![ha0.into()];
         for i in 1..16 {
             let fa = FullAdder { a: self.a.bit(i), b: self.b.bit(i), c: carry, sum: self.out.bit(i), carry: Output::new() };
             carry = fa.carry.clone().into();
-            result.push(fa.into());
+            components.push(fa.into());
         }
-        Some(result)
+        Some(IC { name: self.name().to_string(), intf: self.reflect(), components })
     }
 }
 
@@ -223,7 +223,7 @@ pub struct Zero16 {
 impl Component for Zero16 {
     type Target = Project02Component;
 
-    fn expand(&self) -> Option<Vec<Project02Component>> {
+    fn expand(&self) -> Option<IC<Project02Component>> {
         // Level 1: OR adjacent pairs
         let or_01   = Or { a: self.a.bit(0),               b: self.a.bit(1),               out: Output::new() };
         let or_23   = Or { a: self.a.bit(2),               b: self.a.bit(3),               out: Output::new() };
@@ -245,7 +245,7 @@ impl Component for Zero16 {
         let or_all  = Or { a: or_lo.out.clone().into(),    b: or_hi.out.clone().into(),    out: Output::new() };
         // Invert: out is 1 iff no bit was set
         let not_all = Not { a: or_all.out.clone().into(), out: self.out.clone() };
-        Some(vec![
+        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![
             Project01Component::from(or_01).into(),
             Project01Component::from(or_23).into(),
             Project01Component::from(or_45).into(),
@@ -262,7 +262,7 @@ impl Component for Zero16 {
             Project01Component::from(or_hi).into(),
             Project01Component::from(or_all).into(),
             Project01Component::from(not_all).into(),
-        ])
+        ]})
     }
 }
 
@@ -280,13 +280,14 @@ impl Component for Neg16 {
       Equivalent to:
       out = a[15]
      */
-    fn expand(&self) -> Option<Vec<Project02Component>> {
+    fn expand(&self) -> Option<IC<Project02Component>> {
         // TEMP: pointless gates to express the wiring we need
         let not0 = Not { a: self.a.bit(15), out: Output::new() };
         let not1 = Not { a: not0.out.clone().into(), out: self.out.clone() };
-        Some(vec![
+        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![
             Project01Component::from(not0).into(),
-            Project01Component::from(not1).into()])
+            Project01Component::from(not1).into(),
+        ]})
     }
 }
 
@@ -321,7 +322,7 @@ pub struct Alu {
 impl Component for Alu {
     type Target = Project02Component;
 
-    fn expand(&self) -> Option<Vec<Project02Component>> {
+    fn expand(&self) -> Option<IC<Project02Component>> {
         // Hack: unconnected input is initialized to zero at present.
         let zero = Input16::new();
 
@@ -343,7 +344,7 @@ impl Component for Alu {
         let rz = Zero16 { a: out.out.clone().into(), out: self.zr.clone() };
         let rneg = Neg16 { a: out.out.clone().into(), out: self.ng.clone() };
 
-        Some(vec![
+        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![
             Project01Component::from(x1).into(),
             Project01Component::from(xn).into(),
             Project01Component::from(x2).into(),
@@ -357,6 +358,6 @@ impl Component for Alu {
             Project01Component::from(out).into(),
             rz.into(),
             rneg.into(),
-        ])
+        ]})
    }
 }

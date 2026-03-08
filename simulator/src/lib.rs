@@ -72,7 +72,7 @@ where
         wires.entry(wire_id(busref)).or_default()
             .push((port.clone(), true, busref.offset, busref.width));
     }
-    for (i, sub) in subs.iter().enumerate() {
+    for (i, sub) in subs.components.iter().enumerate() {
         let sub_intf = sub.reflect();
         let label = format!("{}{}", sub.name().to_lowercase(), i);
         for (port, busref) in &sub_intf.inputs {

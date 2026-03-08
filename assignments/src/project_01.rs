@@ -1,8 +1,7 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use simulator::{self, Component, Input, Input16, Output, Output16, Reflect, Chip};
+use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, Chip};
 pub use simulator::component::Nand;
-use simulator::component::IC;
 use simulator::Reflect as _;
 use simulator::Chip as _;
 use std::collections::HashMap;
@@ -37,9 +36,9 @@ impl From<Mux16> for Project01Component { fn from(c: Mux16) -> Self { Project01C
 impl Component for Project01Component {
     type Target = Project01Component;
 
-    fn expand(&self) -> Option<Vec<Project01Component>> {
+    fn expand(&self) -> Option<IC<Project01Component>> {
         match self {
-            Project01Component::Nand(c)  => c.expand().map(|v| v.into_iter().map(Into::into).collect()),
+            Project01Component::Nand(c)  => c.expand().map(|ic| IC { name: ic.name, intf: ic.intf, components: ic.components.into_iter().map(Into::into).collect() }),
             Project01Component::Not(c)   => c.expand(),
             Project01Component::And(c)   => c.expand(),
             Project01Component::Or(c)    => c.expand(),
@@ -89,9 +88,9 @@ pub fn flatten<C: Reflect + Into<Project01Component>>(chip: C) -> IC<Nand> {
         match comp.expand() {
             None => match comp {
                 Project01Component::Nand(nand) => vec![nand],
-                _ => unreachable!(),
+                _ => panic!("Did not reduce to Nand: {:?}", comp.name()),
             },
-            Some(subs) => subs.into_iter().flat_map(go).collect(),
+            Some(ic) => ic.components.into_iter().flat_map(go).collect(),
         }
     }
     IC { name: format!("{} (flat)", chip.name()),
@@ -114,13 +113,13 @@ impl Component for Not {
       let nand = Nand { a: inputs.a, b: inputs.b }
       outputs.out = nand.out
      */
-    fn expand(&self) -> Option<Vec<Project01Component>> {
+    fn expand(&self) -> Option<IC<Project01Component>> {
         let nand = Nand {
             a: self.a.clone(),
             b: self.a.clone(),
             out: self.out.clone(),
         };
-        Option::Some(vec![nand.into()])
+        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![nand.into()] })
     }
 }
 
@@ -139,10 +138,10 @@ impl Component for And {
       let not = Not { a: nand.out }
       outputs.out = not.out
      */
-    fn expand(&self) -> Option<Vec<Project01Component>> {
+    fn expand(&self) -> Option<IC<Project01Component>> {
         let nand = Nand { a: self.a.clone(), b: self.b.clone(), out: Output::new() };
         let not  = Not  { a: nand.out.clone().into(),            out: self.out.clone() };
-        Option::Some(vec![nand.into(), not.into()])
+        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![nand.into(), not.into()] })
     }
 }
 
@@ -162,11 +161,11 @@ impl Component for Or {
       let nand = Nand { a: not_a.out, b: not_b.out}
       outputs.out = nand.out
      */
-    fn expand(&self) -> Option<Vec<Project01Component>> {
+    fn expand(&self) -> Option<IC<Project01Component>> {
         let not_a = Not  { a: self.a.clone(), out: Output::new() };
         let not_b = Not  { a: self.b.clone(), out: Output::new() };
         let nand  = Nand { a: not_a.out.clone().into(), b: not_b.out.clone().into(), out: self.out.clone() };
-        Some(vec![not_a.into(), not_b.into(), nand.into()])
+        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![not_a.into(), not_b.into(), nand.into()] })
     }
 }
 
@@ -186,12 +185,12 @@ impl Component for Xor {
       let n3  = Nand { a: b, b: n1.out }
       outputs.out = Nand { a: n2.out, b: n3.out }
      */
-    fn expand(&self) -> Option<Vec<Project01Component>> {
+    fn expand(&self) -> Option<IC<Project01Component>> {
         let n1  = Nand { a: self.a.clone(),        b: self.b.clone(),        out: Output::new() };
         let n2  = Nand { a: self.a.clone(),        b: n1.out.clone().into(), out: Output::new() };
         let n3  = Nand { a: self.b.clone(),        b: n1.out.clone().into(), out: Output::new() };
         let out = Nand { a: n2.out.clone().into(), b: n3.out.clone().into(), out: self.out.clone() };
-        Some(vec![n1.into(), n2.into(), n3.into(), out.into()])
+        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![n1.into(), n2.into(), n3.into(), out.into()] })
     }
 }
 
@@ -212,12 +211,12 @@ impl Component for Mux {
       let nand1   = Nand { a: sel,          b: a1 }
       outputs.out = Nand { a: nand0.out, b: nand1.out }
      */
-    fn expand(&self) -> Option<Vec<Project01Component>> {
+    fn expand(&self) -> Option<IC<Project01Component>> {
         let not_sel = Not  { a: self.sel.clone(),             out: Output::new() };
         let nand0   = Nand { a: not_sel.out.clone().into(),   b: self.a0.clone(),       out: Output::new() };
         let nand1   = Nand { a: self.sel.clone(),             b: self.a1.clone(),       out: Output::new() };
         let out     = Nand { a: nand0.out.clone().into(),     b: nand1.out.clone().into(), out: self.out.clone() };
-        Some(vec![not_sel.into(), nand0.into(), nand1.into(), out.into()])
+        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![not_sel.into(), nand0.into(), nand1.into(), out.into()] })
     }
 }
 
@@ -239,11 +238,11 @@ impl Component for Dmux {
       outputs.a = and_a.out
       outputs.b = and_b.out
      */
-    fn expand(&self) -> Option<Vec<Project01Component>> {
+    fn expand(&self) -> Option<IC<Project01Component>> {
         let not_sel = Not { a: self.sel.clone(),   out: Output::new() };
         let and_a   = And { a: self.input.clone(), b: not_sel.out.clone().into(),   out: self.a.clone() };
         let and_b   = And { a: self.input.clone(), b: self.sel.clone(),   out: self.b.clone() };
-        Some(vec![not_sel.into(), and_a.into(), and_b.into()])
+        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![not_sel.into(), and_a.into(), and_b.into()] })
     }
 }
 
@@ -261,10 +260,10 @@ impl Component for Not16 {
         let not = Not { a: inputs.a[i] }
         outputs.out[i] = not.out
      */
-    fn expand(&self) -> Option<Vec<Project01Component>> {
-        Some((0..16).map(|i| {
+    fn expand(&self) -> Option<IC<Project01Component>> {
+        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: (0..16).map(|i| {
             Not { a: self.a.bit(i), out: self.out.bit(i) }.into()
-        }).collect())
+        }).collect() })
     }
 }
 
@@ -283,10 +282,10 @@ impl Component for And16 {
         let and = And { a: inputs.a[i], b: inputs.b[i] }
         outputs.out[i] = and.out
      */
-    fn expand(&self) -> Option<Vec<Project01Component>> {
-        Some((0..16).map(|i| {
+    fn expand(&self) -> Option<IC<Project01Component>> {
+        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: (0..16).map(|i| {
             And { a: self.a.bit(i), b: self.b.bit(i), out: self.out.bit(i) }.into()
-        }).collect())
+        }).collect() })
     }
 }
 
@@ -330,18 +329,18 @@ impl Component for Mux16 {
         let nand1      = Nand { a: sel,         b: a1[i]    }
         outputs.out[i] = Nand { a: nand0.out,   b: nand1.out }
      */
-    fn expand(&self) -> Option<Vec<Project01Component>> {
+    fn expand(&self) -> Option<IC<Project01Component>> {
         let not_sel = Not { a: self.sel.clone(), out: Output::new() };
         let not_sel_out: Input = not_sel.out.clone().into();
 
-        let mut result = vec![not_sel.into()];
-        result.extend((0..16).flat_map(|i| {
+        let mut components = vec![not_sel.into()];
+        components.extend((0..16).flat_map(|i| {
             let nand0 = Nand { a: not_sel_out.clone(),       b: self.a0.bit(i),        out: Output::new() };
             let nand1 = Nand { a: self.sel.clone(),           b: self.a1.bit(i),        out: Output::new() };
             let out   = Nand { a: nand0.out.clone().into(),  b: nand1.out.clone().into(), out: self.out.bit(i) };
             vec![nand0.into(), nand1.into(), out.into()]
         }).collect::<Vec<_>>());
-        Some(result)
+        Some(IC { name: self.name().to_string(), intf: self.reflect(), components })
     }
 }
 

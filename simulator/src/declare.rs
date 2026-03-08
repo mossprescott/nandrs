@@ -77,14 +77,14 @@ pub trait Component {
     /// it ultimately produces a completely "flat" set of interconnected primitives.
     ///
     /// If the component is already primitive, then None.
-    fn expand(&self) -> Option<Vec<Self::Target>>;
+    fn expand(&self) -> Option<IC<Self::Target>>;
 }
 
 /// Enumerate the inputs and outputs of a component for reference from the outside.
 /// Needed for any component to be analyzed or simulated in a generic way.
 pub trait Reflect {
     fn reflect(&self) -> Interface;
-    fn name(&self) -> &'static str;
+    fn name(&self) -> &str;
 }
 
 /// Construct a fresh instance of a chip struct with new Input/Output buses on every port.
@@ -120,4 +120,28 @@ impl<Width: Nat> From<OutputBus<Width>> for BusRef {
 pub struct Interface {
     pub inputs: HashMap<String, BusRef>,
     pub outputs: HashMap<String, BusRef>,
+}
+
+/// A circuit composed of inputs, outputs, and zero or more components of a certain type.
+///
+/// Invariant: every input of every component must refer to either: one of the inputs of
+/// self.intf, or an output associated with some other component in the same IC.
+pub struct IC<C> {
+    pub name: String,
+
+    /// The exposed inputs and outputs.
+    pub intf: Interface,
+
+    /// The constituent components.
+    pub components: Vec<C>,
+}
+
+impl<C> Reflect for IC<C> {
+    fn reflect(&self) -> Interface {
+        self.intf.clone()
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
 }

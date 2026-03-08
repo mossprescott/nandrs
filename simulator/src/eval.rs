@@ -5,8 +5,8 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::component::{IC, Nand};
-use crate::declare::{BusRef, Reflect};
+use crate::component::Nand;
+use crate::declare::{BusRef, IC, Reflect};
 
 /// Evaluate a chip given named input values, returning named output values.
 ///
