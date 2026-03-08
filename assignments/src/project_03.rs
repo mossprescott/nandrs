@@ -67,17 +67,20 @@ pub fn flatten<C: Reflect + Into<Project03Component>>(chip: C) -> IC<Sequential1
     }
 }
 
+/// Program counter component, including a register storing the current instruction address.
+///
+/// When more than one flag is set, "reset" supercedes "load", which supercedes "inc".
 #[derive(Reflect, Chip)]
 pub struct PC {
+    /// Reset to zero on the next cycle
+    pub reset: Input,
+
     /// Load an arbitrary address
     pub addr: Input16,
     pub load: Input,
 
     /// Increment to point to the next address on the next cycle
     pub inc: Input,
-
-    /// Reset to zero on the next cycle
-    pub reset: Input,
 
     pub out: Output16,
 }
