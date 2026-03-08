@@ -3,9 +3,11 @@ pub mod component;
 pub mod declare;
 pub mod eval;
 pub mod nat;
+pub mod simulate;
 
 pub use eval::eval;
 
+// TODO: re-export little if anything
 pub use declare::*;
 
 pub use simulator_derive::{Reflect, Chip};

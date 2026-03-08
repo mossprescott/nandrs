@@ -38,7 +38,7 @@ impl Component for Project01Component {
 
     fn expand(&self) -> Option<IC<Project01Component>> {
         match self {
-            Project01Component::Nand(c)  => c.expand().map(|ic| IC { name: ic.name, intf: ic.intf, components: ic.components.into_iter().map(Into::into).collect() }),
+            Project01Component::Nand(c)  => c.expand().map(|ic| unreachable!()),
             Project01Component::Not(c)   => c.expand(),
             Project01Component::And(c)   => c.expand(),
             Project01Component::Or(c)    => c.expand(),

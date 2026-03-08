@@ -5,14 +5,14 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::component::Nand;
+use crate::component::Combinational;
 use crate::declare::{BusRef, IC, Reflect};
 
 /// Evaluate a chip given named input values, returning named output values.
 ///
 /// Values are u64; for 1-bit signals use 0 or 1. For a multi-bit bus of width w,
 /// bits 0..w-1 carry the value.
-pub fn eval<'a, I>(chip: &IC<Nand>, inputs: I) -> HashMap<String, u64>
+pub fn eval<'a, I>(chip: &IC<Combinational>, inputs: I) -> HashMap<String, u64>
 where
     I: IntoIterator<Item = (&'a str, u64)>,
 {

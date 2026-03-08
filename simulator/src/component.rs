@@ -87,6 +87,8 @@ pub enum Sequential<Width: Nat> {
     Register(Register<Width>),
 }
 
+pub type Sequential16 = Sequential<N16>;
+
 // TODO: "Computer?" sequential, plus RAM, ROM, Keyboard, and TTY
 // Except... Generalize Keyboard and TTY to some kind of I/O device provided by the harness.
 // It could be keyboard and debug trace, or it could be the host terminal, etc.
