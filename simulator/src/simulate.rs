@@ -50,6 +50,10 @@ impl ChipState {
 
     /// Turn the crank: latch registers then re-evaluate combinational logic.
     pub fn ticktock(&mut self) {
+        // Evaluate with current inputs so wire_state reflects this cycle.
+        self.evaluate();
+
+        // Latch registers.
         for comp in &self.components {
             if let Sequential::Register(reg) = comp {
                 let intf = reg.reflect();
@@ -59,6 +63,8 @@ impl ChipState {
                 }
             }
         }
+
+        // Re-evaluate so outputs reflect the new register state.
         self.evaluate();
     }
 
