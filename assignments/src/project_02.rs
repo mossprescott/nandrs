@@ -3,7 +3,8 @@
 use simulator::{self, Component, Input, Input16, Output, Output16, Reflect, Chip};
 use simulator::Reflect as _;
 use simulator::Chip as _;
-use crate::project_01::{Project01Component, Mux16, Not16, And16, Nand, Not, Xor, And, Or};
+use simulator::component::{IC, Nand};
+use crate::project_01::{Project01Component, Mux16, Not16, And16, Not, Xor, And, Or};
 
 pub enum Project02Component {
     Project01(Project01Component),
@@ -55,7 +56,7 @@ impl Reflect for Project02Component {
             Project02Component::Alu(c)       => c.reflect(),
         }
     }
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         match self {
             Project02Component::Project01(c) => c.name(),
             Project02Component::HalfAdder(c) => c.name(),
@@ -70,17 +71,21 @@ impl Reflect for Project02Component {
 }
 
 /// Recursively expand until only Nands are left.
-pub fn flatten<C: Into<Project02Component>>(chip: C) -> Vec<Nand> {
+pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Nand> {
     fn go(comp: Project02Component) -> Vec<Nand> {
         match comp.expand() {
             None => match comp {
-                Project02Component::Project01(p) => crate::project_01::flatten(p),
+                Project02Component::Project01(p) => crate::project_01::flatten(p).components,
                 _ => unreachable!(),
             },
             Some(subs) => subs.into_iter().flat_map(go).collect(),
         }
     }
-    go(chip.into())
+    IC {
+        name: format!("{} (flat)", chip.name()),
+        intf: chip.reflect(),
+        components: go(chip.into()),
+    }
 }
 
 /// sum = 1s-digit of two-bit sum, carry = 2s-digit

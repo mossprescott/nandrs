@@ -1,4 +1,5 @@
 pub mod bool;
+pub mod component;
 pub mod declare;
 pub mod eval;
 pub mod nat;
@@ -7,7 +8,7 @@ pub use eval::eval;
 
 pub use declare::*;
 
-pub use simulator_derive::Reflect;
+pub use simulator_derive::{Reflect, Chip};
 
 fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
     let mut ai = a.chars().peekable();

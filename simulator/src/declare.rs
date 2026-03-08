@@ -96,6 +96,7 @@ pub trait Chip {
 /// Type-erased bus reference, for use in Interface where the width is only known at runtime.
 /// The `id` field carries the wire identity: two BusRefs with the same `id` pointer refer to
 /// the same bus. `offset` is the first bit index within the bus; `width` is the count of bits.
+#[derive(Clone)]
 pub struct BusRef {
     pub id: Rc<()>,
     pub offset: usize,
@@ -114,6 +115,8 @@ impl<Width: Nat> From<OutputBus<Width>> for BusRef {
     }
 }
 
+/// Enumerates the exposed inputs and outputs of some chip or component.
+#[derive(Clone)]
 pub struct Interface {
     pub inputs: HashMap<String, BusRef>,
     pub outputs: HashMap<String, BusRef>,

@@ -34,7 +34,7 @@ use syn::{Data, DeriveInput, Fields, Type, parse_macro_input};
 ///             ]),
 ///         }
 ///     }
-///     fn name(&self) -> &'static str { "And" }
+///     fn name(&self) -> &str { "And" }
 /// }
 /// ```
 #[proc_macro_derive(Reflect)]
@@ -77,7 +77,7 @@ pub fn derive_reflect(input: TokenStream) -> TokenStream {
                     outputs: ::std::collections::HashMap::from([#(#outputs),*]),
                 }
             }
-            fn name(&self) -> &'static str { #name_str }
+            fn name(&self) -> &str { #name_str }
         }
     }
     .into()

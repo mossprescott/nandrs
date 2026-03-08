@@ -1,25 +1,11 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
 use simulator::{self, Component, Input, Input16, Output, Output16, Reflect, Chip};
+pub use simulator::component::Nand;
+use simulator::component::IC;
 use simulator::Reflect as _;
 use simulator::Chip as _;
 use std::collections::HashMap;
-
-/// The single primitive: true if either input is false.
-#[derive(Reflect, Chip)]
-pub struct Nand {
-    pub a: Input,
-    pub b: Input,
-    pub out: Output,
-}
-/// Nothing to expand; Nand is Nand.
-impl Component for Nand {
-    type Target = Nand;
-
-    fn expand(&self) -> Option<Vec<Nand>> {
-       Option::None
-    }
-}
 
 /// Components implemented in this project: simple, logical components for 1 and 16 bits.
 pub enum Project01Component {
@@ -81,7 +67,7 @@ impl Reflect for Project01Component {
             Project01Component::Mux16(c) => c.reflect(),
         }
     }
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         match self {
             Project01Component::Nand(c)  => c.name(),
             Project01Component::Not(c)   => c.name(),
@@ -98,7 +84,7 @@ impl Reflect for Project01Component {
 }
 
 /// Recursively expand() until only Nands are left.
-pub fn flatten<C: Into<Project01Component>>(chip: C) -> Vec<Nand> {
+pub fn flatten<C: Reflect + Into<Project01Component>>(chip: C) -> IC<Nand> {
     fn go(comp: Project01Component) -> Vec<Nand> {
         match comp.expand() {
             None => match comp {
@@ -108,7 +94,10 @@ pub fn flatten<C: Into<Project01Component>>(chip: C) -> Vec<Nand> {
             Some(subs) => subs.into_iter().flat_map(go).collect(),
         }
     }
-    go(chip.into())
+    IC { name: format!("{} (flat)", chip.name()),
+        intf: chip.reflect(),
+        components: go(chip.into()),
+    }
 }
 
 

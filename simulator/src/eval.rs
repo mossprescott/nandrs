@@ -1,23 +1,19 @@
-/// A simple evaluator for chips that reduce to a collection of Nands.
+/// A simple evaluator for "combinational" chips, consisting only of Nands.
 ///
 /// There is no clock and no state.
 
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::declare::{BusRef, Component, Reflect};
+use crate::component::{IC, Nand};
+use crate::declare::{BusRef, Reflect};
 
-/// Evaluate a component given named input values, returning named output values.
+/// Evaluate a chip given named input values, returning named output values.
 ///
 /// Values are u64; for 1-bit signals use 0 or 1. For a multi-bit bus of width w,
 /// bits 0..w-1 carry the value.
-///
-/// Uses `reflect()` to identify wires by identity and `expand()` to decompose compound
-/// components. A component that returns `None` from `expand()` is the NAND primitive.
-pub fn eval<'a, C, I>(chip: &C, inputs: I) -> HashMap<String, u64>
+pub fn eval<'a, I>(chip: &IC<Nand>, inputs: I) -> HashMap<String, u64>
 where
-    C: Component + Reflect,
-    C::Target: Component<Target = C::Target> + Reflect,
     I: IntoIterator<Item = (&'a str, u64)>,
 {
     let intf = chip.reflect();
@@ -35,7 +31,13 @@ where
         }
     }
 
-    eval_component(chip, &mut wire_state);
+    // Evaluate each Nand in order.
+    for nand in &chip.components {
+        let intf = nand.reflect();
+        let a = read_bit(&wire_state, &intf.inputs["a"]);
+        let b = read_bit(&wire_state, &intf.inputs["b"]);
+        write_bit(&mut wire_state, &intf.outputs["out"], !(a & b));
+    }
 
     // Read named outputs.
     intf.outputs
@@ -57,28 +59,6 @@ fn width_mask(width: usize) -> u64 {
 
 fn bus_mask(busref: &BusRef) -> u64 {
     width_mask(busref.width) << busref.offset
-}
-
-fn eval_component<C>(component: &C, wire_state: &mut HashMap<usize, u64>)
-where
-    C: Component + Reflect,
-    C::Target: Component<Target = C::Target> + Reflect,
-{
-    let intf = component.reflect();
-
-    match component.expand() {
-        None => {
-            // Primitive NAND: out = !(a & b)
-            let a = read_bit(wire_state, &intf.inputs["a"]);
-            let b = read_bit(wire_state, &intf.inputs["b"]);
-            write_bit(wire_state, &intf.outputs["out"], !(a & b));
-        }
-        Some(sub_components) => {
-            for sub in &sub_components {
-                eval_component(sub, wire_state);
-            }
-        }
-    }
 }
 
 fn read_bit(wire_state: &HashMap<usize, u64>, busref: &BusRef) -> bool {
