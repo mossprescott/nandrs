@@ -5,6 +5,9 @@ pub mod eval;
 pub mod nat;
 pub mod simulate;
 
+#[cfg(test)]
+mod tests;
+
 pub use eval::eval;
 
 // TODO: re-export little if anything
