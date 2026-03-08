@@ -145,3 +145,12 @@ impl<C> Reflect for IC<C> {
         &self.name
     }
 }
+
+/// Nothing to expand; an IC is an expanded thing by definition.
+impl<C> Component for IC<C> {
+    type Target = C;
+
+    fn expand(&self) -> Option<IC<C>> {
+        None
+    }
+}

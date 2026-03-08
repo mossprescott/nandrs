@@ -57,7 +57,7 @@ where
 
     let intf = chip.reflect();
     let subs = match chip.expand() {
-        None    => return String::new(),
+        None    => panic!("Could not expand: {}", chip.name()),
         Some(s) => s,
     };
 

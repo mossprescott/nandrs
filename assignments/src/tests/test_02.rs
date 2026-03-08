@@ -1,4 +1,4 @@
-use simulator::{Chip as _};
+use simulator::{print_graph, Chip as _};
 use simulator::eval::eval;
 use crate::project_02::{flatten, HalfAdder, FullAdder, Inc16, Add16, Zero16, Neg16, Alu};
 
@@ -101,7 +101,12 @@ fn neg16_truth_table() {
 
 #[test]
 fn alu_truth_table() {
-    let chip = flatten(Alu::chip());
+    let chip = Alu::chip();
+
+    // When it breaks, it's nice to see what it tried to do
+    print!("{}", print_graph(&chip));
+
+    let chip = flatten(chip);
 
     // 0 = 0 + 0
     let r = eval(&chip, [("x", 0), ("y", 0), ("zx", 1), ("nx", 0), ("zy", 1), ("ny", 0), ("f", 1), ("no", 0)]);

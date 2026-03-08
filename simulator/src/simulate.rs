@@ -26,17 +26,18 @@ pub struct ChipState {
 impl ChipState {
     /// Set the value of an input for the next cycle.
     pub fn set(&mut self, name: &str, value: u64) {
-        todo!()
+        // TODO
     }
 
     /// Get the value of an output as of the last cycle.
     pub fn get(&self, name: &str) -> u64 {
-        todo!()
+        // TODO
+        0
     }
 
     /// Turn the crank: as it were, raise and lower the imaginary clock signal, causing
     /// stateful components (registers) to latch their inputs, then reevaluate.
     pub fn ticktock(&mut self) {
-        todo!()
+        // TODO
     }
 }

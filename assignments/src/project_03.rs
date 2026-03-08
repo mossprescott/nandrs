@@ -4,7 +4,8 @@ use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, 
 use simulator::Reflect as _;
 use simulator::Chip as _;
 use simulator::component::{Nand, Register16, Sequential, Sequential16};
-use crate::project_02::Project02Component;
+use crate::project_01::{Or, Mux16, Project01Component};
+use crate::project_02::{Inc16, Project02Component};
 
 pub enum Project03Component {
     Project02(Project02Component),
@@ -55,6 +56,7 @@ pub fn flatten<C: Reflect + Into<Project03Component>>(chip: C) -> IC<Sequential1
                         .components.into_iter()
                         .map(|nand| Sequential::Nand(nand))
                         .collect(),
+                Project03Component::Register16(reg) => vec![Sequential::Register(reg)],
                 _ => panic!("Did not reduce to Nand/Register: {:?}", comp.name()),
             },
             Some(ic) => ic.components.into_iter().flat_map(go).collect(),
@@ -88,7 +90,37 @@ pub struct PC {
 impl Component for PC {
     type Target = Project03Component;
 
+    // Note: no special ceremony needed for back-references to the register's output, because
+    // that wire is already declared as the output "out".
     fn expand(&self) -> Option<IC<Project03Component>> {
-        todo!()
+        // HACK: an input that's never initialized is zero
+        let zero = Input16::new();
+
+        let inc = Inc16 { a: self.out.clone().into(), out: Output16::new() };
+        let next0 = Mux16 { a0: self.out.clone().into(), a1: inc.out.clone().into(), sel: self.inc.clone(), out: Output16::new() };
+
+        let next1 = Mux16 { a0: next0.out.clone().into(), a1: self.addr.clone(), sel: self.load.clone(), out: Output16::new() };
+
+        let next2 = Mux16 { a0: next1.out.clone().into(), a1: zero.clone(), sel: self.reset.clone(), out: Output16::new() };
+
+        let any0 = Or { a: self.inc.clone(), b: self.load.clone(), out: Output::new() };
+        let any = Or { a: any0.out.clone().into(), b: self.reset.clone(), out: Output::new() };
+
+        let reg = Register16 {
+            data: next2.out.clone().into(),
+            load: any.out.clone().into(),
+            out: self.out.clone(),
+        };
+
+        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![
+            // FIXME: horrific
+            Project02Component::from(inc).into(),
+            Project02Component::from(Project01Component::from(next0)).into(),
+            Project02Component::from(Project01Component::from(next1)).into(),
+            Project02Component::from(Project01Component::from(next2)).into(),
+            Project02Component::from(Project01Component::from(any0)).into(),
+            Project02Component::from(Project01Component::from(any)).into(),
+            reg.into(),
+        ]})
     }
 }

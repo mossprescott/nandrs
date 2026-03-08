@@ -1,10 +1,17 @@
 use crate::project_03::{PC, flatten};
 use simulator::declare::{Chip as _};
 use simulator::simulate::synthesize;
+use simulator::print_graph;
 
 #[test]
 fn pc_behavior() {
-    let chip = flatten(PC::chip());
+    let chip = PC::chip();
+
+     // When it breaks, it's nice to see what it tried to do
+    print!("{}", print_graph(&chip));
+
+    let chip = flatten(chip);
+
     let mut state = synthesize(&chip);
 
     assert_eq!(state.get("out"), 0);
@@ -56,4 +63,9 @@ fn pc_behavior() {
 
     state.ticktock();
     assert_eq!(state.get("out"), 0);
+}
+
+#[test]
+fn pc_optimal() {
+    assert_eq!(flatten(PC::chip()).components.len(), 230);
 }

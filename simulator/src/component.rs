@@ -87,6 +87,29 @@ pub enum Sequential<Width: Nat> {
     Register(Register<Width>),
 }
 
+impl<Width: Nat + Clone> Reflect for Sequential<Width> {
+    fn reflect(&self) -> Interface {
+        match self {
+            Self::Nand(c) => c.reflect(),
+            Self::Register(c) => c.reflect(),
+        }
+    }
+    fn name(&self) -> &str {
+        match self {
+            Self::Nand(c) => c.name(),
+            Self::Register(c) => c.name(),
+        }
+    }
+}
+
+impl<Width: Nat> Component for Sequential<Width> {
+    type Target = Self;
+
+    fn expand(&self) -> Option<IC<Self::Target>> {
+        None
+    }
+}
+
 pub type Sequential16 = Sequential<N16>;
 
 // TODO: "Computer?" sequential, plus RAM, ROM, Keyboard, and TTY
