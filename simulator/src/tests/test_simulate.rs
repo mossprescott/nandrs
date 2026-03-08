@@ -1,4 +1,4 @@
-use crate::component::{Register16, Sequential16};
+use crate::component::{Register16, Sequential16, RAM16, Computational16};
 use crate::declare::{Chip as _, IC, Reflect as _};
 use crate::simulate::synthesize;
 
@@ -30,3 +30,43 @@ fn register_behavior() {
     state.ticktock();
     assert_eq!(state.get("out"), 42); // retained
 }
+
+#[test]
+fn ram_behavior() {
+    let ram = RAM16::chip();
+    let chip = IC {
+        name: ram.name().to_string(),
+        intf: ram.reflect(),
+        components: vec![Computational16::RAM(ram)],
+    };
+    let mut state = synthesize(&chip);
+
+    assert_eq!(state.get("out"), 0);
+
+    // Write 42 to address 5.
+    state.set("addr", 5);
+    state.set("data", 42);
+    state.set("load", 1);
+    state.ticktock();
+    assert_eq!(state.get("out"), 42);
+
+    // Write 99 to address 10.
+    state.set("addr", 10);
+    state.set("data", 99);
+    state.ticktock();
+    assert_eq!(state.get("out"), 99);
+
+    // Read address 5 — other address unaffected.
+    state.set("addr", 5);
+    state.set("load", 0);
+    state.ticktock();
+    assert_eq!(state.get("out"), 42);
+
+    // Unwritten address reads 0.
+    state.set("addr", 0);
+    state.ticktock();
+    assert_eq!(state.get("out"), 0);
+}
+
+// TODO: test RAM latency
+// TODO: test RAM limits (address out of bounds)

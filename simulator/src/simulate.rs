@@ -2,24 +2,37 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::declare::{BusRef, IC, Interface, Reflect as _};
-use crate::component::{Sequential, Sequential16};
+use crate::component::{Computational, Computational16};
 
-/// Transform circuit description to a form for simulation.
-pub fn synthesize(chip: &IC<Sequential16>) -> ChipState {
+/// Transform circuit description for simulation.
+pub fn synthesize<C>(chip: &IC<C>) -> ChipState
+where
+    C: Clone + crate::Reflect + Into<Computational16>,
+{
+    let components: Vec<Computational16> = chip.components.iter().cloned().map(Into::into).collect();
     let mut reg_state: HashMap<usize, u64> = HashMap::new();
-    for comp in &chip.components {
-        if let Sequential::Register(reg) = comp {
-            let intf = reg.reflect();
-            reg_state.insert(wire_id(&intf.outputs["out"]), 0);
+    let mut ram_state: HashMap<usize, HashMap<u64, u64>> = HashMap::new();
+    for comp in &components {
+        match comp {
+            Computational::Register(reg) => {
+                let intf = reg.reflect();
+                reg_state.insert(wire_id(&intf.outputs["out"]), 0);
+            }
+            Computational::RAM(ram) => {
+                let intf = ram.reflect();
+                ram_state.insert(wire_id(&intf.outputs["out"]), HashMap::new());
+            }
+            _ => {}
         }
     }
     let mut state = ChipState {
         intf: chip.reflect(),
         name: chip.name().to_string(),
-        components: chip.components.clone(),
+        components,
         input_vals: HashMap::new(),
         wire_state: HashMap::new(),
         reg_state,
+        ram_state,
     };
     state.evaluate();
     state
@@ -29,10 +42,12 @@ pub fn synthesize(chip: &IC<Sequential16>) -> ChipState {
 pub struct ChipState {
     intf: Interface,
     name: String,
-    components: Vec<Sequential16>,
+    components: Vec<Computational16>,
     input_vals: HashMap<String, u64>,
     wire_state: HashMap<usize, u64>,
     reg_state: HashMap<usize, u64>,
+    /// Maps each RAM's output-wire id → (addr → value).
+    ram_state: HashMap<usize, HashMap<u64, u64>>,
 }
 
 impl ChipState {
@@ -48,23 +63,44 @@ impl ChipState {
             .unwrap_or(0)
     }
 
-    /// Turn the crank: latch registers then re-evaluate combinational logic.
+    /// Turn the crank: latch registers and RAM, then re-evaluate combinational logic.
     pub fn ticktock(&mut self) {
         // Evaluate with current inputs so wire_state reflects this cycle.
         self.evaluate();
 
-        // Latch registers.
+        // Collect updates (avoids borrow conflict between components and state maps).
+        let mut reg_updates: Vec<(usize, u64)> = Vec::new();
+        let mut ram_updates: Vec<(usize, u64, u64)> = Vec::new();
+
         for comp in &self.components {
-            if let Sequential::Register(reg) = comp {
-                let intf = reg.reflect();
-                if read_bit(&self.wire_state, &intf.inputs["load"]) {
-                    let val = read_bus(&self.wire_state, &intf.inputs["data"]);
-                    self.reg_state.insert(wire_id(&intf.outputs["out"]), val);
+            match comp {
+                Computational::Register(reg) => {
+                    let intf = reg.reflect();
+                    if read_bit(&self.wire_state, &intf.inputs["load"]) {
+                        let val = read_bus(&self.wire_state, &intf.inputs["data"]);
+                        reg_updates.push((wire_id(&intf.outputs["out"]), val));
+                    }
                 }
+                Computational::RAM(ram) => {
+                    let intf = ram.reflect();
+                    if read_bit(&self.wire_state, &intf.inputs["load"]) {
+                        let addr = read_bus(&self.wire_state, &intf.inputs["addr"]);
+                        let val  = read_bus(&self.wire_state, &intf.inputs["data"]);
+                        ram_updates.push((wire_id(&intf.outputs["out"]), addr, val));
+                    }
+                }
+                _ => {}
             }
         }
 
-        // Re-evaluate so outputs reflect the new register state.
+        for (id, val) in reg_updates {
+            self.reg_state.insert(id, val);
+        }
+        for (out_id, addr, val) in ram_updates {
+            self.ram_state.entry(out_id).or_default().insert(addr, val);
+        }
+
+        // Re-evaluate so outputs reflect the new state.
         self.evaluate();
     }
 
@@ -83,17 +119,52 @@ impl ChipState {
             ws.insert(id, val);
         }
 
-        // Evaluate Nands in order.
+        // First Nand pass — computes addresses needed for RAM/ROM lookup.
+        eval_nands(&mut ws, &self.components);
+
+        // Seed RAM/ROM outputs based on computed addresses.
         for comp in &self.components {
-            if let Sequential::Nand(nand) = comp {
-                let intf = nand.reflect();
-                let a = read_bit(&ws, &intf.inputs["a"]);
-                let b = read_bit(&ws, &intf.inputs["b"]);
-                write_bit(&mut ws, &intf.outputs["out"], !(a & b));
+            match comp {
+                Computational::RAM(ram) => {
+                    let intf = ram.reflect();
+                    let addr   = read_bus(&ws, &intf.inputs["addr"]);
+                    let out_id = wire_id(&intf.outputs["out"]);
+                    let val = self.ram_state.get(&out_id)
+                        .and_then(|m| m.get(&addr))
+                        .copied()
+                        .unwrap_or(0);
+                    write_bus(&mut ws, &intf.outputs["out"], val);
+                }
+                Computational::ROM(rom) => {
+                    let intf = rom.reflect();
+                    let addr   = read_bus(&ws, &intf.inputs["addr"]);
+                    let out_id = wire_id(&intf.outputs["out"]);
+                    // ROM uses the same ram_state map (loaded externally).
+                    let val = self.ram_state.get(&out_id)
+                        .and_then(|m| m.get(&addr))
+                        .copied()
+                        .unwrap_or(0);
+                    write_bus(&mut ws, &intf.outputs["out"], val);
+                }
+                _ => {}
             }
         }
 
+        // Second Nand pass — uses RAM/ROM outputs.
+        eval_nands(&mut ws, &self.components);
+
         self.wire_state = ws;
+    }
+}
+
+fn eval_nands(ws: &mut HashMap<usize, u64>, components: &[Computational16]) {
+    for comp in components {
+        if let Computational::Nand(nand) = comp {
+            let intf = nand.reflect();
+            let a = read_bit(ws, &intf.inputs["a"]);
+            let b = read_bit(ws, &intf.inputs["b"]);
+            write_bit(ws, &intf.outputs["out"], !(a & b));
+        }
     }
 }
 
