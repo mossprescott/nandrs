@@ -4,9 +4,9 @@ use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, 
 use simulator::Reflect as _;
 use simulator::Chip as _;
 use simulator::component::{Nand, Register16, RAM16, ROM16, Sequential, Computational, Computational16};
-use crate::project_01::{Project01Component, Not};
-use crate::project_02::Project02Component;
-use crate::project_03::Project03Component;
+use crate::project_01::{Project01Component, Not, And, Or, Mux16};
+use crate::project_02::{Project02Component, Alu};
+use crate::project_03::{Project03Component, PC};
 
 pub enum Project05Component {
     Project03(Project03Component),
@@ -67,6 +67,22 @@ impl Reflect for Project05Component {
     }
 }
 
+fn p01<C: Into<Project01Component>>(c: C) -> Project05Component {
+    let p01: Project01Component = c.into();
+    let p02: Project02Component = p01.into();
+    let p03: Project03Component = p02.into();
+    p03.into()
+}
+fn p02<C: Into<Project02Component>>(c: C) -> Project05Component {
+    let p02: Project02Component = c.into();
+    let p03: Project03Component = p02.into();
+    p03.into()
+}
+fn p03<C: Into<Project03Component>>(c: C) -> Project05Component {
+    let p03: Project03Component = c.into();
+    p03.into()
+}
+
 /// Recursively expand until only Nands, Registers, RAMs, and ROMs are left.
 pub fn flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Computational16> {
     fn go(comp: Project05Component) -> Vec<Computational16> {
@@ -120,8 +136,9 @@ pub struct Decode {
     /// Instuction word from the ROM
     pub instr: Input16,
 
-    /// If true, the ALU is not involved; just load the bits of the instruction to the A register.
-    pub load: Output,
+    /// If true (bit 15 = 1), this is a C-instruction (ALU involved);
+    /// otherwise an A-instruction (load bits into A register).
+    pub is_c: Output,
 
     /// If true, the "X" input to the ALU is the memory (M), otherwise register A.
     pub read_m: Output,
@@ -168,7 +185,7 @@ impl Component for Decode {
             for not in [mid, pass] { components.push(wrap(not)); }
         };
 
-        wire(self.instr.bit(15).clone(), self.load.clone());
+        wire(self.instr.bit(15).clone(), self.is_c.clone());
         // bit-14: unused
         // bit-13: unused
         wire(self.instr.bit(12).clone(), self.read_m.clone());
@@ -217,7 +234,131 @@ pub struct CPU {
 impl Component for CPU {
     type Target = Project05Component;
 
-    fn expand(&self) -> Option<IC<Project05Component>> {  }
+    fn expand(&self) -> Option<IC<Project05Component>> {
+        let mut components: Vec<Project05Component> = vec![];
+
+        // === Decode ===
+        let decode = Decode {
+            instr:   self.instr.clone(),
+            is_c:    Output::new(), read_m:  Output::new(),
+            zx:      Output::new(), nx:      Output::new(),
+            zy:      Output::new(), ny:      Output::new(),
+            f:       Output::new(), no:      Output::new(),
+            write_a: Output::new(), write_m: Output::new(), write_d: Output::new(),
+            jmp_lt:  Output::new(), jmp_eq:  Output::new(), jmp_gt:  Output::new(),
+        };
+        let is_c        = decode.is_c.clone();        // instr[15]: 1 = C-instruction
+        let read_m_out  = decode.read_m.clone();
+        let zx          = decode.zx.clone();
+        let nx          = decode.nx.clone();
+        let zy          = decode.zy.clone();
+        let ny          = decode.ny.clone();
+        let f           = decode.f.clone();
+        let no          = decode.no.clone();
+        let dec_write_a = decode.write_a.clone();
+        let dec_write_m = decode.write_m.clone();
+        let dec_write_d = decode.write_d.clone();
+        let jmp_lt      = decode.jmp_lt.clone();
+        let jmp_eq      = decode.jmp_eq.clone();
+        let jmp_gt      = decode.jmp_gt.clone();
+        components.push(Project05Component::Decode(decode));
+
+        // === is_a = NOT(is_c) ===
+        let is_a_gate = Not { a: is_c.clone().into(), out: Output::new() };
+        let is_a = is_a_gate.out.clone();
+        components.push(p01(is_a_gate));
+
+        // === A register data mux: sel=is_a → a1=instr (A-instr), a0=alu_out (C-instr) ===
+        // alu.out = self.mem_out; resolved correctly in 2nd Nand pass of evaluate()
+        let a_data_mux = Mux16 {
+            sel: is_a.clone().into(),
+            a0:  self.mem_out.clone().into(),
+            a1:  self.instr.clone(),
+            out: Output16::new(),
+        };
+        let a_data = a_data_mux.out.clone();
+        components.push(p01(a_data_mux));
+
+        // === load_a = is_a OR write_a ===
+        let load_a_gate = Or { a: is_a.clone().into(), b: dec_write_a.into(), out: Output::new() };
+        let load_a = load_a_gate.out.clone();
+        components.push(p01(load_a_gate));
+
+        // === A register: out → mem_addr ===
+        let reg_a = Register16 { data: a_data.into(), load: load_a.into(), out: self.mem_addr.clone() };
+        components.push(p03(reg_a));
+
+        // === ALU Y mux: sel=read_m → a0=A (mem_addr), a1=mem_in ===
+        let y_mux = Mux16 {
+            sel: read_m_out.into(),
+            a0:  self.mem_addr.clone().into(),
+            a1:  self.mem_in.clone(),
+            out: Output16::new(),
+        };
+        let y_src = y_mux.out.clone();
+        components.push(p01(y_mux));
+
+        // === ALU: x=D, y=y_src, out → mem_out ===
+        let reg_d_out: Output16 = Output16::new();  // D register output wire (seeded from reg_state)
+        let alu = Alu {
+            x:   reg_d_out.clone().into(),
+            y:   y_src.into(),
+            zx:  zx.into(), nx: nx.into(),
+            zy:  zy.into(), ny: ny.into(),
+            f:   f.into(),  no: no.into(),
+            out: self.mem_out.clone(),
+            zr:  Output::new(),
+            ng:  Output::new(),
+        };
+        let alu_zr = alu.zr.clone();
+        let alu_ng = alu.ng.clone();
+        components.push(p02(alu));
+
+        // === load_d = AND(is_c, write_d) ===
+        let load_d_gate = And { a: is_c.clone().into(), b: dec_write_d.into(), out: Output::new() };
+        let load_d = load_d_gate.out.clone();
+        components.push(p01(load_d_gate));
+
+        // === D register ===
+        let reg_d = Register16 { data: self.mem_out.clone().into(), load: load_d.into(), out: reg_d_out };
+        components.push(p03(reg_d));
+
+        // === mem_write = AND(is_c, write_m) ===
+        components.push(p01(And { a: is_c.clone().into(), b: dec_write_m.into(), out: self.mem_write.clone() }));
+
+        // === Jump logic ===
+        let not_ng  = Not { a: alu_ng.clone().into(), out: Output::new() };
+        let not_zr  = Not { a: alu_zr.clone().into(), out: Output::new() };
+        let is_pos  = And { a: not_ng.out.clone().into(), b: not_zr.out.clone().into(), out: Output::new() };
+        let jlt_and = And { a: jmp_lt.into(), b: alu_ng.into(), out: Output::new() };
+        let jeq_and = And { a: jmp_eq.into(), b: alu_zr.into(), out: Output::new() };
+        let jgt_and = And { a: jmp_gt.into(), b: is_pos.out.clone().into(), out: Output::new() };
+        let j_lt_eq = Or  { a: jlt_and.out.clone().into(), b: jeq_and.out.clone().into(), out: Output::new() };
+        let jump_any= Or  { a: j_lt_eq.out.clone().into(), b: jgt_and.out.clone().into(), out: Output::new() };
+        let do_jump = And { a: is_c.clone().into(), b: jump_any.out.clone().into(), out: Output::new() };
+        let do_jump_out = do_jump.out.clone();
+        for g in [p01(not_ng), p01(not_zr), p01(is_pos),
+                  p01(jlt_and), p01(jeq_and), p01(jgt_and),
+                  p01(j_lt_eq), p01(jump_any), p01(do_jump)] {
+            components.push(g);
+        }
+
+        // === PC: inc always 1 (NAND of two undriven=0 inputs) ===
+        let const_one = Nand { a: Input::new(), b: Input::new(), out: Output::new() };
+        let inc_wire  = const_one.out.clone();
+        components.push(p01(const_one));
+
+        let pc = PC {
+            addr:  self.mem_addr.clone().into(),
+            load:  do_jump_out.into(),
+            inc:   inc_wire.into(),
+            reset: self.reset.clone().into(),
+            out:   self.pc.clone(),
+        };
+        components.push(p03(pc));
+
+        Some(IC { name: self.name().to_string(), intf: self.reflect(), components })
+    }
 }
 
 #[derive(Reflect, Chip)]
