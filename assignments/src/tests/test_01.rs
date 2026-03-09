@@ -232,7 +232,7 @@ fn mux16_graph() {
          nand_20.b <- a1[6]\n\
          nand_21.a <- nand_19.out\n\
          nand_21.b <- nand_20.out\n\
-         nand_22.a <- not0.out\n\
+         nand_22.a <- not_0.out\n\
          nand_22.b <- a0[7]\n\
          nand_23.a <- sel\n\
          nand_23.b <- a1[7]\n\
@@ -262,7 +262,7 @@ fn mux16_graph() {
          nand_35.b <- a1[11]\n\
          nand_36.a <- nand_34.out\n\
          nand_36.b <- nand_35.out\n\
-         nand_37.a <- not0.out\n\
+         nand_37.a <- not_0.out\n\
          nand_37.b <- a0[12]\n\
          nand_38.a <- sel\n\
          nand_38.b <- a1[12]\n\

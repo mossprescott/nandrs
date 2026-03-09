@@ -79,7 +79,7 @@ where
     }
     for (i, sub) in subs.components.iter().enumerate() {
         let sub_intf = sub.reflect();
-        let label = format!("{}{}", sub.name().to_lowercase(), i);
+        let label = format!("{}_{}", sub.name().to_lowercase(), i);
         for (port, busref) in &sub_intf.inputs {
             wires.entry(wire_id(busref)).or_default()
                 .push((format!("{}.{}", label, port), true, busref.offset, busref.width));
