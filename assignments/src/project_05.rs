@@ -476,5 +476,46 @@ pub struct Computer {
 impl Component for Computer {
     type Target = Project05Component;
 
-    fn expand(&self) -> Option<IC<Project05Component>> { todo!() }
+    /*
+      let cpu = CPU { reset: self.reset, instr: rom.out, mem_in: memory.out, pc: self.pc, mem_out, mem_write, mem_addr }
+      let rom = ROM16 { size: 32K, addr: cpu.pc }
+      let memory = MemorySystem { data: cpu.mem_out, load: cpu.mem_write, addr: cpu.mem_addr }
+      outputs.pc = cpu.pc
+     */
+    fn expand(&self) -> Option<IC<Project05Component>> {
+        let mem_in_wire = Output16::new();  // back-ref from memory to CPU
+
+        let rom = ROM16 {
+            size: 32 * 1024,
+            addr: self.pc.clone().into(),
+            out:  Output16::new(),
+        };
+
+        let cpu = CPU {
+            reset:     self.reset.clone(),
+            pc:        self.pc.clone(),
+            instr:     rom.out.clone().into(),
+            mem_out:   Output16::new(),
+            mem_write: Output::new(),
+            mem_addr:  Output16::new(),
+            mem_in:    mem_in_wire.clone().into(),
+        };
+
+        let memory = MemorySystem {
+            data: cpu.mem_out.clone().into(),
+            load: cpu.mem_write.clone().into(),
+            addr: cpu.mem_addr.clone().into(),
+            out:  mem_in_wire,
+        };
+
+        Some(IC {
+            name: self.name().to_string(),
+            intf: self.reflect(),
+            components: vec![
+                Project05Component::ROM(rom),
+                Project05Component::CPU(cpu),
+                Project05Component::MemorySystem(memory),
+            ],
+        })
+    }
 }

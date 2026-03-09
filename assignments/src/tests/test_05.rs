@@ -134,16 +134,17 @@ fn computer_add_behavior() {
 
     for _ in 0..pgm.len() { state.ticktock(); }
 
+    assert_eq!(state.get("pc"), 6);
     assert_eq!(ram.peek(1), 5);
 }
 
 #[test]
 fn computer_optimal() {
-    let components = flatten(MemorySystem::chip()).components;
+    let components = flatten(Computer::chip()).components;
     let rams  = components.iter().filter(|c| matches!(c, Computational::RAM(_))).count();
     let roms  = components.iter().filter(|c| matches!(c, Computational::ROM(_))).count();
     let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
     assert_eq!(rams,    2);
     assert_eq!(roms,    1);
-    assert_eq!(nands, 10000);
+    assert_eq!(nands, 1050);
 }
