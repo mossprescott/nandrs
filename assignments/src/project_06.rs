@@ -58,6 +58,12 @@ impl Statement {
 /// - multiple destinations: "DM=0", "DA=!D"; set both destinations to the output value
 ///   (even A and M but that might be undefined depending on your CPU)
 /// - hex constants: "@0x007f"
+fn is_valid_symbol(s: &str) -> bool {
+    !s.is_empty()
+        && s.chars().next().map_or(false, |c| c.is_alphabetic() || c == '_')
+        && !s.chars().any(|c| c.is_whitespace())
+}
+
 pub fn parse_statement(line: &str) -> Option<Statement> {
     // Strip comments and whitespace
     let line = line.split("//").next().unwrap().trim();
@@ -67,15 +73,34 @@ pub fn parse_statement(line: &str) -> Option<Statement> {
 
     // Label: (name)
     if line.starts_with('(') && line.ends_with(')') {
-        return Some(Statement::Label(Label(line[1..line.len()-1].to_string())));
+        let name = &line[1..line.len()-1];
+        return if is_valid_symbol(name) {
+            Some(Statement::Label(Label(name.to_string())))
+        } else {
+            None
+        };
     }
 
     // A-instruction: @value or @symbol
     if let Some(rest) = line.strip_prefix('@') {
-        return if let Ok(n) = rest.parse::<u16>() {
-            Some(Statement::Literal(n))
-        } else {
+        if rest.is_empty() {
+            return None;
+        }
+        // Hex literal: @0x...
+        if let Some(hex) = rest.strip_prefix("0x").or_else(|| rest.strip_prefix("0X")) {
+            return u16::from_str_radix(hex, 16).ok().map(Statement::Literal);
+        }
+        // Decimal literal: starts with a digit, must be in 15-bit range
+        if rest.chars().next().unwrap().is_ascii_digit() {
+            return rest.parse::<u16>().ok()
+                .filter(|&n| n <= 0x7fff)
+                .map(Statement::Literal);
+        }
+        // Symbolic address
+        return if is_valid_symbol(rest) {
             Some(Statement::Address(Label(rest.to_string())))
+        } else {
+            None
         };
     }
 
