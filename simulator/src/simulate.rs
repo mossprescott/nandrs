@@ -45,7 +45,7 @@ where
     }
     let mut state = ChipState {
         intf: chip.reflect(),
-        name: chip.name().to_string(),
+        // name: chip.name().to_string(),
         components,
         input_vals: HashMap::new(),
         wire_state: HashMap::new(),
@@ -60,7 +60,7 @@ where
 /// Runtime state of a simulated chip, and access to its inputs and outputs.
 pub struct ChipState {
     intf: Interface,
-    name: String,
+    //name: String,
     components: Vec<Computational16>,
     input_vals: HashMap<String, u64>,
     wire_state: HashMap<usize, u64>,

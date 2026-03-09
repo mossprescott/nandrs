@@ -8,7 +8,7 @@ impl From<&str> for Label {
     }
 }
 
-type Addr = u16;
+pub type Addr = u16;
 
 /// Unit of assembly source, either an instruction, like "D=A" or "@256", or a label, like
 /// "(main)"
