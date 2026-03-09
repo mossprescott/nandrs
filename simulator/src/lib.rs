@@ -50,8 +50,6 @@ fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
 ///
 /// Note: Claude has been given full latitude here as long as the output looks right,
 /// and it's elected to sort strings at the end.
-///
-/// TODO: collapse parallel wiring, where several bits of the same input/output pair are connected.
 pub fn print_graph<C>(chip: &C) -> String
 where
     C: Component + Reflect,
