@@ -124,16 +124,19 @@ pub type Sequential16 = Sequential<N16>;
 // - Memory and I/O (Computational)
 
 #[derive(Clone)]
-pub struct RAM<Width: Nat> {
-    pub addr: InputBus<Width>,
+pub struct RAM<A: Nat, D: Nat> {
+    /// Capacity of the RAM in words; <= 2^address_bits. Valid addresses are 0 to size-1.
+    pub size: usize,
 
-    pub data: InputBus<Width>,
+    pub addr: InputBus<A>,
+
+    pub data: InputBus<D>,
     pub load: Input,
 
-    pub out: OutputBus<Width>,
+    pub out: OutputBus<D>,
 }
 
-impl<Width: Nat + Clone> Reflect for RAM<Width> {
+impl<A: Nat + Clone, D: Nat + Clone> Reflect for RAM<A, D> {
     fn reflect(&self) -> Interface {
         Interface {
             inputs: std::collections::HashMap::from([
@@ -149,29 +152,32 @@ impl<Width: Nat + Clone> Reflect for RAM<Width> {
     fn name(&self) -> &str { "RAM" }
 }
 
-impl<Width: Nat> Chip for RAM<Width> {
+impl<A: Nat, D: Nat> Chip for RAM<A, D> {
     fn chip() -> Self {
-        RAM { addr: InputBus::new(), data: InputBus::new(), load: Input::new(), out: OutputBus::<Width>::new() }
+        RAM { size: 0, addr: InputBus::new(), data: InputBus::new(), load: Input::new(), out: OutputBus::<D>::new() }
     }
 }
 
 /// Nothing to expand; RAM is primitive for the simulator.
-impl<Width: Nat> Component for RAM<Width> {
-    type Target = RAM<Width>;
+impl<A: Nat, D: Nat> Component for RAM<A, D> {
+    type Target = RAM<A, D>;
 
-    fn expand(&self) -> Option<IC<RAM<Width>>> {
+    fn expand(&self) -> Option<IC<RAM<A, D>>> {
         None
     }
 }
 
 #[derive(Clone)]
-pub struct ROM<Width: Nat> {
-    pub addr: InputBus<Width>,
+pub struct ROM<A: Nat, D: Nat> {
+    /// Capacity of the ROM in words; <= 2^address_bits. Valid addresses are 0 to size-1.
+    pub size: usize,
 
-    pub out: OutputBus<Width>,
+    pub addr: InputBus<A>,
+
+    pub out: OutputBus<D>,
 }
 
-impl<Width: Nat + Clone> Reflect for ROM<Width> {
+impl<A: Nat + Clone, D: Nat + Clone> Reflect for ROM<A, D> {
     fn reflect(&self) -> Interface {
         Interface {
             inputs: std::collections::HashMap::from([
@@ -185,32 +191,34 @@ impl<Width: Nat + Clone> Reflect for ROM<Width> {
     fn name(&self) -> &str { "ROM" }
 }
 
-impl<Width: Nat> Chip for ROM<Width> {
+impl<A: Nat, D: Nat> Chip for ROM<A, D> {
     fn chip() -> Self {
-        ROM { addr: InputBus::<Width>::new(), out: OutputBus::<Width>::new() }
+        ROM { size: 0, addr: InputBus::<A>::new(), out: OutputBus::<D>::new() }
     }
 }
 
 /// Nothing to expand; ROM is primitive for the simulator.
-impl<Width: Nat> Component for ROM<Width> {
-    type Target = ROM<Width>;
+impl<A: Nat, D: Nat> Component for ROM<A, D> {
+    type Target = ROM<A, D>;
 
-    fn expand(&self) -> Option<IC<ROM<Width>>> {
+    fn expand(&self) -> Option<IC<ROM<A, D>>> {
         None
     }
 }
 
 /// Type of components that participate in computers, including logic, registers, memory, and I/O.
 #[derive(Clone)]
-pub enum Computational<Width: Nat> {
+pub enum Computational<A: Nat, D: Nat> {
     Nand(Nand),
-    Register(Register<Width>),
-    RAM(RAM<Width>),
-    ROM(ROM<Width>),
+    Register(Register<D>),
+    /// Note: typically not all of the address bits are used, but also multiple RAMs with
+    /// different address widths would be most precise and that's just not worth it for now.
+    RAM(RAM<A, D>),
+    ROM(ROM<A, D>),
     // TODO: I/O (Keyboard, TTY)
 }
 
-impl<Width: Nat + Clone> Reflect for Computational<Width> {
+impl<A: Nat + Clone, D: Nat + Clone> Reflect for Computational<A, D> {
     fn reflect(&self) -> Interface {
         match self {
             Self::Nand(c)     => c.reflect(),
@@ -229,7 +237,7 @@ impl<Width: Nat + Clone> Reflect for Computational<Width> {
     }
 }
 
-impl<Width: Nat> Component for Computational<Width> {
+impl<A: Nat, D: Nat> Component for Computational<A, D> {
     type Target = Self;
 
     fn expand(&self) -> Option<IC<Self::Target>> {
@@ -237,12 +245,12 @@ impl<Width: Nat> Component for Computational<Width> {
     }
 }
 
-pub type RAM16 = RAM<N16>;
-pub type ROM16 = ROM<N16>;
-pub type Computational16 = Computational<N16>;
+pub type RAM16           = RAM<N16, N16>;
+pub type ROM16           = ROM<N16, N16>;
+pub type Computational16 = Computational<N16, N16>;
 
-impl<Width: Nat> From<Sequential<Width>> for Computational<Width> {
-    fn from(s: Sequential<Width>) -> Self {
+impl<A: Nat, D: Nat> From<Sequential<D>> for Computational<A, D> {
+    fn from(s: Sequential<D>) -> Self {
         match s {
             Sequential::Nand(n)     => Computational::Nand(n),
             Sequential::Register(r) => Computational::Register(r),

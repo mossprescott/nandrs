@@ -5,6 +5,9 @@ use crate::declare::{BusRef, IC, Interface, Reflect as _};
 use crate::component::{Computational, Computational16};
 
 /// Transform circuit description for simulation.
+///
+/// Note: currently 16-bit words are assumed, but up to 64-bits wouldn't be a problem if the type
+/// was generalized.
 pub fn synthesize<C>(chip: &IC<C>) -> ChipState
 where
     C: Clone + crate::Reflect + Into<Computational16>,
@@ -16,10 +19,12 @@ where
         match comp {
             Computational::Register(reg) => {
                 let intf = reg.reflect();
+                assert_eq!(intf.outputs["out"].width, 16);
                 reg_state.insert(wire_id(&intf.outputs["out"]), 0);
             }
             Computational::RAM(ram) => {
                 let intf = ram.reflect();
+                assert_eq!(intf.outputs["out"].width, 16);
                 ram_state.insert(wire_id(&intf.outputs["out"]), HashMap::new());
             }
             _ => {}
@@ -195,4 +200,38 @@ fn write_bit(ws: &mut HashMap<usize, u64>, b: &BusRef, value: bool) {
     let entry = ws.entry(wire_id(b)).or_insert(0);
     let bit = 1u64 << b.offset;
     if value { *entry |= bit; } else { *entry &= !bit; }
+}
+
+/// Access to auxiliary chips "on the bus", which the harness needs to access.
+/// Which components – and how many of each – are present depends on the chip design.
+///
+/// Realistically, there will be two RAMs present if the conventional HACK MemorySystem is used.
+/// In that case, the RAM sizes will differ.
+pub enum BusResident {
+    RAM(RAMState),
+    ROM(ROMState),
+    // Keyboard(KeyboardState),
+    // TTY(TTYState),
+}
+
+/// Track the contents and simulation state of a RAM.
+///
+/// Every word is initialized to 0.
+///
+/// Future: for versimillitude, each RAM should have a defined read latency. The address input
+/// will have to be presented one or more cycles *before* the output value is actually used. For
+/// example, the HACK CPU always latches the address into register A (and presents it to the RAM)
+/// at least one cycle before any read/write. In "realistic" designs, one or two cycles or latency
+/// was typical, even decades ago.
+pub struct RAMState {
+    size: usize,
+
+    data: Vec<u64>,
+}
+
+/// Hold pre-initialized ROM contents.
+pub struct ROMState {
+    size: usize,
+
+    data: Vec<u64>,
 }
