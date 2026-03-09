@@ -5,7 +5,7 @@ use simulator::Reflect as _;
 use simulator::Chip as _;
 use simulator::component::{Nand, Register16, RAM16, ROM16, Sequential, Computational, Computational16};
 use crate::project_01::{Project01Component, Not, And, Or, Mux16};
-use crate::project_02::{Project02Component, Alu};
+use crate::project_02::{Project02Component, ALU};
 use crate::project_03::{Project03Component, PC};
 
 pub enum Project05Component {
@@ -300,7 +300,7 @@ impl Component for CPU {
 
         // === ALU: x=D, y=y_src, out → mem_out ===
         let reg_d_out: Output16 = Output16::new();  // D register output wire (seeded from reg_state)
-        let alu = Alu {
+        let alu = ALU {
             x:   reg_d_out.clone().into(),
             y:   y_src.into(),
             zx:  zx.into(), nx: nx.into(),

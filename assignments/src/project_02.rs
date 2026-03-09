@@ -14,7 +14,7 @@ pub enum Project02Component {
     Add16(Add16),
     Zero16(Zero16),
     Neg16(Neg16),
-    Alu(Alu),
+    ALU(ALU),
 }
 
 impl From<Project01Component> for Project02Component { fn from(c: Project01Component) -> Self { Project02Component::Project01(c) } }
@@ -24,7 +24,7 @@ impl From<Inc16>     for Project02Component { fn from(c: Inc16)     -> Self { Pr
 impl From<Add16>     for Project02Component { fn from(c: Add16)     -> Self { Project02Component::Add16(c)     } }
 impl From<Zero16>    for Project02Component { fn from(c: Zero16)    -> Self { Project02Component::Zero16(c)    } }
 impl From<Neg16>     for Project02Component { fn from(c: Neg16)     -> Self { Project02Component::Neg16(c)     } }
-impl From<Alu>       for Project02Component { fn from(c: Alu)       -> Self { Project02Component::Alu(c)       } }
+impl From<ALU>       for Project02Component { fn from(c: ALU)       -> Self { Project02Component::ALU(c)       } }
 
 impl Component for Project02Component {
     type Target = Project02Component;
@@ -38,7 +38,7 @@ impl Component for Project02Component {
             Project02Component::Add16(c)     => c.expand(),
             Project02Component::Zero16(c)    => c.expand(),
             Project02Component::Neg16(c)     => c.expand(),
-            Project02Component::Alu(c)       => c.expand(),
+            Project02Component::ALU(c)       => c.expand(),
         }
     }
 }
@@ -53,7 +53,7 @@ impl Reflect for Project02Component {
             Project02Component::Add16(c)     => c.reflect(),
             Project02Component::Zero16(c)    => c.reflect(),
             Project02Component::Neg16(c)     => c.reflect(),
-            Project02Component::Alu(c)       => c.reflect(),
+            Project02Component::ALU(c)       => c.reflect(),
         }
     }
     fn name(&self) -> &str {
@@ -65,7 +65,7 @@ impl Reflect for Project02Component {
             Project02Component::Add16(c)     => c.name(),
             Project02Component::Zero16(c)    => c.name(),
             Project02Component::Neg16(c)     => c.name(),
-            Project02Component::Alu(c)       => c.name(),
+            Project02Component::ALU(c)       => c.name(),
         }
     }
 }
@@ -293,7 +293,7 @@ impl Component for Neg16 {
 
 /// Hack ALU: computes one of several functions of x and y selected by control bits.
 #[derive(Reflect, Chip)]
-pub struct Alu {
+pub struct ALU {
     /// "Left" input
     pub x:   Input16,
     // "Right" input
@@ -319,7 +319,7 @@ pub struct Alu {
     pub ng:  Output,
 }
 
-impl Component for Alu {
+impl Component for ALU {
     type Target = Project02Component;
 
     fn expand(&self) -> Option<IC<Project02Component>> {

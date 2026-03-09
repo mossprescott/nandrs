@@ -1,6 +1,6 @@
 use simulator::{print_graph, Chip as _};
 use simulator::eval::eval;
-use crate::project_02::{flatten, HalfAdder, FullAdder, Inc16, Add16, Zero16, Neg16, Alu};
+use crate::project_02::{flatten, HalfAdder, FullAdder, Inc16, Add16, Zero16, Neg16, ALU};
 
 #[test]
 fn half_adder_truth_table() {
@@ -101,7 +101,7 @@ fn neg16_truth_table() {
 
 #[test]
 fn alu_truth_table() {
-    let chip = Alu::chip();
+    let chip = ALU::chip();
 
     // When it breaks, it's nice to see what it tried to do
     print!("{}", print_graph(&chip));
@@ -148,5 +148,42 @@ fn alu_truth_table() {
 #[test]
 fn alu_optimal() {
     // TODO: 560, once Neg16 is reduced to wiring only
-    assert_eq!(flatten(Alu::chip()).components.len(), 562);
+    assert_eq!(flatten(ALU::chip()).components.len(), 562);
+}
+
+
+#[test]
+fn alu_graph() {
+    let chip = ALU::chip();
+    assert_eq!(
+        print_graph(&chip),
+        "ALU:\n\
+         mux16_0.a0[0..15] <- x[0..15]\n\
+         mux16_0.sel <- zx\n\
+         not16_1.a[0..15] <- mux16_0.out[0..15]\n\
+         mux16_2.a0[0..15] <- mux16_0.out[0..15]\n\
+         mux16_2.a1[0..15] <- not16_1.out[0..15]\n\
+         mux16_2.sel <- nx\n\
+         mux16_3.a0[0..15] <- y[0..15]\n\
+         mux16_3.sel <- zy\n\
+         not16_4.a[0..15] <- mux16_3.out[0]\n\
+         mux16_5.a0[0..15] <- mux16_3.out[0..15]\n\
+         mux16_5.a1[0..15] <- not16_4.out[0..15]\n\
+         mux16_5.sel <- ny\n\
+         and16_6.a[0..15] <- mux16_2.out[0..15]\n\
+         and16_6.b[0..15] <- mux16_5.out[0..15]\n\
+         add16_7.a[0..15] <- mux16_2.out[0..15]\n\
+         add16_7.b[0..15] <- mux16_5.out[0..15]\n\
+         mux16_8.a0[0..15] <- and16_6.out[0..15]\n\
+         mux16_8.a1[0..15] <- add16_7.out[0..15]\n\
+         mux16_8.sel <- f\n\
+         not16_9.a[0..15] <- mux16_8.out[0..15]\n\
+         mux16_10.a0[0..15] <- mux16_8.out[0..15]\n\
+         mux16_10.a1[0..15] <- not16_9.out[0..15]\n\
+         mux16_10.sel <- no\n\
+         zero16_11.a[0..15] <- mux16_10.out[0..15]\n\
+         neg16_12.a[0..15] <- mux16_10.out[0..15]\n\
+         ng <- neg16_12.out\n\
+         out[0..15] <- mux16_10.out[0..15]\n\
+         zr <- zero16_11.out");
 }
