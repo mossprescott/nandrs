@@ -26,6 +26,17 @@ The majority of the details are being worked out using Claude Code. The meta-goa
 well it's able to handle a project of this complexity, and how much fun it is to do a project like
 this that way. See the commit comments for a record of when Claude was helpful and when not.
 
+
+## Quick Start
+
+Have a rust toolchain...
+
+`cargo run cargo run --release -p computer -- examples/Pong.asm`
+
+Currently it will do about 900 cycles/sec, prior to any thought about speed. And it doesn't seem
+to be working yet either.
+
+
 ## Simulation
 
 A single chip/computer simulator is implemented. The user/learner writes a description of their

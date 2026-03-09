@@ -1,5 +1,8 @@
 /// HACK Assembly translation
 
+use std::collections::HashMap;
+use crate::project_05::{SCREEN_BASE, KEYBOARD};
+
 #[derive(Debug, PartialEq)]
 pub struct Label(String);
 impl From<&str> for Label {
@@ -179,9 +182,60 @@ pub fn parse_statement(line: &str) -> Option<Statement> {
     Some(Statement::Instruction(bits))
 }
 
-/// Consume source text, producing a buffer of 16-bit instruction values.
-///
-/// TODO: start_addr: u16, built_in: HashMap<Label, Addr>
-pub fn assemble(src: &str) -> Vec<u16> {
-    todo!()
+pub struct Program {
+    pub instructions: Vec<u16>,
+    pub symbols: HashMap<String, Addr>,
 }
+
+/// Consume source text, producing a buffer of 16-bit instruction values.
+pub fn assemble(src: &str) -> Program {
+    // Predefined symbols
+    let mut symbols: HashMap<String, u16> = HashMap::new();
+    for i in 0u16..=15 { symbols.insert(format!("R{i}"), i); }
+    symbols.insert("SP".into(),     0);
+    symbols.insert("LCL".into(),    1);
+    symbols.insert("ARG".into(),    2);
+    symbols.insert("THIS".into(),   3);
+    symbols.insert("THAT".into(),   4);
+    symbols.insert("SCREEN".into(), SCREEN_BASE);
+    symbols.insert("KBD".into(),    KEYBOARD);
+
+    let stmts: Vec<Statement> = src.lines().filter_map(parse_statement).collect();
+
+    // Pass 1: assign ROM addresses to labels.
+    let mut labels: HashMap<String, u16> = HashMap::new();
+    let mut rom_addr: u16 = 0;
+    for stmt in &stmts {
+        match stmt {
+            Statement::Label(Label(name)) => {
+                symbols.insert(name.clone(), rom_addr);
+                labels.insert(name.clone(), rom_addr);
+            }
+            _ => { rom_addr += 1; }
+        }
+    }
+
+    // Pass 2: emit instructions, allocating variables starting at RAM[16].
+    let mut next_var: u16 = 16;
+    let mut out = Vec::new();
+    for stmt in stmts {
+        match stmt {
+            Statement::Label(_) => {}
+            Statement::Literal(x) => out.push(x),
+            Statement::Instruction(x) => out.push(x),
+            Statement::Address(Label(name)) => {
+                let addr = *symbols.entry(name).or_insert_with(|| {
+                    let v = next_var;
+                    next_var += 1;
+                    v
+                });
+                out.push(addr);
+            }
+        }
+    }
+    Program {
+        instructions: out,
+        symbols: labels,
+    }
+}
+
