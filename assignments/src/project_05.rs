@@ -202,6 +202,10 @@ impl Component for MemorySystem {
     }
 }
 
+pub const RAM_BASE:    u16 = 0;
+pub const SCREEN_BASE: u16 = 16384;
+pub const KEYBOARD:    u16 = 32768;
+
 /// Pure wiring; this component just makes the unpacking of instructions easier to test and
 /// to use separately.
 ///

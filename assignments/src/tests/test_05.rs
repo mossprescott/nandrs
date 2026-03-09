@@ -1,4 +1,4 @@
-use crate::project_05::{MemorySystem, CPU, Computer, flatten};
+use crate::project_05::{MemorySystem, CPU, Computer, flatten, SCREEN_BASE};
 use crate::project_06::parse_statement;
 use simulator::declare::Chip as _;
 use simulator::simulate::{synthesize, BusResident};
@@ -40,8 +40,7 @@ fn memory_system_behavior() {
     assert_eq!(ram.peek(0), 1234);
 
     // Now write to the screen buffer:
-    let SCREEN = 16384;
-    state.set("addr", SCREEN);
+    state.set("addr", SCREEN_BASE.into());
     state.set("data", 0x5555);
 
     state.ticktock();
