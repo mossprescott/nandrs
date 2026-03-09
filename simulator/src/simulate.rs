@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -14,7 +15,7 @@ where
 {
     let components: Vec<Computational16> = chip.components.iter().cloned().map(Into::into).collect();
     let mut reg_state: HashMap<usize, u64> = HashMap::new();
-    let mut ram_state: HashMap<usize, HashMap<u64, u64>> = HashMap::new();
+    let mut bus_residents: Vec<BusResident> = Vec::new();
     for comp in &components {
         match comp {
             Computational::Register(reg) => {
@@ -25,7 +26,19 @@ where
             Computational::RAM(ram) => {
                 let intf = ram.reflect();
                 assert_eq!(intf.outputs["out"].width, 16);
-                ram_state.insert(wire_id(&intf.outputs["out"]), HashMap::new());
+                bus_residents.push(BusResident::RAM(RAMHandle(Rc::new(RefCell::new(RAMState {
+                    wire_id: wire_id(&intf.outputs["out"]),
+                    size: ram.size,
+                    data: vec![0u64; ram.size],
+                })))));
+            }
+            Computational::ROM(rom) => {
+                let intf = rom.reflect();
+                bus_residents.push(BusResident::ROM(ROMHandle(Rc::new(RefCell::new(ROMState {
+                    wire_id: wire_id(&intf.outputs["out"]),
+                    size: rom.size,
+                    data: vec![0u64; rom.size],
+                })))));
             }
             _ => {}
         }
@@ -37,7 +50,7 @@ where
         input_vals: HashMap::new(),
         wire_state: HashMap::new(),
         reg_state,
-        ram_state,
+        bus_residents,
     };
     state.evaluate();
     state
@@ -51,8 +64,7 @@ pub struct ChipState {
     input_vals: HashMap<String, u64>,
     wire_state: HashMap<usize, u64>,
     reg_state: HashMap<usize, u64>,
-    /// Maps each RAM's output-wire id → (addr → value).
-    ram_state: HashMap<usize, HashMap<u64, u64>>,
+    bus_residents: Vec<BusResident>,
 }
 
 impl ChipState {
@@ -66,6 +78,16 @@ impl ChipState {
         self.intf.outputs.get(name)
             .map(|b| read_bus(&self.wire_state, b))
             .unwrap_or(0)
+    }
+
+    /// RAM and ROM instances present in the simulated circuit.
+    pub fn bus_residents(&self) -> &[BusResident] {
+        &self.bus_residents
+    }
+
+    /// RAM and ROM instances present in the simulated circuit, mutably (e.g. to load a ROM).
+    pub fn bus_residents_mut(&mut self) -> &mut [BusResident] {
+        &mut self.bus_residents
     }
 
     /// Turn the crank: latch registers and RAM, then re-evaluate combinational logic.
@@ -102,7 +124,11 @@ impl ChipState {
             self.reg_state.insert(id, val);
         }
         for (out_id, addr, val) in ram_updates {
-            self.ram_state.entry(out_id).or_default().insert(addr, val);
+            if let Some(BusResident::RAM(h)) = self.bus_residents.iter()
+                .find(|res| matches!(res, BusResident::RAM(h) if h.0.borrow().wire_id == out_id))
+            {
+                h.poke(addr, val);
+            }
         }
 
         // Re-evaluate so outputs reflect the new state.
@@ -134,9 +160,11 @@ impl ChipState {
                     let intf = ram.reflect();
                     let addr   = read_bus(&ws, &intf.inputs["addr"]);
                     let out_id = wire_id(&intf.outputs["out"]);
-                    let val = self.ram_state.get(&out_id)
-                        .and_then(|m| m.get(&addr))
-                        .copied()
+                    let val = self.bus_residents.iter()
+                        .find_map(|res| match res {
+                            BusResident::RAM(h) if h.0.borrow().wire_id == out_id => h.0.borrow().data.get(addr as usize).copied(),
+                            _ => None,
+                        })
                         .unwrap_or(0);
                     write_bus(&mut ws, &intf.outputs["out"], val);
                 }
@@ -144,10 +172,11 @@ impl ChipState {
                     let intf = rom.reflect();
                     let addr   = read_bus(&ws, &intf.inputs["addr"]);
                     let out_id = wire_id(&intf.outputs["out"]);
-                    // ROM uses the same ram_state map (loaded externally).
-                    let val = self.ram_state.get(&out_id)
-                        .and_then(|m| m.get(&addr))
-                        .copied()
+                    let val = self.bus_residents.iter()
+                        .find_map(|res| match res {
+                            BusResident::ROM(h) if h.0.borrow().wire_id == out_id => h.0.borrow().data.get(addr as usize).copied(),
+                            _ => None,
+                        })
                         .unwrap_or(0);
                     write_bus(&mut ws, &intf.outputs["out"], val);
                 }
@@ -208,10 +237,10 @@ fn write_bit(ws: &mut HashMap<usize, u64>, b: &BusRef, value: bool) {
 /// Realistically, there will be two RAMs present if the conventional HACK MemorySystem is used.
 /// In that case, the RAM sizes will differ.
 pub enum BusResident {
-    RAM(RAMState),
-    ROM(ROMState),
-    // Keyboard(KeyboardState),
-    // TTY(TTYState),
+    RAM(RAMHandle),
+    ROM(ROMHandle),
+    // Keyboard(KeyboardHandle),
+    // TTY(TTYHandle),
 }
 
 /// Track the contents and simulation state of a RAM.
@@ -224,14 +253,69 @@ pub enum BusResident {
 /// at least one cycle before any read/write. In "realistic" designs, one or two cycles or latency
 /// was typical, even decades ago.
 pub struct RAMState {
-    size: usize,
-
+    wire_id: usize,
+    pub size: usize,
     data: Vec<u64>,
+}
+
+impl RAMState {
+    /// Read a word. If the address is out-of-range, returns 0.
+    pub fn peek(&self, addr: u64) -> u64 {
+        self.data.get(addr as usize).copied().unwrap_or_else(|| {
+            println!("Out of range read: RAM[{}]", addr);
+            0
+        })
+    }
+
+    /// Write a word. If the address is out-of-range, ignore.
+    pub fn poke(&mut self, addr: u64, val: u64) {
+        if let Some(cell) = self.data.get_mut(addr as usize) {
+            *cell = val;
+        } else {
+            println!("Out of range write: {} -> RAM[{}]", val, addr);
+        }
+    }
 }
 
 /// Hold pre-initialized ROM contents.
 pub struct ROMState {
-    size: usize,
-
+    wire_id: usize,
+    pub size: usize,
     data: Vec<u64>,
+}
+
+impl ROMState {
+    /// Read a word. If the address is out-of-range, returns 0.
+    pub fn read(&self, addr: u64) -> u64 {
+        self.data.get(addr as usize).copied().unwrap_or_else(|| {
+            println!("Out of range read: ROM[{}]", addr);
+            0
+        })
+    }
+
+    /// Replace the entire contents.
+    pub fn flash(&mut self, data: Vec<u64>) {
+        self.data = data;
+    }
+}
+
+/// A clonable handle to a RAM instance in the simulated circuit.
+/// Cloning the handle gives another reference to the same underlying RAM.
+#[derive(Clone)]
+pub struct RAMHandle(Rc<RefCell<RAMState>>);
+
+impl RAMHandle {
+    pub fn peek(&self, addr: u64) -> u64       { self.0.borrow().peek(addr) }
+    pub fn poke(&self, addr: u64, val: u64)    { self.0.borrow_mut().poke(addr, val) }
+    pub fn size(&self) -> usize                { self.0.borrow().size }
+}
+
+/// A clonable handle to a ROM instance in the simulated circuit.
+#[derive(Clone)]
+pub struct ROMHandle(Rc<RefCell<ROMState>>);
+
+impl ROMHandle {
+    pub fn read(&self, addr: u64) -> u64       { self.0.borrow().read(addr) }
+    pub fn flash(&self, data: Vec<u64>)        { self.0.borrow_mut().flash(data) }
+    pub fn size(&self) -> usize                { self.0.borrow().size }
 }
