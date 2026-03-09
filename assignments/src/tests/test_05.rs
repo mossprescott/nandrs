@@ -2,6 +2,7 @@ use crate::project_05::{MemorySystem, CPU, Computer, flatten};
 use crate::project_06::parse_statement;
 use simulator::declare::Chip as _;
 use simulator::simulate::{synthesize, BusResident};
+use simulator::component::Computational;
 use simulator::print_graph;
 
 #[test]
@@ -62,8 +63,11 @@ fn memory_system_behavior() {
 
 #[test]
 fn memory_system_optimal() {
-    // TODO: count by type
-    assert_eq!(flatten(MemorySystem::chip()).components.len(), 108);
+    let components = flatten(MemorySystem::chip()).components;
+    let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
+    let rams  = components.iter().filter(|c| matches!(c, Computational::RAM(_))).count();
+    assert_eq!(nands, 106);
+    assert_eq!(rams,    2);
 }
 
 fn instr(stmt: &str) -> u16 {
