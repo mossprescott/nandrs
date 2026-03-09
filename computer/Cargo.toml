@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 simulator = { path = "../simulator" }
 assignments = { path = "../assignments" }
+minifb = "0.27"
