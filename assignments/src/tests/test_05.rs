@@ -1,7 +1,7 @@
-use crate::project_05::{MemorySystem, CPU, Computer, flatten, SCREEN_BASE};
+use crate::project_05::{MemorySystem, CPU, Computer, flatten, SCREEN_BASE, find_ram, find_screen, find_rom};
 use crate::project_06::parse_statement;
 use simulator::declare::Chip as _;
-use simulator::simulate::{synthesize, BusResident};
+use simulator::simulate::synthesize;
 use simulator::component::Computational;
 use simulator::print_graph;
 
@@ -16,11 +16,8 @@ fn memory_system_behavior() {
 
     let mut state = synthesize(&chip);
 
-    let find_ram = |size| state.bus_residents().iter()
-        .find_map(|r| if let BusResident::RAM(h) = r { if h.size() == size { Some(h.clone()) } else { None } } else { None })
-        .unwrap();
-    let ram    = find_ram(16 * 1024); // 16KB main RAM
-    let screen = find_ram( 8 * 1024); // 8KB screen buffer
+    let ram    = find_ram(&state);
+    let screen = find_screen(&state);
 
     state.set("addr", 0);
     assert_eq!(state.get("out"), 0);
@@ -112,21 +109,41 @@ fn cpu_optimal() {
     assert_eq!(flatten(CPU::chip()).components.len(), 947);
 }
 
+fn add_program() -> Vec<u64> {
+    ["@2", "D=A", "@3", "D=D+A", "@1", "M=D"]
+        .map(|op| instr(op).into())
+        .to_vec()
+}
+
 #[test]
-fn computer_behavior() {
+fn computer_add_behavior() {
     let chip = Computer::chip();
 
-     // When it breaks, it's nice to see what it tried to do
+    // When it breaks, it's nice to see what it tried to do
     print!("{}", print_graph(&chip));
 
     let chip = flatten(chip);
 
     let mut state = synthesize(&chip);
 
-    assert_eq!(state.get("out"), 0);
+    let rom = find_rom(&state);
+    let ram = find_ram(&state);
+
+    let pgm = add_program();
+    rom.flash(pgm.clone());
+
+    for _ in 0..pgm.len() { state.ticktock(); }
+
+    assert_eq!(ram.peek(1), 5);
 }
 
 #[test]
 fn computer_optimal() {
-    assert_eq!(flatten(Computer::chip()).components.len(), todo!());
+    let components = flatten(MemorySystem::chip()).components;
+    let rams  = components.iter().filter(|c| matches!(c, Computational::RAM(_))).count();
+    let roms  = components.iter().filter(|c| matches!(c, Computational::ROM(_))).count();
+    let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
+    assert_eq!(rams,    2);
+    assert_eq!(roms,    1);
+    assert_eq!(nands, 10000);
 }

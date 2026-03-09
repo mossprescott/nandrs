@@ -4,6 +4,7 @@ use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, 
 use simulator::Reflect as _;
 use simulator::Chip as _;
 use simulator::component::{Nand, Register16, RAM16, ROM16, Sequential, Computational, Computational16};
+use simulator::simulate::{ChipState, BusResident, RAMHandle, ROMHandle};
 use crate::project_01::{Project01Component, Not, And, Or, Mux16};
 use crate::project_02::{Project02Component, ALU};
 use crate::project_03::{Project03Component, PC};
@@ -205,6 +206,27 @@ impl Component for MemorySystem {
 pub const RAM_BASE:    u16 = 0;
 pub const SCREEN_BASE: u16 = 16384;
 pub const KEYBOARD:    u16 = 32768;
+
+/// Access the main RAM, assuming a normal MemorySystem is present. Otherwise panic.
+pub fn find_ram(state: &ChipState) -> RAMHandle {
+    state.bus_residents().iter()
+        .find_map(|r| if let BusResident::RAM(h) = r { if h.size() == 16 * 1024 { Some(h.clone()) } else { None } } else { None })
+        .expect("no 16KB RAM found")
+}
+
+/// Access the screen RAM, assuming a normal MemorySystem is present. Otherwise panic.
+pub fn find_screen(state: &ChipState) -> RAMHandle {
+    state.bus_residents().iter()
+        .find_map(|r| if let BusResident::RAM(h) = r { if h.size() == 8 * 1024 { Some(h.clone()) } else { None } } else { None })
+        .expect("no 8KB screen RAM found")
+}
+
+/// Access the ROM, assuming a normal MemorySystem is present. Otherwise panic.
+pub fn find_rom(state: &ChipState) -> ROMHandle {
+    state.bus_residents().iter()
+        .find_map(|r| if let BusResident::ROM(h) = r { Some(h.clone()) } else { None })
+        .expect("no ROM found")
+}
 
 /// Pure wiring; this component just makes the unpacking of instructions easier to test and
 /// to use separately.
