@@ -152,9 +152,9 @@ impl<A: Nat + Clone, D: Nat + Clone> Reflect for RAM<A, D> {
     fn name(&self) -> &str { "RAM" }
 }
 
-impl<A: Nat, D: Nat> Chip for RAM<A, D> {
-    fn chip() -> Self {
-        RAM { size: 0, addr: InputBus::new(), data: InputBus::new(), load: Input::new(), out: OutputBus::<D>::new() }
+impl<A: Nat, D: Nat> RAM<A, D> {
+    pub fn chip(size: usize) -> Self {
+        RAM { size: size, addr: InputBus::new(), data: InputBus::new(), load: Input::new(), out: OutputBus::<D>::new() }
     }
 }
 
@@ -191,9 +191,9 @@ impl<A: Nat + Clone, D: Nat + Clone> Reflect for ROM<A, D> {
     fn name(&self) -> &str { "ROM" }
 }
 
-impl<A: Nat, D: Nat> Chip for ROM<A, D> {
-    fn chip() -> Self {
-        ROM { size: 0, addr: InputBus::<A>::new(), out: OutputBus::<D>::new() }
+impl<A: Nat, D: Nat> ROM<A, D> {
+    pub fn chip(size: usize) -> Self {
+        ROM { size: size, addr: InputBus::<A>::new(), out: OutputBus::<D>::new() }
     }
 }
 

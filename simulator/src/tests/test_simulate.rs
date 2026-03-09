@@ -31,9 +31,12 @@ fn register_behavior() {
     assert_eq!(state.get("out"), 42); // retained
 }
 
+/// Test RAM's behavior vis-a-vis its inputs and outputs.
+///
+/// Note: to access a RAM in-situ in a larger chip, see ChipState::bus_residents().
 #[test]
 fn ram_behavior() {
-    let ram = RAM16::chip();
+    let ram = RAM16::chip(1024);
     let chip = IC {
         name: ram.name().to_string(),
         intf: ram.reflect(),
