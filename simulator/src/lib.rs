@@ -50,12 +50,14 @@ fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
 ///
 /// Note: Claude has been given full latitude here as long as the output looks right,
 /// and it's elected to sort strings at the end.
+///
+/// TODO: collapse parallel wiring, where several bits of the same input/output pair are connected.
 pub fn print_graph<C>(chip: &C) -> String
 where
     C: Component + Reflect,
     C::Target: Component<Target = C::Target> + Reflect,
 {
-    use std::collections::{BTreeSet, HashMap};
+    use std::collections::HashMap;
     use std::rc::Rc;
 
     let intf = chip.reflect();
@@ -90,30 +92,28 @@ where
         }
     }
 
-    let bit_label = |name: &str, width: usize, bit: usize| -> String {
-        if width == 1 { name.to_string() } else { format!("{}[{}]", name, bit) }
+    // Label for an endpoint: no subscript if the endpoint itself is 1-bit;
+    // [lo] if 1 bit is selected from a wider bus; [lo..hi] for a full range.
+    let ep_label = |name: &str, ep_w: usize, n: usize, lo: usize| -> String {
+        if ep_w == 1    { name.to_string() }
+        else if n == 1  { format!("{}[{}]", name, lo) }
+        else            { format!("{}[{}..{}]", name, lo, lo + n - 1) }
     };
 
     let mut lines: Vec<String> = wires.values()
         .flat_map(|endpoints| {
-            // Collect every individual bit offset referenced by any endpoint in this wire group.
-            let bits: BTreeSet<usize> = endpoints.iter()
-                .flat_map(|&(_, _, off, w)| off..off + w)
-                .collect();
+            let sources: Vec<_> = endpoints.iter().filter(|(_, is_sink, _, _)| !is_sink).collect();
+            let sinks:   Vec<_> = endpoints.iter().filter(|(_, is_sink, _, _)| *is_sink).collect();
             let mut result = vec![];
-            for bit in bits {
-                let sources: Vec<_> = endpoints.iter()
-                    .filter(|&&(_, is_sink, off, w)| !is_sink && off <= bit && bit < off + w)
-                    .map(|(name, _, _, w)| bit_label(name, *w, bit))
-                    .collect();
-                let sinks: Vec<_> = endpoints.iter()
-                    .filter(|&&(_, is_sink, off, w)| is_sink && off <= bit && bit < off + w)
-                    .map(|(name, _, _, w)| bit_label(name, *w, bit))
-                    .collect();
-                for src in &sources {
-                    for sink in &sinks {
-                        result.push(format!("{} <- {}", sink, src));
-                    }
+            for (src_name, _, src_off, src_w) in &sources {
+                for (sink_name, _, sink_off, sink_w) in &sinks {
+                    let lo = (*src_off).max(*sink_off);
+                    let hi = (src_off + src_w).min(sink_off + sink_w);
+                    if lo >= hi { continue; }
+                    let n = hi - lo;
+                    result.push(format!("{} <- {}",
+                        ep_label(sink_name, *sink_w, n, lo),
+                        ep_label(src_name,  *src_w,  n, lo)));
                 }
             }
             result
@@ -123,6 +123,7 @@ where
     // Sort by destination component index, then port name; chip outputs sort last.
     let sink_key = |line: &str| -> (usize, String) {
         let sink = line.split(" <- ").next().unwrap_or("");
+        let sink = sink.split('[').next().unwrap_or(sink); // strip subscript before parsing
         if let Some(dot) = sink.find('.') {
             let comp = &sink[..dot];
             let num_start = comp.len() - comp.chars().rev().take_while(|c| c.is_ascii_digit()).count();

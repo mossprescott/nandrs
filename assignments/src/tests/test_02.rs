@@ -166,7 +166,7 @@ fn alu_graph() {
          mux16_2.sel <- nx\n\
          mux16_3.a0[0..15] <- y[0..15]\n\
          mux16_3.sel <- zy\n\
-         not16_4.a[0..15] <- mux16_3.out[0]\n\
+         not16_4.a[0..15] <- mux16_3.out[0..15]\n\
          mux16_5.a0[0..15] <- mux16_3.out[0..15]\n\
          mux16_5.a1[0..15] <- not16_4.out[0..15]\n\
          mux16_5.sel <- ny\n\
