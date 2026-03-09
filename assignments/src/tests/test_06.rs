@@ -5,7 +5,7 @@ fn parse_labels() {
     use crate::project_06::Statement::Label;
 
     assert_eq!(parse_statement("(main)"),   Some(Label("main".into())));
-    assert_eq!(parse_statement("(branch_123_gen-foo)"), Some(Label("branch_123_gen-foo".into())));
+    assert_eq!(parse_statement("(_branch_123_gen-foo$hello)"), Some(Label("_branch_123_gen-foo$hello".into())));
 }
 
 #[test]
@@ -14,7 +14,7 @@ fn parse_addresses() {
 
     assert_eq!(parse_statement("@SP"),     Some(Address("SP".into())));
     assert_eq!(parse_statement("@main"),   Some(Address("main".into())));
-    assert_eq!(parse_statement("@branch_123_gen-foo"), Some(Address("branch_123_gen-foo".into())));
+    assert_eq!(parse_statement("@_branch_123_gen-foo$hello"), Some(Address("_branch_123_gen-foo$hello".into())));
 }
 
 #[test]
@@ -68,9 +68,9 @@ fn parse_basic_ops() {
 fn parse_destinations() {
     use crate::project_06::Statement::Instruction;
 
-    assert_eq!(parse_statement("A=0"),   Some(Instruction(0xEA80 | 0x20))); // dest = 100
-    assert_eq!(parse_statement("D=0"),   Some(Instruction(0xEA80 | 0x10))); // dest = 010
-    assert_eq!(parse_statement("M=0"),   Some(Instruction(0xEA80 | 0x08))); // dest = 001
+    assert_eq!(parse_statement("A=0"),   Some(Instruction(0xEA80 | 0b100_000)));
+    assert_eq!(parse_statement("D=0"),   Some(Instruction(0xEA80 | 0b010_000)));
+    assert_eq!(parse_statement("M=0"),   Some(Instruction(0xEA80 | 0b001_000)));
 }
 
 #[test]
@@ -89,4 +89,55 @@ fn parse_jump_conditions() {
 
     // Don't jump. Kinda redundant.
     assert_eq!(parse_statement("0"),   Some(Instruction(0xEA80 | 0b000)));
+}
+
+
+// - Some error cases to keep me out of trouble:
+
+#[test]
+fn reject_bad_labels() {
+    use crate::project_06::Statement::Label;
+
+    assert_eq!(parse_statement("()"), None);
+    assert_eq!(parse_statement("(0)"), None);
+    assert_eq!(parse_statement("(0anything)"), None);
+    assert_eq!(parse_statement("(foo bar)"), None);
+}
+
+#[test]
+fn reject_bad_addresses() {
+    use crate::project_06::Statement::Address;
+
+    assert_eq!(parse_statement("@"), None);
+    assert_eq!(parse_statement("@0anything"), None);
+
+    // If this doesn't get split earlier, it's an error here:
+    assert_eq!(parse_statement("@foo bar"), None);
+}
+
+// - Now, some compatible extensions that can be useful:
+
+#[test]
+fn parse_multiple_destinations() {
+    use crate::project_06::Statement::Instruction;
+
+    // Any order:
+    assert_eq!(parse_statement("DA=0"),   Some(Instruction(0xEA80 | 0b101_000)));
+    assert_eq!(parse_statement("DM=0"),   Some(Instruction(0xEA80 | 0b011_000)));
+    assert_eq!(parse_statement("AMD=0"),  Some(Instruction(0xEA80 | 0b111_000)));
+}
+
+
+#[test]
+fn parse_hex_constants() {
+    use crate::project_06::Statement::Literal;
+
+    assert_eq!(parse_statement("@0x0"),     Some(Literal(0x0000)));
+    assert_eq!(parse_statement("@0x100"),   Some(Literal(0x0100)));
+    assert_eq!(parse_statement("@0x7fff"),  Some(Literal(0x7fff)));
+
+    // Some variations:
+    assert_eq!(parse_statement("@0x00"),    Some(Literal(0x0000)));
+    assert_eq!(parse_statement("@0x0100"),  Some(Literal(0x0100)));
+    assert_eq!(parse_statement("@0x7ABC"),  Some(Literal(0x7abc)));
 }
