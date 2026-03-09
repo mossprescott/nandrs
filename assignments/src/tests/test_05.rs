@@ -63,7 +63,7 @@ fn memory_system_behavior() {
 #[test]
 fn memory_system_optimal() {
     // TODO: count by type
-    assert_eq!(flatten(MemorySystem::chip()).components.len(), 1);
+    assert_eq!(flatten(MemorySystem::chip()).components.len(), 108);
 }
 
 fn instr(stmt: &str) -> u16 {

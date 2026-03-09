@@ -51,6 +51,7 @@ where
         wire_state: HashMap::new(),
         reg_state,
         bus_residents,
+        dirty: false,
     };
     state.evaluate();
     state
@@ -65,16 +66,22 @@ pub struct ChipState {
     wire_state: HashMap<usize, u64>,
     reg_state: HashMap<usize, u64>,
     bus_residents: Vec<BusResident>,
+    dirty: bool,
 }
 
 impl ChipState {
-    /// Set the value of an input for the next cycle.
+    /// Set the value of an input. Combinational outputs will reflect this on the next `get()`.
     pub fn set(&mut self, name: &str, value: u64) {
         self.input_vals.insert(name.to_string(), value);
+        self.dirty = true;
     }
 
-    /// Get the value of an output as of the last cycle.
-    pub fn get(&self, name: &str) -> u64 {
+    /// Get the value of an output, re-evaluating combinational logic if any inputs changed.
+    pub fn get(&mut self, name: &str) -> u64 {
+        if self.dirty {
+            self.evaluate();
+            self.dirty = false;
+        }
         self.intf.outputs.get(name)
             .map(|b| read_bus(&self.wire_state, b))
             .unwrap_or(0)
@@ -93,6 +100,7 @@ impl ChipState {
     /// Turn the crank: latch registers and RAM, then re-evaluate combinational logic.
     pub fn ticktock(&mut self) {
         // Evaluate with current inputs so wire_state reflects this cycle.
+        self.dirty = false;
         self.evaluate();
 
         // Collect updates (avoids borrow conflict between components and state maps).
@@ -133,6 +141,7 @@ impl ChipState {
 
         // Re-evaluate so outputs reflect the new state.
         self.evaluate();
+        self.dirty = false;
     }
 
     fn evaluate(&mut self) {

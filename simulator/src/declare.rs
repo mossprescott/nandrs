@@ -11,19 +11,29 @@ use crate::nat::{Nat, N1, N16};
 #[derive(Clone)]
 pub struct InputBus<Width: Nat> {
     width: PhantomData<Width>,
+    /// Override for the number of bits, when fewer than Width::as_int() are connected.
+    /// 0 means "use the type-level width".
+    effective_width: usize,
     id: Rc<()>,
     offset: usize,
 }
 impl<Width: Nat> InputBus<Width> {
     pub fn new() -> Self {
-        InputBus { width: PhantomData, id: Rc::new(()), offset: 0 }
+        InputBus { width: PhantomData, effective_width: 0, id: Rc::new(()), offset: 0 }
     }
 
     /// Select a single bit from this bus, returning a 1-bit InputBus that shares
     /// the same underlying wire identity but refers only to bit `i`.
     pub fn bit(&self, i: usize) -> Input {
         assert!(i < Width::as_int(), "bit index {} out of range for {}-bit bus", i, Width::as_int());
-        InputBus { width: PhantomData, id: self.id.clone(), offset: self.offset + i }
+        InputBus { width: PhantomData, effective_width: 0, id: self.id.clone(), offset: self.offset + i }
+    }
+
+    /// Slice `len` bits starting at `offset` from this bus.
+    /// The returned bus shares the same wire identity but its BusRef will have width = `len`.
+    pub fn mask(&self, offset: usize, len: usize) -> InputBus<Width> {
+        assert!(offset + len <= Width::as_int(), "mask({}, {}) out of range for {}-bit bus", offset, len, Width::as_int());
+        InputBus { width: PhantomData, effective_width: len, id: self.id.clone(), offset: self.offset + offset }
     }
 }
 
@@ -46,7 +56,7 @@ pub struct OutputBus<Width: Nat> {
 impl<Width: Nat> From<OutputBus<Width>> for InputBus<Width> {
     /// Any number of inputs can be fed by the same output.
     fn from(output: OutputBus<Width>) -> Self {
-        InputBus { width: PhantomData, id: output.id, offset: output.offset }
+        InputBus { width: PhantomData, effective_width: 0, id: output.id, offset: output.offset }
     }
 }
 impl<Width: Nat> OutputBus<Width> {
@@ -60,6 +70,14 @@ impl<Width: Nat> OutputBus<Width> {
     pub fn bit(&self, i: usize) -> Output {
         assert!(i < Width::as_int(), "bit index {} out of range for {}-bit bus", i, Width::as_int());
         OutputBus { width: PhantomData, id: self.id.clone(), offset: self.offset + i }
+    }
+
+    /// Slice `len` bits starting at `offset` from this bus, returning an InputBus<Width>
+    /// with the same wire identity but a runtime-specified effective width.
+    /// Useful for connecting a subset of a wide bus to a narrower address input.
+    pub fn mask(&self, offset: usize, len: usize) -> InputBus<Width> {
+        assert!(offset + len <= Width::as_int(), "mask({}, {}) out of range for {}-bit bus", offset, len, Width::as_int());
+        InputBus { width: PhantomData, effective_width: len, id: self.id.clone(), offset: self.offset + offset }
     }
 }
 
@@ -105,7 +123,8 @@ pub struct BusRef {
 
 impl<Width: Nat> From<InputBus<Width>> for BusRef {
     fn from(input: InputBus<Width>) -> Self {
-        BusRef { id: input.id, offset: input.offset, width: Width::as_int() }
+        let width = if input.effective_width != 0 { input.effective_width } else { Width::as_int() };
+        BusRef { id: input.id, offset: input.offset, width }
     }
 }
 

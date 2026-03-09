@@ -110,6 +110,9 @@ pub fn flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Computation
     }
 }
 
+/// Main RAM (16KB), screen buffer (8KB), and I/O.
+///
+/// During simulation, these components are exposed as BusResidents.
 #[derive(Reflect, Chip)]
 pub struct MemorySystem {
     pub data: Input16,
@@ -123,7 +126,80 @@ pub struct MemorySystem {
 impl Component for MemorySystem {
     type Target = Project05Component;
 
-    fn expand(&self) -> Option<IC<Project05Component>> { todo!() }
+    fn expand(&self) -> Option<IC<Project05Component>> {
+        use simulator::Input16;
+        let mut components: Vec<Project05Component> = vec![];
+
+        // addr[14]=1 → screen/keyboard range; addr[15]=1 → out of range
+        let sel_screen = self.addr.bit(14);
+        let sel_oor    = self.addr.bit(15);
+
+        let not_screen_gate = Not { a: sel_screen.clone().into(), out: Output::new() };
+        let not_screen = not_screen_gate.out.clone();
+        components.push(p01(not_screen_gate));
+
+        let not_oor_gate = Not { a: sel_oor.clone().into(), out: Output::new() };
+        let not_oor = not_oor_gate.out.clone();
+        components.push(p01(not_oor_gate));
+
+        // load_valid = AND(self.load, NOT(addr[15]))
+        let load_valid_gate = And { a: self.load.clone().into(), b: not_oor.into(), out: Output::new() };
+        let load_valid = load_valid_gate.out.clone();
+        components.push(p01(load_valid_gate));
+
+        // load_ram    = AND(load_valid, NOT(addr[14]))
+        let load_ram_gate = And { a: load_valid.clone().into(), b: not_screen.into(), out: Output::new() };
+        let load_ram = load_ram_gate.out.clone();
+        components.push(p01(load_ram_gate));
+
+        // load_screen = AND(load_valid, addr[14])
+        let load_screen_gate = And { a: load_valid.into(), b: sel_screen.clone().into(), out: Output::new() };
+        let load_screen = load_screen_gate.out.clone();
+        components.push(p01(load_screen_gate));
+
+        // Main RAM (16KB): addr bits 0-13 (14-bit addressing)
+        let ram = RAM16 {
+            size: 16 * 1024,
+            addr: self.addr.mask(0, 14),
+            data: self.data.clone(),
+            load: load_ram.into(),
+            out: Output16::new(),
+        };
+        let ram_out = ram.out.clone();
+        components.push(Project05Component::RAM(ram));
+
+        // Screen buffer (8KB): addr bits 0-12 (13-bit addressing)
+        let screen = RAM16 {
+            size: 8 * 1024,
+            addr: self.addr.mask(0, 13),
+            data: self.data.clone(),
+            load: load_screen.into(),
+            out: Output16::new(),
+        };
+        let screen_out = screen.out.clone();
+        components.push(Project05Component::RAM(screen));
+
+        // Inner mux: sel=addr[14] → a0=ram_out (RAM), a1=screen_out (Screen)
+        let inner_mux = Mux16 {
+            sel: sel_screen.into(),
+            a0:  ram_out.into(),
+            a1:  screen_out.into(),
+            out: Output16::new(),
+        };
+        let inner_out = inner_mux.out.clone();
+        components.push(p01(inner_mux));
+
+        // Outer mux: sel=addr[15] → a0=valid data, a1=0 (out-of-range)
+        let outer_mux = Mux16 {
+            sel: sel_oor.into(),
+            a0:  inner_out.into(),
+            a1:  Input16::new(),  // undriven = constant 0
+            out: self.out.clone(),
+        };
+        components.push(p01(outer_mux));
+
+        Some(IC { name: self.name().to_string(), intf: self.reflect(), components })
+    }
 }
 
 /// Pure wiring; this component just makes the unpacking of instructions easier to test and
