@@ -115,6 +115,16 @@ fn reject_bad_addresses() {
     assert_eq!(parse_statement("@foo bar"), None);
 }
 
+#[test]
+fn reject_bad_constants() {
+    use crate::project_06::Statement::Literal;
+
+    assert_eq!(parse_statement("@-1"),    None);
+    assert_eq!(parse_statement("@1.5"),   None);
+    assert_eq!(parse_statement("@32768"), None);
+}
+
+
 // - Now, some compatible extensions that can be useful:
 
 #[test]
@@ -122,7 +132,7 @@ fn parse_multiple_destinations() {
     use crate::project_06::Statement::Instruction;
 
     // Any order:
-    assert_eq!(parse_statement("DA=0"),   Some(Instruction(0xEA80 | 0b101_000)));
+    assert_eq!(parse_statement("DA=0"),   Some(Instruction(0xEA80 | 0b110_000)));
     assert_eq!(parse_statement("DM=0"),   Some(Instruction(0xEA80 | 0b011_000)));
     assert_eq!(parse_statement("AMD=0"),  Some(Instruction(0xEA80 | 0b111_000)));
 }
