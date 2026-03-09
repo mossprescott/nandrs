@@ -96,10 +96,10 @@ fn cpu_behavior() {
 
     // "Write" to M (exposing the value)
     state.set("instr", instr("M=D").into());
-    assert_eq!(state.get("mem_write"), 0);
+    // Note: values all available within the cycle
+    assert_eq!(state.get("mem_write"), 1);
     assert_eq!(state.get("mem_out"), 1234);
     assert_eq!(state.get("mem_addr"), 256);
-    // Note: values all available within the cycle
 }
 
 #[test]
