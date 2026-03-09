@@ -1,4 +1,5 @@
 use crate::project_05::{MemorySystem, CPU, Computer, flatten};
+use crate::project_06::parse_statement;
 use simulator::declare::Chip as _;
 use simulator::simulate::synthesize;
 use simulator::print_graph;
@@ -14,6 +15,10 @@ fn memory_system_optimal() {
     assert_eq!(flatten(MemorySystem::chip()).components.len(), todo!());
 }
 
+fn instr(stmt: &str) -> u16 {
+    parse_statement(stmt).unwrap().raw().unwrap()
+}
+
 #[test]
 fn cpu_behavior() {
     let chip = CPU::chip();
@@ -26,20 +31,20 @@ fn cpu_behavior() {
     let mut state = synthesize(&chip);
 
     // Load constant 1234 into A
-    state.set("instr", 1234);  // TODO: parse_statement("@1234")
+    state.set("instr", instr("@1234").into());
     assert_eq!(state.get("mem_write"), 0);
     state.ticktock();
 
     // Move it to D
-    state.set("instr", 0b1110110000010000); // D=A
+    state.set("instr", instr("D=A").into());
     state.ticktock();
 
     // Load address 256 into A
-    state.set("instr", 256);  // TODO: parse_statement("@256")
+    state.set("instr", instr("@256").into());
     state.ticktock();
 
     // "Write" to M (exposing the value)
-    state.set("instr", 0b1110001100001000); // M=D
+    state.set("instr", instr("M=D").into());
     assert_eq!(state.get("mem_write"), 0);
     assert_eq!(state.get("mem_out"), 1234);
     assert_eq!(state.get("mem_addr"), 256);
