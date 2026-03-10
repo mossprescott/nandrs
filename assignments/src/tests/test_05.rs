@@ -91,7 +91,7 @@ fn cpu_behavior() {
     state.set("instr", instr("M=D").into());
     // Note: values all available within the cycle
     assert_eq!(state.get("mem_write"), 1);
-    assert_eq!(state.get("mem_out"), 1234);
+    assert_eq!(state.get("mem_write_data"), 1234);
     assert_eq!(state.get("mem_addr"), 256);
 }
 
@@ -99,7 +99,7 @@ fn cpu_behavior() {
 fn cpu_optimal() {
     // PyNand has 1099 nands and 48 dffs
     // TODO: actually what?
-    assert_eq!(flatten(CPU::chip()).components.len(), 947);
+    assert_eq!(flatten(CPU::chip()).components.len(), 996);
 }
 
 fn add_program() -> Vec<u64> {
@@ -195,6 +195,51 @@ fn computer_max_behavior() {
 }
 
 #[test]
+fn computer_indirect_write() {
+    let chip = flatten(Computer::chip());
+    let mut state = synthesize(&chip);
+
+    let rom = find_rom(&state);
+    let ram = find_ram(&state);
+
+    // Store target address in R14, then write a value there
+    let target: u64 = 100;
+    ram.poke(14, target);
+
+    let pgm: Vec<u64> = ["@14", "A=M", "M=1"]
+        .map(|op| instr(op).into())
+        .to_vec();
+    rom.flash(pgm);
+
+    for _ in 0..3 { state.ticktock(); }
+
+    // assert_eq!(ram.peek(0), 1);  // Bug: writes here
+    assert_eq!(ram.peek(target), 1);
+}
+
+#[test]
+fn computer_indirect_jump() {
+    let chip = flatten(Computer::chip());
+    let mut state = synthesize(&chip);
+
+    let rom = find_rom(&state);
+    let ram = find_ram(&state);
+
+    // Store target address in R14, then jump to it (as in a "call" or "return" sequence)
+    let target: u64 = 100;
+    ram.poke(14, target);
+
+    let pgm: Vec<u64> = ["@14", "A=M", "JMP"]
+        .map(|op| instr(op).into())
+        .to_vec();
+    rom.flash(pgm);
+
+    for _ in 0..3 { state.ticktock(); }
+
+    assert_eq!(state.get("pc"), target);
+}
+
+#[test]
 fn computer_optimal() {
     let components = flatten(Computer::chip()).components;
     let rams  = components.iter().filter(|c| matches!(c, Computational::RAM(_))).count();
@@ -202,5 +247,5 @@ fn computer_optimal() {
     let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
     assert_eq!(rams,    2);
     assert_eq!(roms,    1);
-    assert_eq!(nands, 1050);
+    assert_eq!(nands, 1099);
 }

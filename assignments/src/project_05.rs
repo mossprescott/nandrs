@@ -326,11 +326,13 @@ pub struct CPU {
     /// The bits of the current instruction
     pub instr: Input16,
 
-    pub mem_out: Output16,
+    pub mem_write_data: Output16,
     pub mem_write: Output,  // aka "load"
+
+    /// Feed-forward: address to write at the end of this cycle, and read from in the *next* cycle
     pub mem_addr: Output16,
 
-    pub mem_in: Input16,  // aka "data"
+    pub mem_read_data: Input16,  // aka "data"
 }
 
 impl Component for CPU {
@@ -370,16 +372,10 @@ impl Component for CPU {
         let is_a = is_a_gate.out.clone();
         components.push(p01(is_a_gate));
 
-        // === A register data mux: sel=is_a → a1=instr (A-instr), a0=alu_out (C-instr) ===
-        // alu.out = self.mem_out; resolved correctly in 2nd Nand pass of evaluate()
-        let a_data_mux = Mux16 {
-            sel: is_a.clone().into(),
-            a0:  self.mem_out.clone().into(),
-            a1:  self.instr.clone(),
-            out: Output16::new(),
-        };
-        let a_data = a_data_mux.out.clone();
-        components.push(p01(a_data_mux));
+        // Declare a_data wire up-front; driven by a_data_mux placed AFTER the ALU so that
+        // the second Nand pass sees the correct ALU output (fixes A=M indirect addressing).
+        let a_data = Output16::new();
+        let a_out  = Output16::new();  // A register output (internal wire)
 
         // === load_a = is_a OR write_a ===
         let load_a_gate = Or { a: is_a.clone().into(), b: dec_write_a.into(), out: Output::new() };
@@ -387,14 +383,14 @@ impl Component for CPU {
         components.push(p01(load_a_gate));
 
         // === A register: out → mem_addr ===
-        let reg_a = Register16 { data: a_data.into(), load: load_a.into(), out: self.mem_addr.clone() };
+        let reg_a = Register16 { data: a_data.clone().into(), load: load_a.clone().into(), out: a_out.clone() };
         components.push(p03(reg_a));
 
         // === ALU Y mux: sel=read_m → a0=A (mem_addr), a1=mem_in ===
         let y_mux = Mux16 {
             sel: read_m_out.into(),
-            a0:  self.mem_addr.clone().into(),
-            a1:  self.mem_in.clone(),
+            a0:  a_out.clone().into(),
+            a1:  self.mem_read_data.clone(),
             out: Output16::new(),
         };
         let y_src = y_mux.out.clone();
@@ -408,7 +404,7 @@ impl Component for CPU {
             zx:  zx.into(), nx: nx.into(),
             zy:  zy.into(), ny: ny.into(),
             f:   f.into(),  no: no.into(),
-            out: self.mem_out.clone(),
+            out: self.mem_write_data.clone(),
             zr:  Output::new(),
             ng:  Output::new(),
         };
@@ -416,13 +412,34 @@ impl Component for CPU {
         let alu_ng = alu.ng.clone();
         components.push(p02(alu));
 
+        // === A register data mux: AFTER ALU so pass 2 reads correct ALU output ===
+        // sel=is_a → a1=instr (A-instr), a0=alu_out (C-instr with dest=A)
+        let a_data_mux = Mux16 {
+            sel: is_a.into(),
+            a0:  self.mem_write_data.clone().into(),
+            a1:  self.instr.clone(),
+            out: a_data.clone(),
+        };
+        components.push(p01(a_data_mux));
+
+        // === next_addr: if A is being written this cycle, expose the new A value as the
+        // address for the memory system (so RAM latches the right read address); otherwise
+        // expose the current A.out. Write address is always A.out (load_a=0 when write_m=1). ===
+        let next_addr_mux = Mux16 {
+            sel: load_a.clone().into(),
+            a0:  a_out.clone().into(),
+            a1:  a_data.into(),
+            out: self.mem_addr.clone(),
+        };
+        components.push(p01(next_addr_mux));
+
         // === load_d = AND(is_c, write_d) ===
         let load_d_gate = And { a: is_c.clone().into(), b: dec_write_d.into(), out: Output::new() };
         let load_d = load_d_gate.out.clone();
         components.push(p01(load_d_gate));
 
         // === D register ===
-        let reg_d = Register16 { data: self.mem_out.clone().into(), load: load_d.into(), out: reg_d_out };
+        let reg_d = Register16 { data: self.mem_write_data.clone().into(), load: load_d.into(), out: reg_d_out };
         components.push(p03(reg_d));
 
         // === mem_write = AND(is_c, write_m) ===
@@ -451,7 +468,7 @@ impl Component for CPU {
         components.push(p01(const_one));
 
         let pc = PC {
-            addr:  self.mem_addr.clone().into(),
+            addr:  a_out.clone().into(),
             load:  do_jump_out.into(),
             inc:   inc_wire.into(),
             reset: self.reset.clone().into(),
@@ -479,11 +496,11 @@ impl Component for Computer {
     /*
       let cpu = CPU { reset: self.reset, instr: rom.out, mem_in: memory.out, pc: self.pc, mem_out, mem_write, mem_addr }
       let rom = ROM16 { size: 32K, addr: cpu.pc }
-      let memory = MemorySystem { data: cpu.mem_out, load: cpu.mem_write, addr: cpu.mem_addr }
+      let memory = MemorySystem { data: cpu.mem_write_data, load: cpu.mem_write, addr: cpu.mem_addr }
       outputs.pc = cpu.pc
      */
     fn expand(&self) -> Option<IC<Project05Component>> {
-        let mem_in_wire = Output16::new();  // back-ref from memory to CPU
+        let mem_read_data_wire = Output16::new();  // back-ref from memory to CPU
 
         let rom = ROM16 {
             size: 32 * 1024,
@@ -495,17 +512,17 @@ impl Component for Computer {
             reset:     self.reset.clone(),
             pc:        self.pc.clone(),
             instr:     rom.out.clone().into(),
-            mem_out:   Output16::new(),
+            mem_write_data:   Output16::new(),
             mem_write: Output::new(),
-            mem_addr:  Output16::new(),
-            mem_in:    mem_in_wire.clone().into(),
+            mem_addr: Output16::new(),
+            mem_read_data: mem_read_data_wire.clone().into(),
         };
 
         let memory = MemorySystem {
-            data: cpu.mem_out.clone().into(),
+            data: cpu.mem_write_data.clone().into(),
             load: cpu.mem_write.clone().into(),
-            addr: cpu.mem_addr.clone().into(),
-            out:  mem_in_wire,
+            addr: cpu.mem_addr.clone().into(),  // next A value drives RAM read address
+            out:  mem_read_data_wire,
         };
 
         Some(IC {
