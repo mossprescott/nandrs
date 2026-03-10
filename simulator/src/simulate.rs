@@ -30,6 +30,7 @@ where
                     wire_id: wire_id(&intf.outputs["out"]),
                     size: ram.size,
                     data: vec![0u64; ram.size],
+                    latched_addr: 0,
                 })))));
             }
             Computational::ROM(rom) => {
@@ -38,6 +39,7 @@ where
                     wire_id: wire_id(&intf.outputs["out"]),
                     size: rom.size,
                     data: vec![0u64; rom.size],
+                    latched_addr: 0,
                 })))));
             }
             _ => {}
@@ -103,9 +105,9 @@ impl ChipState {
         self.dirty = false;
         self.evaluate();
 
-        // Collect updates (avoids borrow conflict between components and state maps).
+        // Collect updates based on the current wire_state.
         let mut reg_updates: Vec<(usize, u64)> = Vec::new();
-        let mut ram_updates: Vec<(usize, u64, u64)> = Vec::new();
+        let mut ram_writes: Vec<(usize, u64, u64)> = Vec::new();  // (out_id, latched_addr, val)
 
         for comp in &self.components {
             match comp {
@@ -118,10 +120,12 @@ impl ChipState {
                 }
                 Computational::RAM(ram) => {
                     let intf = ram.reflect();
+                    let out_id = wire_id(&intf.outputs["out"]);
+                    // Write uses the addr computed in this cycle's initial evaluate().
                     if read_bit(&self.wire_state, &intf.inputs["load"]) {
                         let addr = read_bus(&self.wire_state, &intf.inputs["addr"]);
-                        let val  = read_bus(&self.wire_state, &intf.inputs["data"]);
-                        ram_updates.push((wire_id(&intf.outputs["out"]), addr, val));
+                        let val = read_bus(&self.wire_state, &intf.inputs["data"]);
+                        ram_writes.push((out_id, addr, val));
                     }
                 }
                 _ => {}
@@ -131,7 +135,7 @@ impl ChipState {
         for (id, val) in reg_updates {
             self.reg_state.insert(id, val);
         }
-        for (out_id, addr, val) in ram_updates {
+        for (out_id, addr, val) in ram_writes {
             if let Some(BusResident::RAM(h)) = self.bus_residents.iter()
                 .find(|res| matches!(res, BusResident::RAM(h) if h.0.borrow().wire_id == out_id))
             {
@@ -139,9 +143,48 @@ impl ChipState {
             }
         }
 
-        // Re-evaluate so outputs reflect the new state.
+        // Re-evaluate with updated registers. wire_state now reflects the new state.
         self.evaluate();
         self.dirty = false;
+
+        // Latch addresses from the final wire_state — registers have been updated, so this
+        // correctly captures the new PC, new A register, etc. for the next cycle.
+        let mut ram_addr_updates: Vec<(usize, u64)> = Vec::new();
+        let mut rom_addr_updates: Vec<(usize, u64)> = Vec::new();
+
+        for comp in &self.components {
+            match comp {
+                Computational::RAM(ram) => {
+                    let intf = ram.reflect();
+                    ram_addr_updates.push((
+                        wire_id(&intf.outputs["out"]),
+                        read_bus(&self.wire_state, &intf.inputs["addr"]),
+                    ));
+                }
+                Computational::ROM(rom) => {
+                    let intf = rom.reflect();
+                    rom_addr_updates.push((
+                        wire_id(&intf.outputs["out"]),
+                        read_bus(&self.wire_state, &intf.inputs["addr"]),
+                    ));
+                }
+                _ => {}
+            }
+        }
+        for (out_id, new_addr) in ram_addr_updates {
+            if let Some(BusResident::RAM(h)) = self.bus_residents.iter()
+                .find(|res| matches!(res, BusResident::RAM(h) if h.0.borrow().wire_id == out_id))
+            {
+                h.0.borrow_mut().latched_addr = new_addr;
+            }
+        }
+        for (out_id, new_addr) in rom_addr_updates {
+            if let Some(BusResident::ROM(h)) = self.bus_residents.iter()
+                .find(|res| matches!(res, BusResident::ROM(h) if h.0.borrow().wire_id == out_id))
+            {
+                h.0.borrow_mut().latched_addr = new_addr;
+            }
+        }
     }
 
     fn evaluate(&mut self) {
@@ -159,19 +202,20 @@ impl ChipState {
             ws.insert(id, val);
         }
 
-        // First Nand pass — computes addresses needed for RAM/ROM lookup.
-        eval_nands(&mut ws, &self.components);
-
-        // Seed RAM/ROM outputs based on computed addresses.
+        // Seed RAM/ROM outputs from their latched address — available immediately like registers.
         for comp in &self.components {
             match comp {
                 Computational::RAM(ram) => {
                     let intf = ram.reflect();
-                    let addr   = read_bus(&ws, &intf.inputs["addr"]);
                     let out_id = wire_id(&intf.outputs["out"]);
                     let val = self.bus_residents.iter()
                         .find_map(|res| match res {
-                            BusResident::RAM(h) if h.0.borrow().wire_id == out_id => h.0.borrow().data.get(addr as usize).copied(),
+                            BusResident::RAM(h) if h.0.borrow().wire_id == out_id => {
+                                let s = h.0.borrow();
+                                let addr = s.latched_addr as usize;
+                                let val = s.data.get(addr).copied();
+                                val
+                            }
                             _ => None,
                         })
                         .unwrap_or(0);
@@ -179,11 +223,13 @@ impl ChipState {
                 }
                 Computational::ROM(rom) => {
                     let intf = rom.reflect();
-                    let addr   = read_bus(&ws, &intf.inputs["addr"]);
                     let out_id = wire_id(&intf.outputs["out"]);
                     let val = self.bus_residents.iter()
                         .find_map(|res| match res {
-                            BusResident::ROM(h) if h.0.borrow().wire_id == out_id => h.0.borrow().data.get(addr as usize).copied(),
+                            BusResident::ROM(h) if h.0.borrow().wire_id == out_id => {
+                                let s = h.0.borrow();
+                                s.data.get(s.latched_addr as usize).copied()
+                            }
                             _ => None,
                         })
                         .unwrap_or(0);
@@ -193,7 +239,11 @@ impl ChipState {
             }
         }
 
-        // Second Nand pass — uses RAM/ROM outputs.
+        // Two Nand passes: first propagates RAM/ROM outputs through memory logic
+        // (e.g. MemorySystem muxes), second lets downstream gates (ALU) use the
+        // correctly computed values. Needed because component order puts CPU before
+        // MemorySystem in the flattened list.
+        eval_nands(&mut ws, &self.components);
         eval_nands(&mut ws, &self.components);
 
         self.wire_state = ws;
@@ -265,6 +315,7 @@ pub struct RAMState {
     wire_id: usize,
     pub size: usize,
     data: Vec<u64>,
+    latched_addr: u64,
 }
 
 impl RAMState {
@@ -291,6 +342,7 @@ pub struct ROMState {
     wire_id: usize,
     pub size: usize,
     data: Vec<u64>,
+    latched_addr: u64,
 }
 
 impl ROMState {
