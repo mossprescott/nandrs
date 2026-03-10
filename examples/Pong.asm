@@ -8,11 +8,15 @@
 // The VM code was then translated by the VM translator into the Hack
 // assembly code shown here.
 
+// Note: this binary was produced by the original compiler and translator provided by the
+// authors. It has been formatted and some labels have been added, but the assembled binary
+// should be identical. At least, I think that's where it came from; it's been a while.
+
 @256
 D=A
 @SP
 M=D
-@133
+@addr133
 0;JMP
 @R15
 M=D
@@ -106,6 +110,7 @@ M=D
 @R13
 A=M
 0;JMP
+(addr95)
 @SP
 A=M
 M=D
@@ -144,6 +149,7 @@ M=D
 @R14
 A=M
 0;JMP
+(addr133)
 @0
 D=A
 @R13
@@ -154,7 +160,7 @@ D=A
 M=D
 @RET_ADDRESS_CALL0
 D=A
-@95
+@addr95
 0;JMP
 (RET_ADDRESS_CALL0)
 (ball.new)
