@@ -129,6 +129,9 @@ fn parse_multiple_destinations() {
     assert_eq!(parse_statement("DA=0"),   Some(Instruction(0xEA80 | 0b110_000)));
     assert_eq!(parse_statement("DM=0"),   Some(Instruction(0xEA80 | 0b011_000)));
     assert_eq!(parse_statement("AMD=0"),  Some(Instruction(0xEA80 | 0b111_000)));
+
+    // Commonly-used to adjust the stack:
+    assert_eq!(parse_statement("AM=M-1"),  Some(Instruction(0xFC80 | 0b101_000)));
 }
 
 
