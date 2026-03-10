@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use minifb::{Key, Window, WindowOptions};
 
-use assignments::project_05::{Computer, flatten, find_rom, find_screen};
+use assignments::project_05::{Computer, flatten, find_ram, find_rom, find_screen};
 use assignments::project_06::{assemble, Program};
 use simulator::declare::Chip as _;
 use simulator::simulate::{synthesize, RAMHandle};
@@ -24,6 +24,43 @@ fn render_screen(screen: &RAMHandle, pixels: &mut [u32]) {
             pixels[pixel_idx] = if (word >> bit) & 1 == 1 { 0x000000 } else { 0xFFFFFF };
         }
     }
+}
+
+fn disassemble(instr: u16) -> String {
+    if instr & 0x8000 == 0 {
+        return format!("@{}", instr & 0x7fff);
+    }
+    let a    = (instr >> 12) & 1;
+    let comp = (instr >>  6) & 0x3f;
+    let dest = (instr >>  3) & 0x7;
+    let jump =  instr        & 0x7;
+
+    let comp_str = match (a, comp) {
+        (0, 0b101010) => "0",    (0, 0b111111) => "1",    (0, 0b111010) => "-1",
+        (0, 0b001100) => "D",    (0, 0b110000) => "A",
+        (0, 0b001101) => "!D",   (0, 0b110001) => "!A",
+        (0, 0b001111) => "-D",   (0, 0b110011) => "-A",
+        (0, 0b011111) => "D+1",  (0, 0b110111) => "A+1",
+        (0, 0b001110) => "D-1",  (0, 0b110010) => "A-1",
+        (0, 0b000010) => "D+A",  (0, 0b010011) => "D-A",
+        (0, 0b000111) => "A-D",  (0, 0b000000) => "D&A",  (0, 0b010101) => "D|A",
+        (1, 0b110000) => "M",    (1, 0b110001) => "!M",   (1, 0b110011) => "-M",
+        (1, 0b110111) => "M+1",  (1, 0b110010) => "M-1",
+        (1, 0b000010) => "D+M",  (1, 0b010011) => "D-M",
+        (1, 0b000111) => "M-D",  (1, 0b000000) => "D&M",  (1, 0b010101) => "D|M",
+        _ => "?",
+    };
+    let dest_str = match dest {
+        0b000 => "",     0b001 => "M=",   0b010 => "D=",   0b011 => "DM=",
+        0b100 => "A=",   0b101 => "AM=",  0b110 => "AD=",  0b111 => "ADM=",
+        _ => unreachable!(),
+    };
+    let jump_str = match jump {
+        0b000 => "",      0b001 => ";JGT", 0b010 => ";JEQ", 0b011 => ";JGE",
+        0b100 => ";JLT",  0b101 => ";JNE", 0b110 => ";JLE", 0b111 => ";JMP",
+        _ => unreachable!(),
+    };
+    format!("{}{}{}", dest_str, comp_str, jump_str)
 }
 
 /// Translate the currently held key to a Hack keycode (0 = no key).
@@ -75,9 +112,10 @@ fn hack_keycode(window: &Window) -> u64 {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let trace = args.contains(&"--trace".to_string());
+    let trace   = args.contains(&"--trace".to_string());
+    let verbose = args.contains(&"--verbose".to_string());
     let path = args.iter().find(|a| !a.starts_with('-') && *a != &args[0])
-        .expect("usage: computer [--trace] <rom-file>");
+        .expect("usage: computer [--trace] [--verbose] <rom-file>");
 
     let src = fs::read_to_string(path).unwrap_or_else(|e| {
         eprintln!("error reading {path}: {e}");
@@ -98,8 +136,9 @@ fn main() {
     let mut state = synthesize(&chip);
     eprintln!(" done.");
 
-    find_rom(&state).flash(instructions.into_iter().map(|v| v as u64).collect());
+    find_rom(&state).flash(instructions.iter().map(|&v| v as u64).collect());
 
+    let ram = find_ram(&state);
     let screen = find_screen(&state);
     let mut pixels = vec![0u32; WIDTH * HEIGHT];
 
@@ -112,7 +151,18 @@ fn main() {
     let mut interval_start = Instant::now();
     let mut interval_cycles: u64 = 0;
 
-    eprintln!("Entering loop.");
+    let print_state = |pc: u16, cycle: u64| {
+        let labels = symbols_by_addr.get(&pc).map(|v| format!(" [{}]", v.join(", "))).unwrap_or_default();
+        println!("pc={pc}{labels}: (cycle {cycle})");
+        println!("  SP: {}", ram.peek(0));
+        let asm = instructions.get(pc as usize).map(|&i| disassemble(i)).unwrap_or("?".to_string());
+        println!("  {asm}")
+    };
+
+    if trace || verbose {
+        print_state(state.get("pc") as u16, cycle);
+    }
+
     while window.is_open() {
         let frame_start = Instant::now();
         let mut batch: u64 = 0;
@@ -122,10 +172,11 @@ fn main() {
             interval_cycles += 1;
             batch += 1;
 
-            if trace {
+            if trace || verbose {
                 let pc = state.get("pc") as u16;
-                if let Some(labels) = symbols_by_addr.get(&pc) {
-                    println!("@{pc} {} (cycle {cycle:>10})", labels.join(", "));
+                let labels = symbols_by_addr.get(&pc).map(|v| format!(" [{}]", v.join(", "))).unwrap_or_default();
+                if verbose || !labels.is_empty() {
+                    print_state(pc, cycle);
                 }
             }
 
