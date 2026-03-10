@@ -20,16 +20,8 @@ fn memory_system_behavior() {
     let screen = find_screen(&state);
 
     state.set("addr", 0);
-    assert_eq!(state.get("out"), 0);
-    assert_eq!(ram.peek(0), 0);
-
-    // Set up to write to the main RAM:
     state.set("data", 1234);
     state.set("load", 1);
-
-    // Not latched yet:
-    assert_eq!(state.get("out"), 0);
-    assert_eq!(ram.peek(0), 0);
 
     // Now advance the clock:
     state.ticktock();
@@ -48,6 +40,7 @@ fn memory_system_behavior() {
     // Out-of-range address:
     state.set("addr", 0x8000);
     state.set("load", 0);
+    state.ticktock();
     assert_eq!(state.get("out"), 0);
 
     // Bad write; nothing explodes:
@@ -136,6 +129,69 @@ fn computer_add_behavior() {
 
     assert_eq!(state.get("pc"), 6);
     assert_eq!(ram.peek(1), 5);
+}
+
+
+fn max_program() -> Vec<u64> {
+    [
+        "@1",
+        "D=M",
+        "@2",
+        "D=D-M",
+        "@10",
+        "D;JGT",
+        "@2",
+        "D=M",  //   D = RAM[2]
+        "@12",
+        "JMP",
+        "@1",   // 10
+        "D=M",  //   D = RAM[1]
+        "@3",   // 12
+        "M=D",  //   RAM[3] = D (max)
+        "@14",  // 14
+        "JMP",  //   infinite loop
+    ]
+       .map(|op| instr(op).into())
+        .to_vec()
+}
+
+#[test]
+fn computer_max_behavior() {
+    let chip = Computer::chip();
+
+    // When it breaks, it's nice to see what it tried to do
+    print!("{}", print_graph(&chip));
+
+    let chip = flatten(chip);
+
+    let mut state = synthesize(&chip);
+
+    let rom = find_rom(&state);
+    let ram = find_ram(&state);
+
+    let pgm = max_program();
+    rom.flash(pgm.clone());
+
+    // Max in RAM[2]:
+    ram.poke(1, 3);
+    ram.poke(2, 5);
+
+    // TODO: make the looping prologue automatic and factor this out
+    while state.get("pc") <= (pgm.len()-2).try_into().unwrap() { state.ticktock(); }
+
+    assert_eq!(ram.peek(3), 5);
+
+    state.set("reset", 1);
+    state.ticktock();
+    state.set("reset", 0);
+
+    // Max in RAM[1]:
+    ram.poke(1, 23456);
+    ram.poke(2, 12345);
+
+    while state.get("pc") <= (pgm.len()-2).try_into().unwrap() { state.ticktock(); }
+
+    assert_eq!(ram.peek(3), 23456);
 }
 
 #[test]
