@@ -85,10 +85,10 @@ fn parse_jump_conditions() {
     assert_eq!(parse_statement("D;JNE"),   Some(Instruction(0xE300 | 0b101)));
     assert_eq!(parse_statement("D;JGE"),   Some(Instruction(0xE300 | 0b011)));
 
-    assert_eq!(parse_statement("0;JMP"),   Some(Instruction(0xEA80 | 0b111)));
+    assert_eq!(parse_statement("JMP"),     Some(Instruction(0xEA80 | 0b111)));
 
     // Don't jump. Kinda redundant.
-    assert_eq!(parse_statement("0"),   Some(Instruction(0xEA80 | 0b000)));
+    assert_eq!(parse_statement("0"),       Some(Instruction(0xEA80 | 0b000)));
 }
 
 
@@ -96,8 +96,6 @@ fn parse_jump_conditions() {
 
 #[test]
 fn reject_bad_labels() {
-    use crate::project_06::Statement::Label;
-
     assert_eq!(parse_statement("()"), None);
     assert_eq!(parse_statement("(0)"), None);
     assert_eq!(parse_statement("(0anything)"), None);
@@ -106,8 +104,6 @@ fn reject_bad_labels() {
 
 #[test]
 fn reject_bad_addresses() {
-    use crate::project_06::Statement::Address;
-
     assert_eq!(parse_statement("@"), None);
     assert_eq!(parse_statement("@0anything"), None);
 
@@ -117,8 +113,6 @@ fn reject_bad_addresses() {
 
 #[test]
 fn reject_bad_constants() {
-    use crate::project_06::Statement::Literal;
-
     assert_eq!(parse_statement("@-1"),    None);
     assert_eq!(parse_statement("@1.5"),   None);
     assert_eq!(parse_statement("@32768"), None);
