@@ -115,6 +115,8 @@ pub fn parse_statement(line: &str) -> Option<Statement> {
     };
     let (comp, jump) = if let Some(semi) = rest.find(';') {
         (&rest[..semi], &rest[semi+1..])
+    } else if matches!(rest, "JGT"|"JEQ"|"JGE"|"JLT"|"JNE"|"JLE"|"JMP") {
+        ("0", rest)
     } else {
         (rest, "")
     };
