@@ -189,9 +189,6 @@ fn main() {
         // TODO: inject hack_keycode into simulator once keyboard RAM support is added
         let _key = hack_keycode(&window);
 
-        // HACK: blink if you're alive:
-        screen.poke(0, if cycle % 3 == 0 { 0x5555 } else { 0xAAAA });
-
         render_screen(&screen, &mut pixels);
         window.update_with_buffer(&pixels, WIDTH, HEIGHT).unwrap();
 
