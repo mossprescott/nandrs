@@ -456,7 +456,9 @@ impl MemorySystemState for MemoryMap {
         let a = addr as usize;
         for (i, r) in self.contents.iter().enumerate() {
             if a >= r.base && a < r.base + r.size {
-                return self.data[i][a - r.base];
+                let val = self.data[i][a - r.base];
+                // eprintln!("Read: region{i}[{a} (0x{a:04x})] = {val}");
+                return val;
             }
         }
         // TODO: record/report these in some legit way. Tests might want to fail, for example.
@@ -468,6 +470,7 @@ impl MemorySystemState for MemoryMap {
         let a = addr as usize;
         for (i, r) in self.contents.iter().enumerate() {
             if a >= r.base && a < r.base + r.size {
+                // eprintln!("Write: {val} -> region{i}[{a} (0x{a:04x})]");
                 self.data[i][a - r.base] = val;
                 return;
             }
