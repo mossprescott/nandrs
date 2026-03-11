@@ -240,6 +240,36 @@ fn computer_indirect_jump() {
 }
 
 #[test]
+fn computer_stack_adjust() {
+    let chip = flatten(Computer::chip());
+    let mut state = synthesize(&chip);
+
+    let rom = find_rom(&state);
+    let ram = find_ram(&state);
+
+    // stack: [1234]
+    ram.poke(0, 257);
+    ram.poke(256, 1234); // Not used, just simulating a value on the stack
+
+    let pgm: Vec<u64> = [
+        "@0",
+        "AM=M-1",  // adjust the stack pointer; A and R0 (aka SP) both = 256 now
+        "D=A",     // now save A to R5
+        "@5",
+        "M=D",
+    ]
+        .map(|op| instr(op).into())
+        .to_vec();
+    rom.flash(pgm.clone());
+
+    for _ in 0..pgm.len() { state.ticktock(); }
+
+    // stack: [] (SP = 256); R5 = 256
+    assert_eq!(ram.peek(0), 256);
+    assert_eq!(ram.peek(5), 256);
+}
+
+#[test]
 fn computer_optimal() {
     let components = flatten(Computer::chip()).components;
     let rams  = components.iter().filter(|c| matches!(c, Computational::RAM(_))).count();
