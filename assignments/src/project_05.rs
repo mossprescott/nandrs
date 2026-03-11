@@ -1,6 +1,6 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, Chip};
+use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, AsConst, Chip};
 use simulator::Reflect as _;
 use simulator::Chip as _;
 use simulator::component::{Nand, Register16, RAM16, ROM16, Sequential, Computational, Computational16};
@@ -55,7 +55,7 @@ impl Reflect for Project05Component {
             Project05Component::Computer(c)     => c.reflect(),
         }
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> String {
         match self {
             Project05Component::Project03(c)    => c.name(),
             Project05Component::RAM(c)          => c.name(),
@@ -65,6 +65,12 @@ impl Reflect for Project05Component {
             Project05Component::CPU(c)          => c.name(),
             Project05Component::Computer(c)     => c.name(),
         }
+    }
+}
+
+impl AsConst for Project05Component {
+    fn as_const(&self) -> Option<u64> {
+        if let Project05Component::Project03(c) = self { c.as_const() } else { None }
     }
 }
 
@@ -94,6 +100,7 @@ pub fn flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Computation
                         .components.into_iter()
                         .map(|s| match s {
                             Sequential::Nand(n)     => Computational::Nand(n),
+                            Sequential::Const(c)    => Computational::Const(c),
                             Sequential::Register(r) => Computational::Register(r),
                         })
                         .collect(),

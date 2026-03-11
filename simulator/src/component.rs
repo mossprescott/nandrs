@@ -1,6 +1,7 @@
-use crate::{Component, IC, Input, InputBus, Output, OutputBus, Reflect, Chip, Interface};
-use crate::nat::{Nat, N16};
+use std::collections::HashMap;
 
+use crate::{Component, IC, Input, InputBus, Output, OutputBus, Reflect, AsConst, Chip, Interface};
+use crate::nat::{Nat, N16};
 
 // - Nand (Combinational)
 
@@ -15,16 +16,16 @@ pub struct Nand {
 impl Reflect for Nand {
     fn reflect(&self) -> Interface {
         Interface {
-            inputs:  std::collections::HashMap::from([
+            inputs:  HashMap::from([
                 ("a".to_string(),   self.a.clone().into()),
                 ("b".to_string(),   self.b.clone().into()),
             ]),
-            outputs: std::collections::HashMap::from([
+            outputs: HashMap::from([
                 ("out".to_string(), self.out.clone().into()),
             ]),
         }
     }
-    fn name(&self) -> &str { "Nand" }
+    fn name(&self) -> String { "Nand".into() }
 }
 
 impl Chip for Nand {
@@ -42,9 +43,72 @@ impl Component for Nand {
     }
 }
 
-/// Type of components that participate in "cobinational" circuits: only Nand.
-pub type Combinational = Nand;
+/// No-cost "component" that just supplies some fixed zero/one bits.
+///
+/// Morally equivalent to a single-word ROM.
+#[derive(Clone)]
+pub struct Const {
+    pub value: u64,
 
+    // HACK: no particular reason this should be 16 bits.
+    pub out: OutputBus<N16>,
+}
+
+impl Const {
+    pub fn chip(value: u64) -> Self {
+        Const { value, out: OutputBus::<N16>::new() }
+    }
+}
+
+impl Reflect for Const {
+    fn reflect(&self) -> Interface {
+        Interface {
+            inputs:  HashMap::new(),
+            outputs: HashMap::from([
+                ("out".to_string(), self.out.clone().into()),
+            ]),
+        }
+    }
+    fn name(&self) -> String { format!("Const({})", self.value) }
+}
+
+impl AsConst for Const {
+    fn as_const(&self) -> Option<u64> { Some(self.value) }
+}
+
+/// Nothing to expand; Const is primitive.
+impl Component for Const {
+    type Target = Const;
+
+    fn expand(&self) -> Option<IC<Const>> {
+        None
+    }
+}
+
+/// Type of components that participate in "combinational" circuits: only Nand and Const.
+pub enum Combinational {
+    Nand(Nand),
+    Const(Const),
+    // ROM?
+}
+
+impl From<Nand>  for Combinational { fn from(c: Nand)  -> Self { Combinational::Nand(c)  } }
+impl From<Const> for Combinational { fn from(c: Const) -> Self { Combinational::Const(c) } }
+
+impl Reflect for Combinational {
+    fn reflect(&self) -> Interface {
+        match self {
+            Self::Nand(c)  => c.reflect(),
+            Self::Const(c) => c.reflect(),
+        }
+    }
+    fn name(&self) -> String {
+        match self {
+            Self::Nand(c)  => c.name(),
+            Self::Const(c) => c.name(),
+        }
+    }
+}
 
 // - Registers (Sequential)
 
@@ -58,16 +122,16 @@ pub struct Register<Width: Nat> {
 impl<Width: Nat + Clone> Reflect for Register<Width> {
     fn reflect(&self) -> Interface {
         Interface {
-            inputs:  std::collections::HashMap::from([
+            inputs:  HashMap::from([
                 ("data".to_string(), self.data.clone().into()),
                 ("load".to_string(), self.load.clone().into()),
             ]),
-            outputs: std::collections::HashMap::from([
+            outputs: HashMap::from([
                 ("out".to_string(), self.out.clone().into()),
             ]),
         }
     }
-    fn name(&self) -> &str { "Register" }
+    fn name(&self) -> String { "Register".into() }
 }
 
 impl<Width: Nat> Chip for Register<Width> {
@@ -87,24 +151,27 @@ impl<Width: Nat> Component for Register<Width> {
 
 pub type Register16 = Register<N16>;
 
-/// Type of components that participate in "sequential" circuits of a defined width: only Nand
+/// Type of components that participate in "sequential" circuits of a defined width: Combinational
 /// and Register<Width>.
 #[derive(Clone)]
 pub enum Sequential<Width: Nat> {
     Nand(Nand),
+    Const(Const),
     Register(Register<Width>),
 }
 
 impl<Width: Nat + Clone> Reflect for Sequential<Width> {
     fn reflect(&self) -> Interface {
         match self {
-            Self::Nand(c) => c.reflect(),
+            Self::Nand(c)     => c.reflect(),
+            Self::Const(c)    => c.reflect(),
             Self::Register(c) => c.reflect(),
         }
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> String {
         match self {
-            Self::Nand(c) => c.name(),
+            Self::Nand(c)     => c.name(),
+            Self::Const(c)    => c.name(),
             Self::Register(c) => c.name(),
         }
     }
@@ -139,17 +206,17 @@ pub struct RAM<A: Nat, D: Nat> {
 impl<A: Nat + Clone, D: Nat + Clone> Reflect for RAM<A, D> {
     fn reflect(&self) -> Interface {
         Interface {
-            inputs: std::collections::HashMap::from([
+            inputs: HashMap::from([
                 ("addr".to_string(), self.addr.clone().into()),
                 ("data".to_string(), self.data.clone().into()),
                 ("load".to_string(), self.load.clone().into()),
             ]),
-            outputs: std::collections::HashMap::from([
+            outputs: HashMap::from([
                 ("out".to_string(), self.out.clone().into()),
             ]),
         }
     }
-    fn name(&self) -> &str { "RAM" }
+    fn name(&self) -> String { "RAM".into() }
 }
 
 impl<A: Nat, D: Nat> RAM<A, D> {
@@ -180,15 +247,15 @@ pub struct ROM<A: Nat, D: Nat> {
 impl<A: Nat + Clone, D: Nat + Clone> Reflect for ROM<A, D> {
     fn reflect(&self) -> Interface {
         Interface {
-            inputs: std::collections::HashMap::from([
+            inputs: HashMap::from([
                 ("addr".to_string(), self.addr.clone().into()),
             ]),
-            outputs: std::collections::HashMap::from([
+            outputs: HashMap::from([
                 ("out".to_string(), self.out.clone().into()),
             ]),
         }
     }
-    fn name(&self) -> &str { "ROM" }
+    fn name(&self) -> String { "ROM".into() }
 }
 
 impl<A: Nat, D: Nat> ROM<A, D> {
@@ -206,10 +273,14 @@ impl<A: Nat, D: Nat> Component for ROM<A, D> {
     }
 }
 
+
+// - Computational
+
 /// Type of components that participate in computers, including logic, registers, memory, and I/O.
 #[derive(Clone)]
 pub enum Computational<A: Nat, D: Nat> {
     Nand(Nand),
+    Const(Const),
     Register(Register<D>),
     /// Note: typically not all of the address bits are used, but also multiple RAMs with
     /// different address widths would be most precise and that's just not worth it for now.
@@ -222,14 +293,16 @@ impl<A: Nat + Clone, D: Nat + Clone> Reflect for Computational<A, D> {
     fn reflect(&self) -> Interface {
         match self {
             Self::Nand(c)     => c.reflect(),
+            Self::Const(c)    => c.reflect(),
             Self::Register(c) => c.reflect(),
             Self::RAM(c)      => c.reflect(),
             Self::ROM(c)      => c.reflect(),
         }
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> String {
         match self {
             Self::Nand(c)     => c.name(),
+            Self::Const(c)    => c.name(),
             Self::Register(c) => c.name(),
             Self::RAM(c)      => c.name(),
             Self::ROM(c)      => c.name(),
@@ -253,6 +326,7 @@ impl<A: Nat, D: Nat> From<Sequential<D>> for Computational<A, D> {
     fn from(s: Sequential<D>) -> Self {
         match s {
             Sequential::Nand(n)     => Computational::Nand(n),
+            Sequential::Const(n)    => Computational::Const(n),
             Sequential::Register(r) => Computational::Register(r),
         }
     }

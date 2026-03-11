@@ -53,7 +53,7 @@ fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
 pub fn print_graph<C>(chip: &C) -> String
 where
     C: Component + Reflect,
-    C::Target: Component<Target = C::Target> + Reflect,
+    C::Target: Component<Target = C::Target> + Reflect + AsConst,
 {
     use std::collections::HashMap;
     use std::rc::Rc;
@@ -66,27 +66,38 @@ where
 
     let wire_id = |b: &BusRef| Rc::as_ptr(&b.id) as usize;
 
-    // wire_id -> Vec<(label, is_sink, offset, width)>
-    let mut wires: HashMap<usize, Vec<(String, bool, usize, usize)>> = HashMap::new();
+    // wire_id -> Vec<(label, is_sink, offset, width, raw)>
+    // raw=true: source label is printed as-is with no subscript (used for Const)
+    let mut wires: HashMap<usize, Vec<(String, bool, usize, usize, bool)>> = HashMap::new();
 
     for (port, busref) in &intf.inputs {
         wires.entry(wire_id(busref)).or_default()
-            .push((port.clone(), false, busref.offset, busref.width));
+            .push((port.clone(), false, busref.offset, busref.width, false));
     }
     for (port, busref) in &intf.outputs {
         wires.entry(wire_id(busref)).or_default()
-            .push((port.clone(), true, busref.offset, busref.width));
+            .push((port.clone(), true, busref.offset, busref.width, false));
     }
-    for (i, sub) in subs.components.iter().enumerate() {
+    let mut index = 0usize;
+    for sub in subs.components.iter() {
         let sub_intf = sub.reflect();
-        let label = format!("{}_{}", sub.name().to_lowercase(), i);
-        for (port, busref) in &sub_intf.inputs {
-            wires.entry(wire_id(busref)).or_default()
-                .push((format!("{}.{}", label, port), true, busref.offset, busref.width));
-        }
-        for (port, busref) in &sub_intf.outputs {
-            wires.entry(wire_id(busref)).or_default()
-                .push((format!("{}.{}", label, port), false, busref.offset, busref.width));
+        if let Some(v) = sub.as_const() {
+            let label = v.to_string();
+            for (_, busref) in &sub_intf.outputs {
+                wires.entry(wire_id(busref)).or_default()
+                    .push((label.clone(), false, busref.offset, busref.width, true));
+            }
+        } else {
+            let label = format!("{}_{}", sub.name().to_lowercase(), index);
+            for (port, busref) in &sub_intf.inputs {
+                wires.entry(wire_id(busref)).or_default()
+                    .push((format!("{}.{}", label, port), true, busref.offset, busref.width, false));
+            }
+            for (port, busref) in &sub_intf.outputs {
+                wires.entry(wire_id(busref)).or_default()
+                    .push((format!("{}.{}", label, port), false, busref.offset, busref.width, false));
+            }
+            index += 1;
         }
     }
 
@@ -100,18 +111,23 @@ where
 
     let mut lines: Vec<String> = wires.values()
         .flat_map(|endpoints| {
-            let sources: Vec<_> = endpoints.iter().filter(|(_, is_sink, _, _)| !is_sink).collect();
-            let sinks:   Vec<_> = endpoints.iter().filter(|(_, is_sink, _, _)| *is_sink).collect();
+            let sources: Vec<_> = endpoints.iter().filter(|(_, is_sink, _, _, _)| !is_sink).collect();
+            let sinks:   Vec<_> = endpoints.iter().filter(|(_, is_sink, _, _, _)| *is_sink).collect();
             let mut result = vec![];
-            for (src_name, _, src_off, src_w) in &sources {
-                for (sink_name, _, sink_off, sink_w) in &sinks {
+            for (src_name, _, src_off, src_w, src_raw) in &sources {
+                for (sink_name, _, sink_off, sink_w, _) in &sinks {
                     let lo = (*src_off).max(*sink_off);
                     let hi = (src_off + src_w).min(sink_off + sink_w);
                     if lo >= hi { continue; }
                     let n = hi - lo;
+                    let src_label = if *src_raw {
+                        src_name.to_string()
+                    } else {
+                        ep_label(src_name, *src_w, n, lo)
+                    };
                     result.push(format!("{} <- {}",
                         ep_label(sink_name, *sink_w, n, lo),
-                        ep_label(src_name,  *src_w,  n, lo)));
+                        src_label));
                 }
             }
             result

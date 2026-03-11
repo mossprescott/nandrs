@@ -99,7 +99,9 @@ fn cpu_behavior() {
 fn cpu_optimal() {
     // PyNand has 1099 nands and 48 dffs
     // TODO: actually what?
-    assert_eq!(flatten(CPU::chip()).components.len(), 996);
+    let components = flatten(CPU::chip()).components;
+    let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
+    assert_eq!(nands, 993);
 }
 
 fn add_program() -> Vec<u64> {

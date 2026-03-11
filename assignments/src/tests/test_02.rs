@@ -1,4 +1,5 @@
 use simulator::{print_graph, Chip as _};
+use simulator::component::Combinational;
 use simulator::eval::eval;
 use crate::project_02::{flatten, HalfAdder, FullAdder, Inc16, Add16, Zero16, Neg16, ALU};
 
@@ -147,8 +148,10 @@ fn alu_truth_table() {
 
 #[test]
 fn alu_optimal() {
-    // TODO: 560, once Neg16 is reduced to wiring only
-    assert_eq!(flatten(ALU::chip()).components.len(), 562);
+    // TODO: reduce by eliminating Mux16s with zero args
+    let components = flatten(ALU::chip()).components;
+    let nands = components.iter().filter(|c| matches!(c, Combinational::Nand(_))).count();
+    assert_eq!(nands, 562);
 }
 
 
@@ -159,12 +162,14 @@ fn alu_graph() {
         print_graph(&chip),
         "ALU:\n\
          mux16_0.a0[0..15] <- x[0..15]\n\
+         mux16_0.a1[0..15] <- 0\n\
          mux16_0.sel <- zx\n\
          not16_1.a[0..15] <- mux16_0.out[0..15]\n\
          mux16_2.a0[0..15] <- mux16_0.out[0..15]\n\
          mux16_2.a1[0..15] <- not16_1.out[0..15]\n\
          mux16_2.sel <- nx\n\
          mux16_3.a0[0..15] <- y[0..15]\n\
+         mux16_3.a1[0..15] <- 0\n\
          mux16_3.sel <- zy\n\
          not16_4.a[0..15] <- mux16_3.out[0..15]\n\
          mux16_5.a0[0..15] <- mux16_3.out[0..15]\n\

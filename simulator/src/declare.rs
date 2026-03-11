@@ -102,7 +102,12 @@ pub trait Component {
 /// Needed for any component to be analyzed or simulated in a generic way.
 pub trait Reflect {
     fn reflect(&self) -> Interface;
-    fn name(&self) -> &str;
+    fn name(&self) -> String;
+}
+
+/// Implemented by components (or wrappers) that may be a Const source.
+pub trait AsConst {
+    fn as_const(&self) -> Option<u64> { None }
 }
 
 /// Construct a fresh instance of a chip struct with new Input/Output buses on every port.
@@ -160,8 +165,8 @@ impl<C> Reflect for IC<C> {
         self.intf.clone()
     }
 
-    fn name(&self) -> &str {
-        &self.name
+    fn name(&self) -> String {
+        self.name.clone()
     }
 }
 

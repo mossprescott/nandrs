@@ -31,12 +31,24 @@ where
         }
     }
 
-    // Evaluate each Nand in order.
-    for nand in &chip.components {
-        let intf = nand.reflect();
-        let a = read_bit(&wire_state, &intf.inputs["a"]);
-        let b = read_bit(&wire_state, &intf.inputs["b"]);
-        write_bit(&mut wire_state, &intf.outputs["out"], !(a & b));
+    // Evaluate each component in order.
+    for comp in &chip.components {
+        match comp {
+            Combinational::Nand(nand) => {
+                let intf = nand.reflect();
+                let a = read_bit(&wire_state, &intf.inputs["a"]);
+                let b = read_bit(&wire_state, &intf.inputs["b"]);
+                write_bit(&mut wire_state, &intf.outputs["out"], !(a & b));
+            }
+            Combinational::Const(c) => {
+                let intf = c.reflect();
+                let busref = &intf.outputs["out"];
+                let id = wire_id(busref);
+                let mask = bus_mask(busref);
+                let entry = wire_state.entry(id).or_insert(0);
+                *entry = (*entry & !mask) | ((c.value << busref.offset) & mask);
+            }
+        }
     }
 
     // Read named outputs.

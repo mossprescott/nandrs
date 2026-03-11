@@ -77,7 +77,7 @@ pub fn derive_reflect(input: TokenStream) -> TokenStream {
                     outputs: ::std::collections::HashMap::from([#(#outputs),*]),
                 }
             }
-            fn name(&self) -> &str { #name_str }
+            fn name(&self) -> String { #name_str.into() }
         }
     }
     .into()

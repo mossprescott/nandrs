@@ -1,7 +1,7 @@
-use simulator::{Input, Input16, Output, Output16, Reflect, print_graph};
+use simulator::{Input, Output, Reflect, print_graph};
 use simulator::Chip as _;
 use simulator::eval::eval;
-use crate::project_01::{flatten, Nand, Not, And, Or, Xor, Mux, Dmux, Not16, And16, Mux16};
+use crate::project_01::{flatten, Const, Nand, Not, And, Or, Xor, Mux, Dmux, Not16, And16, Mux16};
 
 #[test]
 fn nand_reflect() {
@@ -23,6 +23,14 @@ fn nand_truth_table() {
     assert_eq!(eval(&chip, [("a", 1), ("b", 1)])["out"], 0);
 }
 
+#[test]
+fn const_truth_table() {
+    let chip = flatten(Const::chip(0));
+    assert_eq!(eval(&chip, [])["out"], 0);
+
+    let chip = flatten(Const::chip(1234));
+    assert_eq!(eval(&chip, [])["out"], 1234);
+}
 
 #[test]
 fn not_truth_table() {

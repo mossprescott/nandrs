@@ -1,9 +1,9 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, Chip};
+use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, AsConst, Chip};
 use simulator::Reflect as _;
 use simulator::Chip as _;
-use simulator::component::{Nand, Register16, Sequential, Sequential16};
+use simulator::component::{Combinational, Const, Nand, Register16, Sequential, Sequential16};
 use crate::project_01::{Or, Mux16, Project01Component};
 use crate::project_02::{Inc16, Project02Component};
 
@@ -36,7 +36,7 @@ impl Reflect for Project03Component {
             Project03Component::PC(c) => c.reflect(),
         }
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> String {
         match self {
             Project03Component::Project02(c) => c.name(),
             Project03Component::Register16(c) => c.name(),
@@ -45,6 +45,11 @@ impl Reflect for Project03Component {
     }
 }
 
+impl AsConst for Project03Component {
+    fn as_const(&self) -> Option<u64> {
+        if let Project03Component::Project02(c) = self { c.as_const() } else { None }
+    }
+}
 
 /// Recursively expand until only Nands and Registers are left.
 pub fn flatten<C: Reflect + Into<Project03Component>>(chip: C) -> IC<Sequential16> {
@@ -54,7 +59,10 @@ pub fn flatten<C: Reflect + Into<Project03Component>>(chip: C) -> IC<Sequential1
                 Project03Component::Project02(p) =>
                     crate::project_02::flatten(p)
                         .components.into_iter()
-                        .map(|nand| Sequential::Nand(nand))
+                        .map(|c| match c {
+                            Combinational::Nand(n)  => Sequential::Nand(n),
+                            Combinational::Const(c) => Sequential::Const(c),
+                        })
                         .collect(),
                 Project03Component::Register16(reg) => vec![Sequential::Register(reg)],
                 _ => panic!("Did not reduce to Nand/Register: {:?}", comp.name()),
@@ -93,15 +101,14 @@ impl Component for PC {
     // Note: no special ceremony needed for back-references to the register's output, because
     // that wire is already declared as the output "out".
     fn expand(&self) -> Option<IC<Project03Component>> {
-        // HACK: an input that's never initialized is zero
-        let zero = Input16::new();
+        let zero = Const { value: 0, out: Output16::new() };
 
         let inc = Inc16 { a: self.out.clone().into(), out: Output16::new() };
         let next0 = Mux16 { a0: self.out.clone().into(), a1: inc.out.clone().into(), sel: self.inc.clone(), out: Output16::new() };
 
         let next1 = Mux16 { a0: next0.out.clone().into(), a1: self.addr.clone(), sel: self.load.clone(), out: Output16::new() };
 
-        let next2 = Mux16 { a0: next1.out.clone().into(), a1: zero.clone(), sel: self.reset.clone(), out: Output16::new() };
+        let next2 = Mux16 { a0: next1.out.clone().into(), a1: zero.out.clone().into(), sel: self.reset.clone(), out: Output16::new() };
 
         let any0 = Or { a: self.inc.clone(), b: self.load.clone(), out: Output::new() };
         let any = Or { a: any0.out.clone().into(), b: self.reset.clone(), out: Output::new() };

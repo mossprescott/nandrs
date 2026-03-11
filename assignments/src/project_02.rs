@@ -1,9 +1,9 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, Chip};
+use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, AsConst, Chip};
 use simulator::Reflect as _;
 use simulator::Chip as _;
-use simulator::component::Nand;
+use simulator::component::{Combinational, Const, Nand};
 use crate::project_01::{Project01Component, Mux16, Not16, And16, Not, Xor, And, Or};
 
 pub enum Project02Component {
@@ -56,7 +56,7 @@ impl Reflect for Project02Component {
             Project02Component::ALU(c)       => c.reflect(),
         }
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> String {
         match self {
             Project02Component::Project01(c) => c.name(),
             Project02Component::HalfAdder(c) => c.name(),
@@ -70,9 +70,15 @@ impl Reflect for Project02Component {
     }
 }
 
+impl AsConst for Project02Component {
+    fn as_const(&self) -> Option<u64> {
+        if let Project02Component::Project01(c) = self { c.as_const() } else { None }
+    }
+}
+
 /// Recursively expand until only Nands are left.
-pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Nand> {
-    fn go(comp: Project02Component) -> Vec<Nand> {
+pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Combinational> {
+    fn go(comp: Project02Component) -> Vec<Combinational> {
         match comp.expand() {
             None => match comp {
                 Project02Component::Project01(p) => crate::project_01::flatten(p).components,
@@ -323,14 +329,14 @@ impl Component for ALU {
     type Target = Project02Component;
 
     fn expand(&self) -> Option<IC<Project02Component>> {
-        // Hack: unconnected input is initialized to zero at present.
-        let zero = Input16::new();
+        let zero = Const { value: 0, out: Output16::new() };
 
-        let x1 = Mux16 { a0: self.x.clone(), a1: zero.clone(), sel: self.zx.clone(), out: Output16::new() };
+        // Wasteful. Not; spread the bit across the whole word; And16. Is that about right?
+        let x1 = Mux16 { a0: self.x.clone(), a1: zero.out.clone().into(), sel: self.zx.clone(), out: Output16::new() };
         let xn = Not16 { a: x1.out.clone().into(), out: Output16::new() };
         let x2 = Mux16 { a0: x1.out.clone().into(), a1: xn.out.clone().into(), sel: self.nx.clone(), out: Output16::new() };
 
-        let y1 = Mux16 { a0: self.y.clone(), a1: zero.clone(), sel: self.zy.clone(), out: Output16::new() };
+        let y1 = Mux16 { a0: self.y.clone(), a1: zero.out.clone().into(), sel: self.zy.clone(), out: Output16::new() };
         let yn = Not16 { a: y1.out.clone().into(), out: Output16::new() };
         let y2 = Mux16 { a0: y1.out.clone().into(), a1: yn.out.clone().into(), sel: self.ny.clone(), out: Output16::new() };
 
@@ -345,6 +351,7 @@ impl Component for ALU {
         let rneg = Neg16 { a: out.out.clone().into(), out: self.ng.clone() };
 
         Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![
+            Project01Component::from(zero).into(),
             Project01Component::from(x1).into(),
             Project01Component::from(xn).into(),
             Project01Component::from(x2).into(),
