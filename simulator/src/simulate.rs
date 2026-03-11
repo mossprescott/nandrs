@@ -115,7 +115,7 @@ impl ChipState {
         // Collect updates based on the current wire_state.
         let mut reg_updates: Vec<(usize, u64)> = Vec::new();
         let mut ram_writes: Vec<(usize, u64, u64)> = Vec::new();  // (out_id, addr, val)
-        let mut ms_writes:  Vec<(usize, u64, u64)> = Vec::new();  // (out_id, addr, val)
+        let mut ms_writes:  Vec<(usize, u64)> = Vec::new();  // (out_id, val)
 
         for comp in &self.components {
             match comp {
@@ -140,9 +140,8 @@ impl ChipState {
                     let intf = ms.reflect();
                     let out_id = wire_id(&intf.outputs["data_out"]);
                     if read_bit(&self.wire_state, &intf.inputs["write"]) {
-                        let addr = read_bus(&self.wire_state, &intf.inputs["addr"]);
-                        let val  = read_bus(&self.wire_state, &intf.inputs["data_in"]);
-                        ms_writes.push((out_id, addr, val));
+                        let val = read_bus(&self.wire_state, &intf.inputs["data_in"]);
+                        ms_writes.push((out_id, val));
                     }
                 }
                 _ => {}
@@ -159,18 +158,16 @@ impl ChipState {
                 h.poke(addr, val);
             }
         }
-        for (out_id, addr, val) in ms_writes {
+        for (out_id, val) in ms_writes {
             if let Some(BusResident::MemorySystem(h)) = self.bus_residents.iter()
                 .find(|res| matches!(res, BusResident::MemorySystem(h) if h.wire_id == out_id))
             {
-                h.poke(addr, val);
+                h.poke(h.latched_addr, val);
             }
         }
 
         // Latch MS addr from the initial wire_state (Nand-computed from current inputs and
-        // reg_state) so the re-evaluate below shows the correct memory data.  This makes
-        // same-cycle write-then-read work: the addr presented this cycle is already in
-        // wire_state, so re-evaluate peeks the right location.
+        // reg_state) so the re-evaluate below shows the correct memory data.
         for comp in &self.components {
             if let Computational::MemorySystem(ms) = comp {
                 let intf = ms.reflect();
