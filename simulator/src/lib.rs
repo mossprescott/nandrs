@@ -60,7 +60,7 @@ where
 
     let intf = chip.reflect();
     let subs = match chip.expand() {
-        None    => panic!("Could not expand: {}", chip.name()),
+        None    => return format!("{}:\n(primitive)", chip.name()),
         Some(s) => s,
     };
 
