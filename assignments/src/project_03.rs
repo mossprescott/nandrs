@@ -114,9 +114,9 @@ impl Component for PC {
         let any = Or { a: any0.out.clone().into(), b: self.reset.clone(), out: Output::new() };
 
         let reg = Register16 {
-            data: next2.out.clone().into(),
-            load: any.out.clone().into(),
-            out: self.out.clone(),
+            data_in:  next2.out.clone().into(),
+            write:    any.out.clone().into(),
+            data_out: self.out.clone(),
         };
 
         Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![

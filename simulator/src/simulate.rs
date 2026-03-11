@@ -21,8 +21,8 @@ where
         match comp {
             Computational::Register(reg) => {
                 let intf = reg.reflect();
-                assert_eq!(intf.outputs["out"].width, 16);
-                reg_state.insert(wire_id(&intf.outputs["out"]), 0);
+                assert_eq!(intf.outputs["data_out"].width, 16);
+                reg_state.insert(wire_id(&intf.outputs["data_out"]), 0);
             }
             Computational::RAM(ram) => {
                 let intf = ram.reflect();
@@ -122,9 +122,9 @@ impl ChipState {
             match comp {
                 Computational::Register(reg) => {
                     let intf = reg.reflect();
-                    if read_bit(&self.wire_state, &intf.inputs["load"]) {
-                        let val = read_bus(&self.wire_state, &intf.inputs["data"]);
-                        reg_updates.push((wire_id(&intf.outputs["out"]), val));
+                    if read_bit(&self.wire_state, &intf.inputs["write"]) {
+                        let val = read_bus(&self.wire_state, &intf.inputs["data_in"]);
+                        reg_updates.push((wire_id(&intf.outputs["data_out"]), val));
                     }
                 }
                 Computational::RAM(ram) => {

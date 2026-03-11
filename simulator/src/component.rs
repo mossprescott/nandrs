@@ -114,20 +114,20 @@ impl Reflect for Combinational {
 
 #[derive(Clone)]
 pub struct Register<Width: Nat> {
-    pub data: InputBus<Width>,
-    pub load: Input,
-    pub out: OutputBus<Width>,
+    pub data_in: InputBus<Width>,
+    pub write: Input,
+    pub data_out: OutputBus<Width>,
 }
 
 impl<Width: Nat + Clone> Reflect for Register<Width> {
     fn reflect(&self) -> Interface {
         Interface {
             inputs:  HashMap::from([
-                ("data".to_string(), self.data.clone().into()),
-                ("load".to_string(), self.load.clone().into()),
+                ("data_in".to_string(), self.data_in.clone().into()),
+                ("write".to_string(),   self.write.clone().into()),
             ]),
             outputs: HashMap::from([
-                ("out".to_string(), self.out.clone().into()),
+                ("data_out".to_string(), self.data_out.clone().into()),
             ]),
         }
     }
@@ -136,7 +136,7 @@ impl<Width: Nat + Clone> Reflect for Register<Width> {
 
 impl<Width: Nat> Chip for Register<Width> {
     fn chip() -> Self {
-        Register { data: InputBus::new(), load: Input::new(), out: OutputBus::<Width>::new() }
+        Register { data_in: InputBus::new(), write: Input::new(), data_out: OutputBus::<Width>::new() }
     }
 }
 

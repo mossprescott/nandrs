@@ -410,7 +410,7 @@ impl Component for CPU {
         components.push(p01(load_a_gate));
 
         // === A register: out → mem_addr ===
-        let reg_a = Register16 { data: a_data.clone().into(), load: load_a.clone().into(), out: a_out.clone() };
+        let reg_a = Register16 { data_in: a_data.clone().into(), write: load_a.clone().into(), data_out: a_out.clone() };
         components.push(p03(reg_a));
 
         // === ALU Y mux: sel=read_m → a0=A (mem_addr), a1=mem_in ===
@@ -466,7 +466,7 @@ impl Component for CPU {
         components.push(p01(load_d_gate));
 
         // === D register ===
-        let reg_d = Register16 { data: self.mem_write_data.clone().into(), load: load_d.into(), out: reg_d_out };
+        let reg_d = Register16 { data_in: self.mem_write_data.clone().into(), write: load_d.into(), data_out: reg_d_out };
         components.push(p03(reg_d));
 
         // === mem_write = AND(is_c, write_m) ===
