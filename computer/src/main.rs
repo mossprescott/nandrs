@@ -5,16 +5,16 @@ use std::time::{Duration, Instant};
 
 use minifb::{Key, Window, WindowOptions};
 
-use assignments::project_05::{Computer, flatten, find_ram, find_rom, find_screen};
+use assignments::project_05::{Computer, flatten, find_ram, find_rom, find_screen, memory_system};
 use assignments::project_06::{assemble, Program};
 use simulator::declare::Chip as _;
-use simulator::simulate::{synthesize, RAMHandle};
+use simulator::simulate::{synthesize, RegionHandle};
 
 const WIDTH: usize = 512;
 const HEIGHT: usize = 256;
 const FRAME_TIME: Duration = Duration::from_millis(16);
 
-fn render_screen(screen: &RAMHandle, pixels: &mut [u32]) {
+fn render_screen(screen: &RegionHandle, pixels: &mut [u32]) {
     for word_idx in 0..(WIDTH / 16 * HEIGHT) {
         let word = screen.peek(word_idx as u64) as u16;
         let row = word_idx / (WIDTH / 16);
@@ -133,7 +133,7 @@ fn main() {
 
     eprint!("Synthesizing...");
     let chip = flatten(Computer::chip());
-    let mut state = synthesize(&chip);
+    let mut state = synthesize(&chip, memory_system());
     eprintln!(" done.");
 
     find_rom(&state).flash(instructions.iter().map(|&v| v as u64).collect());
