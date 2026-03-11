@@ -205,7 +205,15 @@ fn main() {
             } else {
                 (cps, "")
             };
-            println!("cycles/s: {val:.1}{suffix}");
+            let cycle_f = cycle as f64;
+            let (tval, tsuffix) = if cycle_f >= 1_000_000.0 {
+                (cycle_f / 1_000_000.0, "M")
+            } else if cycle_f >= 1_000.0 {
+                (cycle_f / 1_000.0, "K")
+            } else {
+                (cycle_f, "")
+            };
+            println!("cycles/s: {val:.1}{suffix} (total: {tval:.1}{tsuffix})");
             interval_start = Instant::now();
             interval_cycles = 0;
         }
