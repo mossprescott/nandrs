@@ -485,6 +485,8 @@ impl MemorySystemState for MemoryMap {
                 return self.data[i][a - r.base];
             }
         }
+        // TODO: record/report these in some legit way. Tests might want to fail, for example.
+        eprintln!("Bus error: no region when reading from location {} (0x{:04X})", addr, addr);
         0
     }
 
@@ -496,8 +498,12 @@ impl MemorySystemState for MemoryMap {
                 return;
             }
         }
+        // TODO: record/report these in some legit way. Tests might want to fail, for example.
+        eprintln!("Bus error: no region when writing to location {} (0x{:04X}) <- {} (0x{:04X})", addr, addr, val, val);
     }
 
+    /// TODO: this doesn't seem useful. Maybe should report the range of valid addresses? Seems
+    /// like it's always contiguous, at least for Hack and pynand's BigComputer.
     fn size(&self) -> usize {
         self.contents.iter().map(|r| r.base + r.size).max().unwrap_or(0)
     }
