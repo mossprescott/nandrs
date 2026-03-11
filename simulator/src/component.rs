@@ -190,6 +190,7 @@ pub type Sequential16 = Sequential<N16>;
 
 // - Memory and I/O (Computational)
 
+/// Simple, writable memory. The simulator supplies an implmentation when it finds one of these.
 #[derive(Clone)]
 pub struct RAM<A: Nat, D: Nat> {
     /// Capacity of the RAM in words; <= 2^address_bits. Valid addresses are 0 to size-1.
@@ -197,22 +198,22 @@ pub struct RAM<A: Nat, D: Nat> {
 
     pub addr: InputBus<A>,
 
-    pub data: InputBus<D>,
-    pub load: Input,
+    pub write: Input,
+    pub data_in: InputBus<D>,
 
-    pub out: OutputBus<D>,
+    pub data_out: OutputBus<D>,
 }
 
 impl<A: Nat + Clone, D: Nat + Clone> Reflect for RAM<A, D> {
     fn reflect(&self) -> Interface {
         Interface {
             inputs: HashMap::from([
-                ("addr".to_string(), self.addr.clone().into()),
-                ("data".to_string(), self.data.clone().into()),
-                ("load".to_string(), self.load.clone().into()),
+                ("addr".to_string(),    self.addr.clone().into()),
+                ("data_in".to_string(), self.data_in.clone().into()),
+                ("write".to_string(),   self.write.clone().into()),
             ]),
             outputs: HashMap::from([
-                ("out".to_string(), self.out.clone().into()),
+                ("data_out".to_string(), self.data_out.clone().into()),
             ]),
         }
     }
@@ -221,7 +222,7 @@ impl<A: Nat + Clone, D: Nat + Clone> Reflect for RAM<A, D> {
 
 impl<A: Nat, D: Nat> RAM<A, D> {
     pub fn chip(size: usize) -> Self {
-        RAM { size: size, addr: InputBus::new(), data: InputBus::new(), load: Input::new(), out: OutputBus::<D>::new() }
+        RAM { size, addr: InputBus::new(), write: Input::new(), data_in: InputBus::new(), data_out: OutputBus::<D>::new() }
     }
 }
 
@@ -234,6 +235,7 @@ impl<A: Nat, D: Nat> Component for RAM<A, D> {
     }
 }
 
+/// Simple, read-only memory. The simulator supplies an implmentation when it finds one of these.
 #[derive(Clone)]
 pub struct ROM<A: Nat, D: Nat> {
     /// Capacity of the ROM in words; <= 2^address_bits. Valid addresses are 0 to size-1.
@@ -273,6 +275,44 @@ impl<A: Nat, D: Nat> Component for ROM<A, D> {
     }
 }
 
+/// Abstracted writable memory system; presents the same interface as a RAM, but the simulator
+/// allows an arbitrary implementation to be supplied. This is analogous to dropping a CPU into
+/// a new system where some other chip is in charge of managing the bus.
+#[derive(Clone)]
+pub struct MemorySystem<A: Nat, D: Nat> {
+    pub addr: InputBus<A>,
+
+    pub write: Input,
+    pub data_in: InputBus<D>,
+
+    pub data_out: OutputBus<D>,
+}
+
+impl<A: Nat + Clone, D: Nat + Clone> Reflect for MemorySystem<A, D> {
+    fn reflect(&self) -> Interface {
+        Interface {
+            inputs: HashMap::from([
+                ("addr".to_string(),    self.addr.clone().into()),
+                ("data_in".to_string(), self.data_in.clone().into()),
+                ("write".to_string(),   self.write.clone().into()),
+            ]),
+            outputs: HashMap::from([
+                ("data_out".to_string(), self.data_out.clone().into()),
+            ]),
+        }
+    }
+    fn name(&self) -> String { "MemorySystem".into() }
+}
+
+/// Nothing to expand; MemorySystem is primitive for the simulator.
+impl<A: Nat, D: Nat> Component for MemorySystem<A, D> {
+    type Target = MemorySystem<A, D>;
+
+    fn expand(&self) -> Option<IC<MemorySystem<A, D>>> {
+        None
+    }
+}
+
 
 // - Computational
 
@@ -282,30 +322,31 @@ pub enum Computational<A: Nat, D: Nat> {
     Nand(Nand),
     Const(Const),
     Register(Register<D>),
-    /// Note: typically not all of the address bits are used, but also multiple RAMs with
-    /// different address widths would be most precise and that's just not worth it for now.
     RAM(RAM<A, D>),
     ROM(ROM<A, D>),
+    MemorySystem(MemorySystem<A, D>),
     // TODO: I/O (Keyboard, TTY)
 }
 
 impl<A: Nat + Clone, D: Nat + Clone> Reflect for Computational<A, D> {
     fn reflect(&self) -> Interface {
         match self {
-            Self::Nand(c)     => c.reflect(),
-            Self::Const(c)    => c.reflect(),
-            Self::Register(c) => c.reflect(),
-            Self::RAM(c)      => c.reflect(),
-            Self::ROM(c)      => c.reflect(),
+            Self::Nand(c)         => c.reflect(),
+            Self::Const(c)        => c.reflect(),
+            Self::Register(c)     => c.reflect(),
+            Self::RAM(c)          => c.reflect(),
+            Self::ROM(c)          => c.reflect(),
+            Self::MemorySystem(c) => c.reflect(),
         }
     }
     fn name(&self) -> String {
         match self {
-            Self::Nand(c)     => c.name(),
-            Self::Const(c)    => c.name(),
-            Self::Register(c) => c.name(),
-            Self::RAM(c)      => c.name(),
-            Self::ROM(c)      => c.name(),
+            Self::Nand(c)         => c.name(),
+            Self::Const(c)        => c.name(),
+            Self::Register(c)     => c.name(),
+            Self::RAM(c)          => c.name(),
+            Self::ROM(c)          => c.name(),
+            Self::MemorySystem(c) => c.name(),
         }
     }
 }
@@ -320,6 +361,7 @@ impl<A: Nat, D: Nat> Component for Computational<A, D> {
 
 pub type RAM16           = RAM<N16, N16>;
 pub type ROM16           = ROM<N16, N16>;
+pub type MemorySystem16  = MemorySystem<N16, N16>;
 pub type Computational16 = Computational<N16, N16>;
 
 impl<A: Nat, D: Nat> From<Sequential<D>> for Computational<A, D> {

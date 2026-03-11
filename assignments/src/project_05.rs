@@ -3,7 +3,7 @@
 use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, AsConst, Chip};
 use simulator::Reflect as _;
 use simulator::Chip as _;
-use simulator::component::{Nand, Register16, RAM16, ROM16, Sequential, Computational, Computational16};
+use simulator::component::{Nand, Register16, RAM16, ROM16, MemorySystem16, Sequential, Computational, Computational16};
 use simulator::simulate::{ChipState, BusResident, RAMHandle, ROMHandle};
 use crate::project_01::{Project01Component, Not, And, Or, Mux16};
 use crate::project_02::{Project02Component, ALU};
@@ -11,21 +11,19 @@ use crate::project_03::{Project03Component, PC};
 
 pub enum Project05Component {
     Project03(Project03Component),
-    RAM(RAM16),
     ROM(ROM16),
+    MemorySystem(MemorySystem16),
     Decode(Decode),
-    MemorySystem(MemorySystem),
     CPU(CPU),
     Computer(Computer),
 }
 
-impl From<Project03Component> for Project05Component { fn from(c: Project03Component) -> Self { Project05Component::Project03(c) } }
-impl From<RAM16>              for Project05Component { fn from(c: RAM16)              -> Self { Project05Component::RAM(c)         } }
-impl From<ROM16>              for Project05Component { fn from(c: ROM16)              -> Self { Project05Component::ROM(c)         } }
-impl From<Decode>             for Project05Component { fn from(c: Decode)             -> Self { Project05Component::Decode(c)       } }
-impl From<MemorySystem>       for Project05Component { fn from(c: MemorySystem)       -> Self { Project05Component::MemorySystem(c) } }
-impl From<CPU>                for Project05Component { fn from(c: CPU)                -> Self { Project05Component::CPU(c)     } }
-impl From<Computer>           for Project05Component { fn from(c: Computer)           -> Self { Project05Component::Computer(c) } }
+impl From<Project03Component> for Project05Component { fn from(c: Project03Component) -> Self { Project05Component::Project03(c)    } }
+impl From<ROM16>              for Project05Component { fn from(c: ROM16)              -> Self { Project05Component::ROM(c)           } }
+impl From<MemorySystem16>     for Project05Component { fn from(c: MemorySystem16)     -> Self { Project05Component::MemorySystem(c)  } }
+impl From<Decode>             for Project05Component { fn from(c: Decode)             -> Self { Project05Component::Decode(c)        } }
+impl From<CPU>                for Project05Component { fn from(c: CPU)                -> Self { Project05Component::CPU(c)           } }
+impl From<Computer>           for Project05Component { fn from(c: Computer)           -> Self { Project05Component::Computer(c)      } }
 
 impl Component for Project05Component {
     type Target = Project05Component;
@@ -33,10 +31,9 @@ impl Component for Project05Component {
     fn expand(&self) -> Option<IC<Project05Component>> {
         match self {
             Project05Component::Project03(c)    => c.expand().map(|ic| IC { name: ic.name, intf: ic.intf, components: ic.components.into_iter().map(Into::into).collect() }),
-            Project05Component::RAM(c)          => c.expand().map(|_| unreachable!()),
             Project05Component::ROM(c)          => c.expand().map(|_| unreachable!()),
+            Project05Component::MemorySystem(c) => c.expand().map(|_| unreachable!()),
             Project05Component::Decode(c)       => c.expand(),
-            Project05Component::MemorySystem(c) => c.expand(),
             Project05Component::CPU(c)          => c.expand(),
             Project05Component::Computer(c)     => c.expand(),
         }
@@ -47,10 +44,9 @@ impl Reflect for Project05Component {
     fn reflect(&self) -> simulator::Interface {
         match self {
             Project05Component::Project03(c)    => c.reflect(),
-            Project05Component::RAM(c)          => c.reflect(),
             Project05Component::ROM(c)          => c.reflect(),
-            Project05Component::Decode(c)       => c.reflect(),
             Project05Component::MemorySystem(c) => c.reflect(),
+            Project05Component::Decode(c)       => c.reflect(),
             Project05Component::CPU(c)          => c.reflect(),
             Project05Component::Computer(c)     => c.reflect(),
         }
@@ -58,10 +54,9 @@ impl Reflect for Project05Component {
     fn name(&self) -> String {
         match self {
             Project05Component::Project03(c)    => c.name(),
-            Project05Component::RAM(c)          => c.name(),
             Project05Component::ROM(c)          => c.name(),
-            Project05Component::Decode(c)       => c.name(),
             Project05Component::MemorySystem(c) => c.name(),
+            Project05Component::Decode(c)       => c.name(),
             Project05Component::CPU(c)          => c.name(),
             Project05Component::Computer(c)     => c.name(),
         }
@@ -104,8 +99,8 @@ pub fn flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Computation
                             Sequential::Register(r) => Computational::Register(r),
                         })
                         .collect(),
-                Project05Component::RAM(r) => vec![Computational::RAM(r)],
-                Project05Component::ROM(r) => vec![Computational::ROM(r)],
+                Project05Component::ROM(r)          => vec![Computational::ROM(r)],
+                Project05Component::MemorySystem(m) => vec![Computational::MemorySystem(m)],
                 _ => panic!("Did not reduce to primitive: {:?}", comp.name()),
             },
             Some(ic) => ic.components.into_iter().flat_map(go).collect(),
@@ -118,97 +113,107 @@ pub fn flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Computation
     }
 }
 
-/// Main RAM (16KB), screen buffer (8KB), and I/O.
-///
-/// During simulation, these components are exposed as BusResidents.
-#[derive(Reflect, Chip)]
-pub struct MemorySystem {
-    pub data: Input16,
-    pub load: Input,
-    pub addr: Input16,
+// /// Main RAM (16KB), screen buffer (8KB), and I/O.
+// ///
+// /// During simulation, these components are exposed as BusResidents.
+// ///
+// /// TODO: this logic will be external to the CPU, which will assume a simple, flat memory model.
+// /// Essentially, all the CPU knows is there is a memory which it can read and write, with an
+// /// address size of 15 bits.
+// ///
+// /// If it's interesting to do this decoding in simulated circuitry, then this decode logic
+// /// will get separately simulated within a component that plugs into the simulated CPU. To get
+// /// started, it will just be handled by native code with some customization, because it's just not
+// /// that interesting... all HACK-family CPUs will share the same memory layout, and memory system
+// /// performance isn't what this project is about.
+// #[derive(Reflect, Chip)]
+// pub struct MemorySystem {
+//     pub data: Input16,
+//     pub load: Input,
+//     pub addr: Input16,
 
-    pub out: Output16,
-    // TODO: tty_ready?
-}
+//     pub out: Output16,
+//     // TODO: tty_ready?
+// }
 
-impl Component for MemorySystem {
-    type Target = Project05Component;
+// impl Component for MemorySystem {
+//     type Target = Project05Component;
 
-    fn expand(&self) -> Option<IC<Project05Component>> {
-        use simulator::Input16;
-        let mut components: Vec<Project05Component> = vec![];
+//     fn expand(&self) -> Option<IC<Project05Component>> {
+//         use simulator::Input16;
+//         let mut components: Vec<Project05Component> = vec![];
 
-        // addr[14]=1 → screen/keyboard range; addr[15]=1 → out of range
-        let sel_screen = self.addr.bit(14);
-        let sel_oor    = self.addr.bit(15);
+//         // addr[14]=1 → screen/keyboard range; addr[15]=1 → out of range
+//         let sel_screen = self.addr.bit(14);
+//         let sel_oor    = self.addr.bit(15);
 
-        let not_screen_gate = Not { a: sel_screen.clone().into(), out: Output::new() };
-        let not_screen = not_screen_gate.out.clone();
-        components.push(p01(not_screen_gate));
+//         let not_screen_gate = Not { a: sel_screen.clone().into(), out: Output::new() };
+//         let not_screen = not_screen_gate.out.clone();
+//         components.push(p01(not_screen_gate));
 
-        let not_oor_gate = Not { a: sel_oor.clone().into(), out: Output::new() };
-        let not_oor = not_oor_gate.out.clone();
-        components.push(p01(not_oor_gate));
+//         let not_oor_gate = Not { a: sel_oor.clone().into(), out: Output::new() };
+//         let not_oor = not_oor_gate.out.clone();
+//         components.push(p01(not_oor_gate));
 
-        // load_valid = AND(self.load, NOT(addr[15]))
-        let load_valid_gate = And { a: self.load.clone().into(), b: not_oor.into(), out: Output::new() };
-        let load_valid = load_valid_gate.out.clone();
-        components.push(p01(load_valid_gate));
+//         // load_valid = AND(self.load, NOT(addr[15]))
+//         let load_valid_gate = And { a: self.load.clone().into(), b: not_oor.into(), out: Output::new() };
+//         let load_valid = load_valid_gate.out.clone();
+//         components.push(p01(load_valid_gate));
 
-        // load_ram    = AND(load_valid, NOT(addr[14]))
-        let load_ram_gate = And { a: load_valid.clone().into(), b: not_screen.into(), out: Output::new() };
-        let load_ram = load_ram_gate.out.clone();
-        components.push(p01(load_ram_gate));
+//         // load_ram    = AND(load_valid, NOT(addr[14]))
+//         let load_ram_gate = And { a: load_valid.clone().into(), b: not_screen.into(), out: Output::new() };
+//         let load_ram = load_ram_gate.out.clone();
+//         components.push(p01(load_ram_gate));
 
-        // load_screen = AND(load_valid, addr[14])
-        let load_screen_gate = And { a: load_valid.into(), b: sel_screen.clone().into(), out: Output::new() };
-        let load_screen = load_screen_gate.out.clone();
-        components.push(p01(load_screen_gate));
+//         // load_screen = AND(load_valid, addr[14])
+//         let load_screen_gate = And { a: load_valid.into(), b: sel_screen.clone().into(), out: Output::new() };
+//         let load_screen = load_screen_gate.out.clone();
+//         components.push(p01(load_screen_gate));
 
-        // Main RAM (16KB): addr bits 0-13 (14-bit addressing)
-        let ram = RAM16 {
-            size: 16 * 1024,
-            addr: self.addr.mask(0, 14),
-            data: self.data.clone(),
-            load: load_ram.into(),
-            out: Output16::new(),
-        };
-        let ram_out = ram.out.clone();
-        components.push(Project05Component::RAM(ram));
+//         // Main RAM (16KB): addr bits 0-13 (14-bit addressing)
+//         let ram = RAM16 {
+//             size: 16 * 1024,
+//             addr: self.addr.mask(0, 14),
+//             data: self.data.clone(),
+//             load: load_ram.into(),
+//             out: Output16::new(),
+//         };
+//         let ram_out = ram.out.clone();
+//         components.push(Project05Component::RAM(ram));
 
-        // Screen buffer (8KB): addr bits 0-12 (13-bit addressing)
-        let screen = RAM16 {
-            size: 8 * 1024,
-            addr: self.addr.mask(0, 13),
-            data: self.data.clone(),
-            load: load_screen.into(),
-            out: Output16::new(),
-        };
-        let screen_out = screen.out.clone();
-        components.push(Project05Component::RAM(screen));
+//         // Screen buffer (8KB): addr bits 0-12 (13-bit addressing)
+//         let screen = RAM16 {
+//             size: 8 * 1024,
+//             addr: self.addr.mask(0, 13),
+//             data: self.data.clone(),
+//             load: load_screen.into(),
+//             out: Output16::new(),
+//         };
+//         let screen_out = screen.out.clone();
+//         components.push(Project05Component::RAM(screen));
 
-        // Inner mux: sel=addr[14] → a0=ram_out (RAM), a1=screen_out (Screen)
-        let inner_mux = Mux16 {
-            sel: sel_screen.into(),
-            a0:  ram_out.into(),
-            a1:  screen_out.into(),
-            out: Output16::new(),
-        };
-        let inner_out = inner_mux.out.clone();
-        components.push(p01(inner_mux));
+//         // Inner mux: sel=addr[14] → a0=ram_out (RAM), a1=screen_out (Screen)
+//         let inner_mux = Mux16 {
+//             sel: sel_screen.into(),
+//             a0:  ram_out.into(),
+//             a1:  screen_out.into(),
+//             out: Output16::new(),
+//         };
+//         let inner_out = inner_mux.out.clone();
+//         components.push(p01(inner_mux));
 
-        // Outer mux: sel=addr[15] → a0=valid data, a1=0 (out-of-range)
-        let outer_mux = Mux16 {
-            sel: sel_oor.into(),
-            a0:  inner_out.into(),
-            a1:  Input16::new(),  // undriven = constant 0
-            out: self.out.clone(),
-        };
-        components.push(p01(outer_mux));
+//         // Outer mux: sel=addr[15] → a0=valid data, a1=0 (out-of-range)
+//         let outer_mux = Mux16 {
+//             sel: sel_oor.into(),
+//             a0:  inner_out.into(),
+//             a1:  Input16::new(),  // undriven = constant 0
+//             out: self.out.clone(),
+//         };
+//         components.push(p01(outer_mux));
 
-        Some(IC { name: self.name().to_string(), intf: self.reflect(), components })
-    }
-}
+//         Some(IC { name: self.name().to_string(), intf: self.reflect(), components })
+//     }
+// }
 
 pub const RAM_BASE:    u16 = 0;
 pub const SCREEN_BASE: u16 = 16384;
@@ -525,11 +530,11 @@ impl Component for Computer {
             mem_read_data: mem_read_data_wire.clone().into(),
         };
 
-        let memory = MemorySystem {
-            data: cpu.mem_write_data.clone().into(),
-            load: cpu.mem_write.clone().into(),
-            addr: cpu.mem_addr.clone().into(),  // next A value drives RAM read address
-            out:  mem_read_data_wire,
+        let memory = MemorySystem16 {
+            addr:     cpu.mem_addr.clone().into(),
+            write:    cpu.mem_write.clone().into(),
+            data_in:  cpu.mem_write_data.clone().into(),
+            data_out: mem_read_data_wire,
         };
 
         Some(IC {

@@ -1,63 +1,63 @@
-use crate::project_05::{MemorySystem, CPU, Computer, flatten, SCREEN_BASE, find_ram, find_screen, find_rom};
+use crate::project_05::{CPU, Computer, flatten, SCREEN_BASE, find_ram, find_screen, find_rom};
 use crate::project_06::parse_statement;
 use simulator::declare::Chip as _;
 use simulator::simulate::synthesize;
 use simulator::component::Computational;
 use simulator::print_graph;
 
-#[test]
-fn memory_system_behavior() {
-    let chip = MemorySystem::chip();
+// #[test]
+// fn memory_system_behavior() {
+//     let chip = MemorySystem::chip();
 
-    // When it breaks, it's nice to see what it tried to do
-    print!("{}", print_graph(&chip));
+//     // When it breaks, it's nice to see what it tried to do
+//     print!("{}", print_graph(&chip));
 
-    let chip = flatten(chip);
+//     let chip = flatten(chip);
 
-    let mut state = synthesize(&chip);
+//     let mut state = synthesize(&chip);
 
-    let ram    = find_ram(&state);
-    let screen = find_screen(&state);
+//     let ram    = find_ram(&state);
+//     let screen = find_screen(&state);
 
-    state.set("addr", 0);
-    state.set("data", 1234);
-    state.set("load", 1);
+//     state.set("addr", 0);
+//     state.set("data", 1234);
+//     state.set("load", 1);
 
-    // Now advance the clock:
-    state.ticktock();
-    assert_eq!(state.get("out"), 1234);
-    assert_eq!(ram.peek(0), 1234);
+//     // Now advance the clock:
+//     state.ticktock();
+//     assert_eq!(state.get("out"), 1234);
+//     assert_eq!(ram.peek(0), 1234);
 
-    // Now write to the screen buffer:
-    state.set("addr", SCREEN_BASE.into());
-    state.set("data", 0x5555);
+//     // Now write to the screen buffer:
+//     state.set("addr", SCREEN_BASE.into());
+//     state.set("data", 0x5555);
 
-    state.ticktock();
-    assert_eq!(state.get("out"), 0x5555);
-    assert_eq!(screen.peek(0), 0x5555);  // Address is mapped to the base of the screen ram
-    assert_eq!(ram.peek(0), 1234);  // Unaffected
+//     state.ticktock();
+//     assert_eq!(state.get("out"), 0x5555);
+//     assert_eq!(screen.peek(0), 0x5555);  // Address is mapped to the base of the screen ram
+//     assert_eq!(ram.peek(0), 1234);  // Unaffected
 
-    // Out-of-range address:
-    state.set("addr", 0x8000);
-    state.set("load", 0);
-    state.ticktock();
-    assert_eq!(state.get("out"), 0);
+//     // Out-of-range address:
+//     state.set("addr", 0x8000);
+//     state.set("load", 0);
+//     state.ticktock();
+//     assert_eq!(state.get("out"), 0);
 
-    // Bad write; nothing explodes:
-    state.set("data", 5678);
-    state.set("load", 1);
-    state.ticktock();
-    assert_eq!(state.get("out"), 0);
-}
+//     // Bad write; nothing explodes:
+//     state.set("data", 5678);
+//     state.set("load", 1);
+//     state.ticktock();
+//     assert_eq!(state.get("out"), 0);
+// }
 
-#[test]
-fn memory_system_optimal() {
-    let components = flatten(MemorySystem::chip()).components;
-    let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
-    let rams  = components.iter().filter(|c| matches!(c, Computational::RAM(_))).count();
-    assert_eq!(nands, 106);
-    assert_eq!(rams,    2);
-}
+// #[test]
+// fn memory_system_optimal() {
+//     let components = flatten(MemorySystem::chip()).components;
+//     let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
+//     let rams  = components.iter().filter(|c| matches!(c, Computational::RAM(_))).count();
+//     assert_eq!(nands, 106);
+//     assert_eq!(rams,    2);
+// }
 
 fn instr(stmt: &str) -> u16 {
     parse_statement(stmt).unwrap().raw().unwrap()
