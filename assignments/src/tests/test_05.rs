@@ -1,54 +1,50 @@
-use crate::project_05::{CPU, Computer, flatten, SCREEN_BASE, find_ram, find_screen, find_rom};
+use crate::project_05::{CPU, Computer, flatten, SCREEN_BASE, find_ram, find_screen, find_rom, memory_system};
 use crate::project_06::parse_statement;
 use simulator::declare::Chip as _;
-use simulator::simulate::synthesize;
-use simulator::component::Computational;
+use simulator::simulate::{synthesize, MemoryMap};
+use simulator::component::{Computational, MemorySystem16};
 use simulator::print_graph;
 
-// #[test]
-// fn memory_system_behavior() {
-//     let chip = MemorySystem::chip();
+/// Mostly this is testing the simulator's handling of the memory mapping we specified.
+#[test]
+fn memory_system_behavior() {
+    let chip = flatten(MemorySystem16::chip());
 
-//     // When it breaks, it's nice to see what it tried to do
-//     print!("{}", print_graph(&chip));
+    let mut state = synthesize(&chip, memory_system());
 
-//     let chip = flatten(chip);
+    let ram    = find_ram(&state);
+    let screen = find_screen(&state);
 
-//     let mut state = synthesize(&chip);
+    state.set("addr", 0);
+    state.set("data_in", 1234);
+    state.set("write", 1);
 
-//     let ram    = find_ram(&state);
-//     let screen = find_screen(&state);
+    // Now advance the clock:
+    state.ticktock();
+    assert_eq!(state.get("data_out"), 1234);
+    assert_eq!(ram.peek(0), 1234);
 
-//     state.set("addr", 0);
-//     state.set("data", 1234);
-//     state.set("load", 1);
+    // Now write to the screen buffer:
+    state.set("addr", SCREEN_BASE.into());
+    state.set("data_in", 0x5555);
 
-//     // Now advance the clock:
-//     state.ticktock();
-//     assert_eq!(state.get("out"), 1234);
-//     assert_eq!(ram.peek(0), 1234);
+    state.ticktock();
+    assert_eq!(state.get("data_out"), 0x5555);
+    assert_eq!(screen.peek(0), 0x5555);  // Address is mapped to the base of the screen ram
+    assert_eq!(ram.peek(0), 1234);  // Unaffected
 
-//     // Now write to the screen buffer:
-//     state.set("addr", SCREEN_BASE.into());
-//     state.set("data", 0x5555);
+    // Out-of-range address; reads 0:
+    state.set("addr", 0x8000);
+    state.set("write", 0);
+    state.ticktock();
+    assert_eq!(state.get("data_out"), 0);
 
-//     state.ticktock();
-//     assert_eq!(state.get("out"), 0x5555);
-//     assert_eq!(screen.peek(0), 0x5555);  // Address is mapped to the base of the screen ram
-//     assert_eq!(ram.peek(0), 1234);  // Unaffected
-
-//     // Out-of-range address:
-//     state.set("addr", 0x8000);
-//     state.set("load", 0);
-//     state.ticktock();
-//     assert_eq!(state.get("out"), 0);
-
-//     // Bad write; nothing explodes:
-//     state.set("data", 5678);
-//     state.set("load", 1);
-//     state.ticktock();
-//     assert_eq!(state.get("out"), 0);
-// }
+    // Bad write; nothing explodes:
+    state.set("data_in", 5678);
+    state.set("write", 1);
+    state.ticktock();
+    assert_eq!(state.get("data_out"), 0);
+}
 
 // #[test]
 // fn memory_system_optimal() {
@@ -72,7 +68,8 @@ fn cpu_behavior() {
 
     let chip = flatten(chip);
 
-    let mut state = synthesize(&chip);
+    let no_ram = MemoryMap::new(vec![]);
+    let mut state = synthesize(&chip, no_ram);
 
     // Load constant 1234 into A
     state.set("instr", instr("@1234").into());
@@ -119,7 +116,7 @@ fn computer_add_behavior() {
 
     let chip = flatten(chip);
 
-    let mut state = synthesize(&chip);
+    let mut state = synthesize(&chip, memory_system());
 
     let rom = find_rom(&state);
     let ram = find_ram(&state);
@@ -166,7 +163,7 @@ fn computer_max_behavior() {
 
     let chip = flatten(chip);
 
-    let mut state = synthesize(&chip);
+    let mut state = synthesize(&chip, memory_system());
 
     let rom = find_rom(&state);
     let ram = find_ram(&state);
@@ -199,7 +196,7 @@ fn computer_max_behavior() {
 #[test]
 fn computer_indirect_write() {
     let chip = flatten(Computer::chip());
-    let mut state = synthesize(&chip);
+    let mut state = synthesize(&chip, memory_system());
 
     let rom = find_rom(&state);
     let ram = find_ram(&state);
@@ -222,7 +219,7 @@ fn computer_indirect_write() {
 #[test]
 fn computer_indirect_jump() {
     let chip = flatten(Computer::chip());
-    let mut state = synthesize(&chip);
+    let mut state = synthesize(&chip, memory_system());
 
     let rom = find_rom(&state);
     let ram = find_ram(&state);
@@ -244,7 +241,7 @@ fn computer_indirect_jump() {
 #[test]
 fn computer_stack_adjust() {
     let chip = flatten(Computer::chip());
-    let mut state = synthesize(&chip);
+    let mut state = synthesize(&chip, memory_system());
 
     let rom = find_rom(&state);
     let ram = find_ram(&state);
@@ -274,10 +271,10 @@ fn computer_stack_adjust() {
 #[test]
 fn computer_optimal() {
     let components = flatten(Computer::chip()).components;
-    let rams  = components.iter().filter(|c| matches!(c, Computational::RAM(_))).count();
-    let roms  = components.iter().filter(|c| matches!(c, Computational::ROM(_))).count();
-    let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
-    assert_eq!(rams,    2);
+    let memsys = components.iter().filter(|c| matches!(c, Computational::MemorySystem(_))).count();
+    let roms   = components.iter().filter(|c| matches!(c, Computational::ROM(_))).count();
+    let nands  = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
+    assert_eq!(memsys,  1);
     assert_eq!(roms,    1);
-    assert_eq!(nands, 1099);
+    assert_eq!(nands,  993);
 }

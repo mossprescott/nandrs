@@ -168,63 +168,48 @@ impl ChipState {
             }
         }
 
-        // Re-evaluate with updated registers. wire_state now reflects the new state.
-        self.evaluate();
-        self.dirty = false;
-
-        // Latch addresses from the final wire_state — registers have been updated, so this
-        // correctly captures the new PC, new A register, etc. for the next cycle.
-        let mut ram_addr_updates: Vec<(usize, u64)> = Vec::new();
-        let mut rom_addr_updates: Vec<(usize, u64)> = Vec::new();
-        let mut ms_addr_updates:  Vec<(usize, u64)> = Vec::new();
-
+        // Latch addresses from the current wire_state before re-evaluating, so that the
+        // re-evaluate reflects the address presented in *this* cycle (not the previous one).
+        // This matches how reg_state is applied before re-evaluate.
         for comp in &self.components {
             match comp {
                 Computational::RAM(ram) => {
                     let intf = ram.reflect();
-                    ram_addr_updates.push((
-                        wire_id(&intf.outputs["data_out"]),
-                        read_bus(&self.wire_state, &intf.inputs["addr"]),
-                    ));
+                    let out_id = wire_id(&intf.outputs["data_out"]);
+                    let new_addr = read_bus(&self.wire_state, &intf.inputs["addr"]);
+                    if let Some(BusResident::RAM(h)) = self.bus_residents.iter()
+                        .find(|res| matches!(res, BusResident::RAM(h) if h.0.borrow().wire_id == out_id))
+                    {
+                        h.0.borrow_mut().latched_addr = new_addr;
+                    }
                 }
                 Computational::ROM(rom) => {
                     let intf = rom.reflect();
-                    rom_addr_updates.push((
-                        wire_id(&intf.outputs["out"]),
-                        read_bus(&self.wire_state, &intf.inputs["addr"]),
-                    ));
+                    let out_id = wire_id(&intf.outputs["out"]);
+                    let new_addr = read_bus(&self.wire_state, &intf.inputs["addr"]);
+                    if let Some(BusResident::ROM(h)) = self.bus_residents.iter()
+                        .find(|res| matches!(res, BusResident::ROM(h) if h.0.borrow().wire_id == out_id))
+                    {
+                        h.0.borrow_mut().latched_addr = new_addr;
+                    }
                 }
                 Computational::MemorySystem(ms) => {
                     let intf = ms.reflect();
-                    ms_addr_updates.push((
-                        wire_id(&intf.outputs["data_out"]),
-                        read_bus(&self.wire_state, &intf.inputs["addr"]),
-                    ));
+                    let out_id = wire_id(&intf.outputs["data_out"]);
+                    let new_addr = read_bus(&self.wire_state, &intf.inputs["addr"]);
+                    if let Some(BusResident::MemorySystem(h)) = self.bus_residents.iter_mut()
+                        .find(|res| matches!(res, BusResident::MemorySystem(h) if h.wire_id == out_id))
+                    {
+                        h.latched_addr = new_addr;
+                    }
                 }
                 _ => {}
             }
         }
-        for (out_id, new_addr) in ram_addr_updates {
-            if let Some(BusResident::RAM(h)) = self.bus_residents.iter()
-                .find(|res| matches!(res, BusResident::RAM(h) if h.0.borrow().wire_id == out_id))
-            {
-                h.0.borrow_mut().latched_addr = new_addr;
-            }
-        }
-        for (out_id, new_addr) in rom_addr_updates {
-            if let Some(BusResident::ROM(h)) = self.bus_residents.iter()
-                .find(|res| matches!(res, BusResident::ROM(h) if h.0.borrow().wire_id == out_id))
-            {
-                h.0.borrow_mut().latched_addr = new_addr;
-            }
-        }
-        for (out_id, new_addr) in ms_addr_updates {
-            if let Some(BusResident::MemorySystem(h)) = self.bus_residents.iter_mut()
-                .find(|res| matches!(res, BusResident::MemorySystem(h) if h.wire_id == out_id))
-            {
-                h.latched_addr = new_addr;
-            }
-        }
+
+        // Re-evaluate with updated registers and latched addresses.
+        self.evaluate();
+        self.dirty = false;
     }
 
     fn evaluate(&mut self) {
