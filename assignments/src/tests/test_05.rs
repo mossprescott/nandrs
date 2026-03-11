@@ -16,6 +16,7 @@ fn memory_system_behavior() {
     let screen = find_screen(&state);
 
     state.set("addr", 0);
+    state.ticktock();  // latch new address
     state.set("data_in", 1234);
     state.set("write", 1);
 
@@ -26,9 +27,10 @@ fn memory_system_behavior() {
 
     // Now write to the screen buffer:
     state.set("addr", SCREEN_BASE.into());
+    state.ticktock();  // latch new address
     state.set("data_in", 0x5555);
-
     state.ticktock();
+
     assert_eq!(state.get("data_out"), 0x5555);
     assert_eq!(screen.peek(0), 0x5555);  // Address is mapped to the base of the screen ram
     assert_eq!(ram.peek(0), 1234);  // Unaffected
