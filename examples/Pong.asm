@@ -12,6 +12,7 @@
 // authors. It has been formatted and some labels have been added, but the assembled binary
 // should be identical. At least, I think that's where it came from; it's been a while.
 
+(addr0)
 @256
 D=A
 @SP
@@ -69,6 +70,7 @@ M=-1
 @R15
 A=M
 0;JMP
+(addr54-return)
 @5
 D=A
 @LCL
@@ -365,7 +367,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (ball.dispose)
 @ARG
@@ -408,7 +410,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (ball.show)
 @ARG
@@ -476,7 +478,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (ball.hide)
 @ARG
@@ -541,7 +543,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (ball.draw)
 @ARG
@@ -628,7 +630,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (ball.getleft)
 @ARG
@@ -650,7 +652,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (ball.getright)
 @ARG
@@ -683,7 +685,7 @@ AM=M-1
 D=M
 A=A-1
 M=D+M
-@54
+@addr54-return
 0;JMP
 (ball.setdestination)
 @3
@@ -1172,7 +1174,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (ball.move)
 @ARG
@@ -1918,7 +1920,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (ball.bounce)
 @5
@@ -2782,7 +2784,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (bat.new)
 @5
@@ -2912,7 +2914,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (bat.dispose)
 @ARG
@@ -2955,7 +2957,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (bat.show)
 @ARG
@@ -3023,7 +3025,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (bat.hide)
 @ARG
@@ -3088,7 +3090,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (bat.draw)
 @ARG
@@ -3180,7 +3182,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (bat.setdirection)
 @ARG
@@ -3215,7 +3217,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (bat.getleft)
 @ARG
@@ -3237,7 +3239,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (bat.getright)
 @ARG
@@ -3272,7 +3274,7 @@ AM=M-1
 D=M
 A=A-1
 M=D+M
-@54
+@addr54-return
 0;JMP
 (bat.setwidth)
 @ARG
@@ -3353,7 +3355,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (bat.move)
 @ARG
@@ -3998,7 +4000,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (main.main)
 @SP
@@ -4096,7 +4098,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (ponggame.new)
 @7
@@ -4603,7 +4605,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (ponggame.dispose)
 @ARG
@@ -4696,7 +4698,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (ponggame.newinstance)
 @0
@@ -4721,7 +4723,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (ponggame.getinstance)
 @ponggame.0
@@ -4730,7 +4732,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (ponggame.run)
 @SP
@@ -5424,7 +5426,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (ponggame.moveball)
 @5
@@ -6070,7 +6072,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (array.new)
 @ARG
@@ -6145,7 +6147,7 @@ D=A
 @95
 0;JMP
 (RET_ADDRESS_CALL104)
-@54
+@addr54-return
 0;JMP
 (array.dispose)
 @ARG
@@ -6188,14 +6190,14 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (keyboard.init)
 @SP
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (keyboard.keypressed)
 @24576
@@ -6217,7 +6219,7 @@ D=A
 @95
 0;JMP
 (RET_ADDRESS_CALL106)
-@54
+@addr54-return
 0;JMP
 (keyboard.readchar)
 @SP
@@ -6418,7 +6420,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (keyboard.readline)
 @5
@@ -6719,7 +6721,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (keyboard.readint)
 @SP
@@ -6813,7 +6815,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (math.init)
 @SP
@@ -7088,7 +7090,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (math.abs)
 @ARG
@@ -7140,7 +7142,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (math.multiply)
 @5
@@ -7624,7 +7626,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (math.divide)
 @4
@@ -8445,7 +8447,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (math.sqrt)
 @4
@@ -8738,7 +8740,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (math.max)
 @ARG
@@ -8789,7 +8791,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (math.min)
 @ARG
@@ -8840,7 +8842,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (memory.init)
 @SP
@@ -8946,7 +8948,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (memory.peek)
 @ARG
@@ -8979,7 +8981,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (memory.poke)
 @ARG
@@ -9033,7 +9035,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (memory.alloc)
 @SP
@@ -9766,7 +9768,7 @@ AM=M-1
 D=M
 A=A-1
 M=D+M
-@54
+@addr54-return
 0;JMP
 (memory.dealloc)
 @SP
@@ -10272,7 +10274,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (output.init)
 @16384
@@ -10382,7 +10384,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (output.initmap)
 @127
@@ -10651,13 +10653,13 @@ D=A
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 D=A
 @SP
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 D=A
 @SP
 AM=M+1
@@ -11003,7 +11005,7 @@ D=A
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 D=A
 @SP
 AM=M+1
@@ -11027,7 +11029,7 @@ D=A
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 D=A
 @SP
 AM=M+1
@@ -12273,7 +12275,7 @@ AM=M-1
 D=M
 @R5
 M=D
-@54
+@addr54-return
 D=A
 @SP
 AM=M+1
@@ -13361,7 +13363,7 @@ D=A
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 D=A
 @SP
 AM=M+1
@@ -13397,7 +13399,7 @@ D=A
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 D=A
 @SP
 AM=M+1
@@ -13705,7 +13707,7 @@ D=A
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 D=A
 @SP
 AM=M+1
@@ -13741,7 +13743,7 @@ D=A
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 D=A
 @SP
 AM=M+1
@@ -15685,7 +15687,7 @@ D=A
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 D=A
 @SP
 AM=M+1
@@ -15933,7 +15935,7 @@ D=A
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 D=A
 @SP
 AM=M+1
@@ -16161,7 +16163,7 @@ D=A
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 D=A
 @SP
 AM=M+1
@@ -16309,7 +16311,7 @@ D=A
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 D=A
 @SP
 AM=M+1
@@ -17507,7 +17509,7 @@ D=A
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 D=A
 @SP
 AM=M+1
@@ -17593,7 +17595,7 @@ D=A
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 D=A
 @SP
 AM=M+1
@@ -18363,7 +18365,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (output.create)
 @SP
@@ -18978,7 +18980,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (output.createshiftedmap)
 @4
@@ -19402,7 +19404,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (output.getmap)
 @SP
@@ -19566,7 +19568,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (output.drawchar)
 @4
@@ -19904,7 +19906,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (output.movecursor)
 @ARG
@@ -20177,7 +20179,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (output.printchar)
 @ARG
@@ -20438,7 +20440,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (output.printstring)
 @SP
@@ -20576,7 +20578,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (output.printint)
 @output.3
@@ -20638,7 +20640,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (output.println)
 @output.1
@@ -20736,7 +20738,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (output.backspace)
 @output.2
@@ -20943,7 +20945,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (screen.init)
 @SP
@@ -21217,7 +21219,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (screen.clearscreen)
 @SP
@@ -21324,7 +21326,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (screen.updatelocation)
 @screen.2
@@ -21516,7 +21518,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (screen.setcolor)
 @ARG
@@ -21535,7 +21537,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (screen.drawpixel)
 @3
@@ -21845,7 +21847,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (screen.drawconditional)
 @ARG
@@ -21936,7 +21938,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (screen.drawline)
 @11
@@ -23037,7 +23039,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (screen.drawrectangle)
 @9
@@ -23964,7 +23966,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (screen.drawhorizontal)
 @11
@@ -24892,7 +24894,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (screen.drawsymetric)
 @ARG
@@ -25217,7 +25219,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (screen.drawcircle)
 @3
@@ -25878,7 +25880,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (string.new)
 @3
@@ -26035,7 +26037,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (string.dispose)
 @ARG
@@ -26128,7 +26130,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (string.length)
 @ARG
@@ -26151,7 +26153,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (string.charat)
 @ARG
@@ -26296,7 +26298,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (string.setcharat)
 @ARG
@@ -26463,7 +26465,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (string.appendchar)
 @ARG
@@ -26610,7 +26612,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (string.eraselastchar)
 @ARG
@@ -26703,7 +26705,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (string.intvalue)
 @5
@@ -26757,7 +26759,7 @@ D;JNE
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (string.intvalue$if_false0)
 @SP
@@ -27123,7 +27125,7 @@ D=M
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (string.setint)
 @4
@@ -27895,7 +27897,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (string.newline)
 @128
@@ -27904,7 +27906,7 @@ D=A
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (string.backspace)
 @129
@@ -27913,7 +27915,7 @@ D=A
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (string.doublequote)
 @34
@@ -27922,7 +27924,7 @@ D=A
 AM=M+1
 A=A-1
 M=D
-@54
+@addr54-return
 0;JMP
 (sys.init)
 @0
@@ -28239,7 +28241,7 @@ M=D
 M=M+1
 A=M-1
 M=0
-@54
+@addr54-return
 0;JMP
 (sys.error)
 @3
