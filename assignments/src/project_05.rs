@@ -4,7 +4,7 @@ use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, 
 use simulator::Reflect as _;
 use simulator::Chip as _;
 use simulator::component::{Nand, Register16, RAM16, ROM16, MemorySystem16, Sequential, Computational, Computational16};
-use simulator::simulate::{ChipState, BusResident, RAMHandle, ROMHandle};
+use simulator::simulate::{ChipState, BusResident, RAMHandle, ROMHandle, MemoryMap, RAMMap, RegionHandle};
 use crate::project_01::{Project01Component, Not, And, Or, Mux16};
 use crate::project_02::{Project02Component, ALU};
 use crate::project_03::{Project03Component, PC};
@@ -113,6 +113,15 @@ pub fn flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Computation
     }
 }
 
+/// Our MemorySystem: Main RAM (16KB), screen buffer (8KB), and I/O, starting from address 0.
+pub fn memory_system() -> MemoryMap {
+    MemoryMap::new(vec![
+        RAMMap { size: 16*1024, base: 0 },
+        RAMMap { size:  8*1024, base: 16*1024 },
+        // RAMMap for keyboard at 24*1024 when needed
+    ])
+}
+
 // /// Main RAM (16KB), screen buffer (8KB), and I/O.
 // ///
 // /// During simulation, these components are exposed as BusResidents.
@@ -215,22 +224,22 @@ pub fn flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Computation
 //     }
 // }
 
-pub const RAM_BASE:    u16 = 0;
-pub const SCREEN_BASE: u16 = 16384;
-pub const KEYBOARD:    u16 = 32768;
+pub const RAM_BASE:    u16 = 0 * 1024;
+pub const SCREEN_BASE: u16 = 16 * 1024;
+pub const KEYBOARD:    u16 = 24 * 1024;
 
-/// Access the main RAM, assuming a normal MemorySystem is present. Otherwise panic.
-pub fn find_ram(state: &ChipState) -> RAMHandle {
+/// Access the main RAM region (base address 0) of the MemorySystem.
+pub fn find_ram(state: &ChipState) -> RegionHandle {
     state.bus_residents().iter()
-        .find_map(|r| if let BusResident::RAM(h) = r { if h.size() == 16 * 1024 { Some(h.clone()) } else { None } } else { None })
-        .expect("no 16KB RAM found")
+        .find_map(|r| if let BusResident::MemorySystem(h) = r { Some(RegionHandle::new(h.clone(), 0)) } else { None })
+        .expect("no MemorySystem found")
 }
 
-/// Access the screen RAM, assuming a normal MemorySystem is present. Otherwise panic.
-pub fn find_screen(state: &ChipState) -> RAMHandle {
+/// Access the screen RAM region (base address 16384) of the MemorySystem.
+pub fn find_screen(state: &ChipState) -> RegionHandle {
     state.bus_residents().iter()
-        .find_map(|r| if let BusResident::RAM(h) = r { if h.size() == 8 * 1024 { Some(h.clone()) } else { None } } else { None })
-        .expect("no 8KB screen RAM found")
+        .find_map(|r| if let BusResident::MemorySystem(h) = r { Some(RegionHandle::new(h.clone(), SCREEN_BASE.into())) } else { None })
+        .expect("no MemorySystem found")
 }
 
 /// Access the ROM, assuming a normal MemorySystem is present. Otherwise panic.
@@ -281,12 +290,13 @@ pub struct Decode {
 }
 
 impl Component for Decode {
+    // Note: in fact, this is only using Nots and really shouldn't even need that, but it keeps
+    // life simple if everything in this file flattens to the same type.
     type Target = Project05Component;
 
     fn expand(&self) -> Option<IC<Project05Component>> {
         let mut components: Vec<Project05Component> = vec![];
 
-        // NOT(NOT(src)) = src: a dumb way to express a plain wire using Nand gates.
         fn wrap(not: Not) -> Project05Component {
             let p01: Project01Component = not.into();
             let p02: Project02Component = p01.into();
@@ -294,6 +304,9 @@ impl Component for Decode {
             p03.into()
         }
         let mut wire = |src: Input, dst: Output| {
+            // NOT(NOT(src)) = src: a dumb way to express a plain wire using Nand gates.
+            // This is a workaround because there's currently no way to express wiring without some
+            // component.
             let mid  = Not { a: src, out: Not::chip().out };
             let pass = Not { a: mid.out.clone().into(), out: dst };
             for not in [mid, pass] { components.push(wrap(not)); }
@@ -348,6 +361,8 @@ pub struct CPU {
 }
 
 impl Component for CPU {
+    // Note: in fact, this doesn't need the MemorySystem, but it keeps
+    // life simple if everything in this file flattens to the same type.
     type Target = Project05Component;
 
     fn expand(&self) -> Option<IC<Project05Component>> {

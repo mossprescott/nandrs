@@ -313,6 +313,16 @@ impl<A: Nat, D: Nat> Component for MemorySystem<A, D> {
     }
 }
 
+impl<A: Nat, D: Nat> Chip for MemorySystem<A, D> {
+    fn chip() -> Self {
+        MemorySystem { addr: InputBus::<A>::new(), write: Input::new(), data_in: InputBus::<D>::new(), data_out: OutputBus::<D>::new() }
+    }
+}
+
+impl<A: Nat, D: Nat> AsConst for MemorySystem<A, D> {
+    fn as_const(&self) -> Option<u64> { None }
+}
+
 
 // - Computational
 
