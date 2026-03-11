@@ -167,37 +167,40 @@ impl ChipState {
             }
         }
 
-        // Re-evaluate with updated registers and writes.
+        // Latch MS addr from the initial wire_state (Nand-computed from current inputs and
+        // reg_state) so the re-evaluate below shows the correct memory data.  This makes
+        // same-cycle write-then-read work: the addr presented this cycle is already in
+        // wire_state, so re-evaluate peeks the right location.
+        for comp in &self.components {
+            if let Computational::MemorySystem(ms) = comp {
+                let intf = ms.reflect();
+                let out_id = wire_id(&intf.outputs["data_out"]);
+                let new_addr = read_bus(&self.wire_state, &intf.inputs["addr"]);
+                if let Some(BusResident::MemorySystem(h)) = self.bus_residents.iter_mut()
+                    .find(|res| matches!(res, BusResident::MemorySystem(h) if h.wire_id == out_id))
+                {
+                    h.latched_addr = new_addr;
+                }
+            }
+        }
+
+        // Re-evaluate with updated registers, writes, and new MS latched addr.
         self.evaluate();
         self.dirty = false;
 
-        // Latch ROM and MS addresses from the final wire_state (after Nand passes).
-        // ROM must latch after re-evaluate so the next cycle re-evaluates the *current*
-        // instruction (not the next one), which is required for the CPU's feed-forward
-        // next_addr_mux to produce the correct MS addr latch.
+        // Latch ROM addr after re-evaluate so the next cycle processes the *current*
+        // instruction, which lets the CPU's feed-forward next_addr_mux set the right MS
+        // addr latch for the cycle after.
         for comp in &self.components {
-            match comp {
-                Computational::ROM(rom) => {
-                    let intf = rom.reflect();
-                    let out_id = wire_id(&intf.outputs["out"]);
-                    let new_addr = read_bus(&self.wire_state, &intf.inputs["addr"]);
-                    if let Some(BusResident::ROM(h)) = self.bus_residents.iter()
-                        .find(|res| matches!(res, BusResident::ROM(h) if h.0.borrow().wire_id == out_id))
-                    {
-                        h.0.borrow_mut().latched_addr = new_addr;
-                    }
+            if let Computational::ROM(rom) = comp {
+                let intf = rom.reflect();
+                let out_id = wire_id(&intf.outputs["out"]);
+                let new_addr = read_bus(&self.wire_state, &intf.inputs["addr"]);
+                if let Some(BusResident::ROM(h)) = self.bus_residents.iter()
+                    .find(|res| matches!(res, BusResident::ROM(h) if h.0.borrow().wire_id == out_id))
+                {
+                    h.0.borrow_mut().latched_addr = new_addr;
                 }
-                Computational::MemorySystem(ms) => {
-                    let intf = ms.reflect();
-                    let out_id = wire_id(&intf.outputs["data_out"]);
-                    let new_addr = read_bus(&self.wire_state, &intf.inputs["addr"]);
-                    if let Some(BusResident::MemorySystem(h)) = self.bus_residents.iter_mut()
-                        .find(|res| matches!(res, BusResident::MemorySystem(h) if h.wire_id == out_id))
-                    {
-                        h.latched_addr = new_addr;
-                    }
-                }
-                _ => {}
             }
         }
     }
@@ -253,19 +256,10 @@ impl ChipState {
                 Computational::MemorySystem(ms) => {
                     let intf = ms.reflect();
                     let out_id = wire_id(&intf.outputs["data_out"]);
-                    // Use the current addr if it's already in ws (e.g. external chip input);
-                    // otherwise fall back to latched_addr from the previous cycle (e.g. when
-                    // addr is driven by Nand logic that hasn't run yet, as in the Computer).
-                    let addr_wire = wire_id(&intf.inputs["addr"]);
                     let val = self.bus_residents.iter()
                         .find_map(|res| match res {
                             BusResident::MemorySystem(h) if h.wire_id == out_id => {
-                                let addr = if ws.contains_key(&addr_wire) {
-                                    read_bus(&ws, &intf.inputs["addr"])
-                                } else {
-                                    h.latched_addr
-                                };
-                                Some(h.peek(addr))
+                                Some(h.peek(h.latched_addr))
                             }
                             _ => None,
                         })
