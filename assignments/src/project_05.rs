@@ -351,13 +351,13 @@ pub struct CPU {
     /// The bits of the current instruction
     pub instr: Input16,
 
-    pub mem_write_data: Output16,
-    pub mem_write: Output,  // aka "load"
+    pub mem_data_out: Output16,
+    pub mem_write: Output,
 
     /// Feed-forward: address to write at the end of this cycle, and read from in the *next* cycle
     pub mem_addr: Output16,
 
-    pub mem_read_data: Input16,  // aka "data"
+    pub mem_data_in: Input16,
 }
 
 impl Component for CPU {
@@ -417,7 +417,7 @@ impl Component for CPU {
         let y_mux = Mux16 {
             sel: read_m_out.into(),
             a0:  a_out.clone().into(),
-            a1:  self.mem_read_data.clone(),
+            a1:  self.mem_data_in.clone(),
             out: Output16::new(),
         };
         let y_src = y_mux.out.clone();
@@ -431,7 +431,7 @@ impl Component for CPU {
             zx:  zx.into(), nx: nx.into(),
             zy:  zy.into(), ny: ny.into(),
             f:   f.into(),  no: no.into(),
-            out: self.mem_write_data.clone(),
+            out: self.mem_data_out.clone(),
             zr:  Output::new(),
             ng:  Output::new(),
         };
@@ -443,7 +443,7 @@ impl Component for CPU {
         // sel=is_a → a1=instr (A-instr), a0=alu_out (C-instr with dest=A)
         let a_data_mux = Mux16 {
             sel: is_a.into(),
-            a0:  self.mem_write_data.clone().into(),
+            a0:  self.mem_data_out.clone().into(),
             a1:  self.instr.clone(),
             out: a_data.clone(),
         };
@@ -466,7 +466,7 @@ impl Component for CPU {
         components.push(p01(load_d_gate));
 
         // === D register ===
-        let reg_d = Register16 { data_in: self.mem_write_data.clone().into(), write: load_d.into(), data_out: reg_d_out };
+        let reg_d = Register16 { data_in: self.mem_data_out.clone().into(), write: load_d.into(), data_out: reg_d_out };
         components.push(p03(reg_d));
 
         // === mem_write = AND(is_c, write_m) ===
@@ -523,11 +523,11 @@ impl Component for Computer {
     /*
       let cpu = CPU { reset: self.reset, instr: rom.out, mem_in: memory.out, pc: self.pc, mem_out, mem_write, mem_addr }
       let rom = ROM16 { size: 32K, addr: cpu.pc }
-      let memory = MemorySystem { data: cpu.mem_write_data, load: cpu.mem_write, addr: cpu.mem_addr }
+      let memory = MemorySystem { data: cpu.mem_data_out, load: cpu.mem_write, addr: cpu.mem_addr }
       outputs.pc = cpu.pc
      */
     fn expand(&self) -> Option<IC<Project05Component>> {
-        let mem_read_data_wire = Output16::new();  // back-ref from memory to CPU
+        let mem_data_in_wire = Output16::new();  // back-ref from memory to CPU
 
         let rom = ROM16 {
             size: 32 * 1024,
@@ -539,17 +539,17 @@ impl Component for Computer {
             reset:     self.reset.clone(),
             pc:        self.pc.clone(),
             instr:     rom.out.clone().into(),
-            mem_write_data:   Output16::new(),
+            mem_data_out:   Output16::new(),
             mem_write: Output::new(),
             mem_addr: Output16::new(),
-            mem_read_data: mem_read_data_wire.clone().into(),
+            mem_data_in: mem_data_in_wire.clone().into(),
         };
 
         let memory = MemorySystem16 {
             addr:     cpu.mem_addr.clone().into(),
             write:    cpu.mem_write.clone().into(),
-            data_in:  cpu.mem_write_data.clone().into(),
-            data_out: mem_read_data_wire,
+            data_in:  cpu.mem_data_out.clone().into(),
+            data_out: mem_data_in_wire,
         };
 
         Some(IC {
