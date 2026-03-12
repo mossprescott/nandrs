@@ -249,44 +249,28 @@ impl ChipState {
         self.dirty = false;
         self.evaluate();
 
-        // Collect updates based on the current wire_state.
-        let mut reg_updates: Vec<(WireID, u64)> = Vec::new();
-        let mut ram_writes: Vec<(Rc<RefCell<crate::device::RAM>>, u64)> = Vec::new();
-        let mut ms_writes:  Vec<(Rc<RefCell<MSDevice>>, u64)> = Vec::new();
-
         for comp in &self.component_wiring {
             match comp {
                 wiring::ComponentWiring::Register(reg) => {
                     if read_bit(&self.wire_state, &reg.write) {
                         let val = read_bus(&self.wire_state, &reg.data_in);
-                        reg_updates.push((reg.data_out, val));
+                        self.reg_state.insert(reg.data_out, val);
                     }
                 }
                 wiring::ComponentWiring::RAM(ram) => {
                     if read_bit(&self.wire_state, &ram.write) {
                         let val = read_bus(&self.wire_state, &ram.data_in);
-                        ram_writes.push((Rc::clone(&ram.device), val));
+                        let _ = ram.device.borrow_mut().write(val);
                     }
                 }
                 wiring::ComponentWiring::MemorySystem(ms) => {
                     if read_bit(&self.wire_state, &ms.write) {
                         let val = read_bus(&self.wire_state, &ms.data_in);
-                        ms_writes.push((Rc::clone(&ms.device), val));
+                        let _ = ms.device.borrow_mut().write(val);
                     }
                 }
                 _ => {}
             }
-        }
-
-        for (id, val) in reg_updates {
-            self.reg_state.insert(id, val);
-        }
-        for (device, val) in ram_writes {
-            let _ = device.borrow_mut().write(val);
-        }
-        // MS write uses device's currently-latched addr (from previous cycle).
-        for (device, val) in ms_writes {
-            let _ = device.borrow_mut().write(val);
         }
 
         // Latch RAM and MS addr from the initial wire_state so the re-evaluate below
