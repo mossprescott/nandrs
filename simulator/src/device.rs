@@ -44,6 +44,10 @@ pub struct ROM {
 }
 
 impl ROM {
+    pub fn new(size: usize) -> Self {
+        ROM { size, data: vec![0u64; size].into_boxed_slice(), addr: 0, valid: true }
+    }
+
     /// For "external" users (not the simulation); overwrite the contents of the ROM
     /// during configuration.
     pub fn flash(&mut self, data: Box<[Data]>) -> Result<(), Error> {

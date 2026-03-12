@@ -38,12 +38,10 @@ where
             }
             Computational::ROM(rom) => {
                 let intf = rom.reflect();
-                bus_residents.push(BusResident::ROM(ROMHandle(Rc::new(RefCell::new(ROMState {
+                bus_residents.push(BusResident::ROM(ROMHandle {
                     wire_id: wire_id(&intf.outputs["out"]),
-                    size: rom.size,
-                    data: vec![0u64; rom.size],
-                    latched_addr: 0,
-                })))));
+                    inner: Rc::new(RefCell::new(crate::device::ROM::new(rom.size))),
+                }));
             }
             Computational::MemorySystem(ms) => {
                 let intf = ms.reflect();
@@ -206,9 +204,9 @@ impl ChipState {
                 let out_id = wire_id(&intf.outputs["out"]);
                 let new_addr = read_bus(&self.wire_state, &intf.inputs["addr"]);
                 if let Some(BusResident::ROM(h)) = self.bus_residents.iter()
-                    .find(|res| matches!(res, BusResident::ROM(h) if h.0.borrow().wire_id == out_id))
+                    .find(|res| matches!(res, BusResident::ROM(h) if h.wire_id == out_id))
                 {
-                    h.0.borrow_mut().latched_addr = new_addr;
+                    let _ = h.inner.borrow_mut().set_addr(new_addr as usize);
                 }
             }
         }
@@ -251,10 +249,8 @@ impl ChipState {
                     let out_id = wire_id(&intf.outputs["out"]);
                     let val = self.bus_residents.iter()
                         .find_map(|res| match res {
-                            BusResident::ROM(h) if h.0.borrow().wire_id == out_id => {
-                                let s = h.0.borrow();
-                                s.data.get(s.latched_addr as usize).copied()
-                            }
+                            BusResident::ROM(h) if h.wire_id == out_id =>
+                                Some(h.inner.borrow().read().unwrap_or(0)),
                             _ => None,
                         })
                         .unwrap_or(0);
@@ -379,37 +375,18 @@ impl RAMHandle {
     pub fn size(&self) -> usize             { self.inner.borrow().size }
 }
 
-/// Hold pre-initialized ROM contents.
-pub struct ROMState {
-    wire_id: usize,
-    pub size: usize,
-    data: Vec<u64>,
-    latched_addr: u64,
-}
-
-impl ROMState {
-    /// Read a word. If the address is out-of-range, returns 0.
-    pub fn read(&self, addr: u64) -> u64 {
-        self.data.get(addr as usize).copied().unwrap_or_else(|| {
-            println!("Out of range read: ROM[{}]", addr);
-            0
-        })
-    }
-
-    /// Replace the entire contents.
-    pub fn flash(&mut self, data: Vec<u64>) {
-        self.data = data;
-    }
-}
-
 /// A clonable handle to a ROM instance in the simulated circuit.
 #[derive(Clone)]
-pub struct ROMHandle(Rc<RefCell<ROMState>>);
+pub struct ROMHandle {
+    wire_id: usize,
+    inner: Rc<RefCell<crate::device::ROM>>,
+}
 
 impl ROMHandle {
-    pub fn read(&self, addr: u64) -> u64 { self.0.borrow().read(addr) }
-    pub fn flash(&self, data: Vec<u64>) { self.0.borrow_mut().flash(data) }
-    pub fn size(&self) -> usize         { self.0.borrow().size }
+    pub fn flash(&self, data: Vec<u64>) {
+        let _ = self.inner.borrow_mut().flash(data.into_boxed_slice());
+    }
+    pub fn size(&self) -> usize { self.inner.borrow().size }
 }
 
 /// Descriptor for one contiguous RAM region in a memory map.
