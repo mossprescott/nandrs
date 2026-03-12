@@ -154,12 +154,12 @@ where
         n_wires,
     };
     let mut state = ChipState {
-        wire_state: vec![0u64; n_wires],
+        wiring: chip_wiring,
+        bus_residents,
         reg_state:  vec![0u64; n_wires],
         input_vals: HashMap::new(),
-        bus_residents,
-        wiring: chip_wiring,
         dirty: false,
+        wire_state: vec![0u64; n_wires],
     };
     state.evaluate();
     state
@@ -186,20 +186,20 @@ pub struct ChipState {
     /// Static circuit description.
     wiring: ChipWiring,
 
+    /// Handles to (memory) devices for inspection from outside.
+    bus_residents: Vec<BusResident>,
+
+    /// State of each register, indexed by WireIndex. Non-register entries are always 0.
+    reg_state: Vec<u64>,
+
     /// Current input values, keyed by pre-resolved wire location for direct use in evaluate().
     input_vals: HashMap<wiring::WireRef, u64>,
 
     /// Any new inputs since last evaluate()?
     dirty: bool,
 
-    /// State of each register, indexed by WireIndex. Non-register entries are always 0.
-    reg_state: Vec<u64>,
-
     /// State of every wire as of the last evaluate(), for inspecting outputs.
     wire_state: Vec<u64>,
-
-    /// Handles to (memory) devices for inspection from outside.
-    bus_residents: Vec<BusResident>,
 }
 
 /// Arbitrary (ptr) value which identifies the storage location for some wire, used as a key to
