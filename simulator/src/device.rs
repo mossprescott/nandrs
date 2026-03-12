@@ -1,6 +1,6 @@
 pub enum Error {
     AddressOutOfRange(usize),
-    // NotReady,
+    Unmapped,
     CannotWrite,
 }
 
@@ -40,14 +40,17 @@ pub struct ROM {
     data: Box<[u64]>,
 
     addr: Addr,
+    valid: bool,
 }
 
 impl MemoryDevice for ROM {
     fn set_addr(&mut self, addr: Addr) -> Result<(), Error> {
         if addr >= self.size {
+            self.valid = false;
             Err(Error::AddressOutOfRange(addr))
         } else {
             self.addr = addr;
+            self.valid = true;
             Ok(())
         }
     }
@@ -56,7 +59,7 @@ impl MemoryDevice for ROM {
     fn ticktock(&mut self) {}
 
     fn read(&self) -> Result<u64, Error> {
-        Ok(self.data[self.addr])
+        if self.valid { Ok(self.data[self.addr]) } else { Err(Error::AddressOutOfRange(0)) }
     }
 
     fn write(&mut self, _word: Data) -> Result<(), Error> {
@@ -73,14 +76,17 @@ pub struct RAM {
 
     addr: Addr,
     next_addr: Addr,
+    valid: bool,
 }
 
 impl MemoryDevice for RAM {
     fn set_addr(&mut self, addr: Addr) -> Result<(), Error> {
         if addr >= self.size {
+            self.valid = false;
             Err(Error::AddressOutOfRange(addr))
         } else {
             self.next_addr = addr;
+            self.valid = true;
             Ok(())
         }
     }
@@ -90,38 +96,44 @@ impl MemoryDevice for RAM {
     }
 
     fn read(&self) -> Result<u64, Error> {
-        Ok(self.data[self.addr])
+        if self.valid { Ok(self.data[self.addr]) } else { Err(Error::AddressOutOfRange(0)) }
     }
 
     fn write(&mut self, word: Data) -> Result<(), Error> {
-        self.data[self.addr] = word;
-        Ok(())
+        if self.valid {
+            self.data[self.addr] = word;
+            Ok(())
+        } else {
+            Err(Error::AddressOutOfRange(0))
+        }
     }
 }
 
 pub struct Overlay<T> {
-    base: Addr,
-    device: T,
+    pub base: Addr,
+    pub device: T,
 }
 
 /// Complete memory (sub)system by overlaying multiple devices at different locations in the address space.
+///
+/// On every operation, the devices are tried in order; the first device that can successfully
+/// handle the operation is used. A device earlier in the list is effectively overlaid on top of
+/// all later ones.
+///
+/// Each device handles its own address latching. `set_addr` is forwarded to every device so each
+/// one can record whether the address falls within its range; `read`/`write` then return the first
+/// `Ok` result.
 pub struct MemorySystem<T> {
-    devices: Vec<Overlay<T>>,
-    active: Option<usize>,
+    pub devices: Vec<Overlay<T>>,
 }
 
 impl<T: MemoryDevice> MemoryDevice for MemorySystem<T> {
+    /// Forward the address to every device (base-adjusted). Each device records whether it's valid.
     fn set_addr(&mut self, addr: Addr) -> Result<(), Error> {
-        for (i, overlay) in self.devices.iter_mut().enumerate() {
-            if addr >= overlay.base {
-                if overlay.device.set_addr(addr - overlay.base).is_ok() {
-                    self.active = Some(i);
-                    return Ok(());
-                }
-            }
+        for overlay in &mut self.devices {
+            let _ = overlay.device.set_addr(addr.checked_sub(overlay.base).unwrap_or(usize::MAX));
         }
-        self.active = None;
-        Err(Error::AddressOutOfRange(addr))
+        Ok(())
     }
 
     fn ticktock(&mut self) {
@@ -130,17 +142,23 @@ impl<T: MemoryDevice> MemoryDevice for MemorySystem<T> {
         }
     }
 
+    /// Read from the first device that covers the current address.
     fn read(&self) -> Result<Data, Error> {
-        match self.active {
-            Some(i) => self.devices[i].device.read(),
-            None    => Err(Error::AddressOutOfRange(0)),
+        for overlay in &self.devices {
+            if let Ok(val) = overlay.device.read() {
+                return Ok(val);
+            }
         }
+        Err(Error::Unmapped)
     }
 
+    /// Write to the first device that covers the current address.
     fn write(&mut self, word: Data) -> Result<(), Error> {
-        match self.active {
-            Some(i) => self.devices[i].device.write(word),
-            None    => Err(Error::AddressOutOfRange(0)),
+        for overlay in &mut self.devices {
+            if overlay.device.write(word).is_ok() {
+                return Ok(());
+            }
         }
+        Err(Error::Unmapped)
     }
 }
