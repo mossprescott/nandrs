@@ -33,8 +33,9 @@ Have a rust toolchain...
 
 `cargo run cargo run --release -p computer -- examples/Pong.asm`
 
-Currently it will do about 900 cycles/sec, prior to any thought about speed. And it doesn't seem
-to be working yet either.
+An initial, naive simulator ran at about 900Hz (Apple M2, ca. 2026.)
+
+After pre-computing storage location to avoid lookups in the simulation loop, we're up to about 5KHz.
 
 
 ## Simulation
