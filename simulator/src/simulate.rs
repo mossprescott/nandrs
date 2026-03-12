@@ -112,15 +112,25 @@ where
 
 /// Runtime state of a simulated chip, and access to its inputs and outputs.
 pub struct ChipState {
+    /// Locations of input/output signals for external access
     intf: Interface,
+
+    /// Pre-computed locations for propagating signals
     component_wiring: Vec<wiring::ComponentWiring>,
 
+    /// Values from outside to be applied at the beginning of each evaluate().
     input_vals: HashMap<String, u64>,
+
+    /// Any new inputs since last evaluate()?
     dirty: bool,
 
-    wire_state: HashMap<WireID, u64>,
+    /// State of each register.
     reg_state: HashMap<WireID, u64>,
 
+    /// State of every wire as of the last evaluate(), for inspecting outputs.
+    wire_state: HashMap<WireID, u64>,
+
+    /// Handles to (memory) devices for inspection from outside.
     bus_residents: Vec<BusResident>,
 }
 
@@ -316,6 +326,7 @@ impl ChipState {
     }
 
     fn evaluate(&mut self) {
+        // Start fresh each cycle:
         let mut ws: HashMap<WireID, u64> = HashMap::new();
 
         // Seed chip inputs.
