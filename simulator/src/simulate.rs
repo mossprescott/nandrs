@@ -67,9 +67,24 @@ where
         match comp {
             Computational::Nand(c)         => CW::Nand(wiring::NandWiring::new(c)),
             Computational::Register(c)     => CW::Register(wiring::RegisterWiring::new(c)),
-            Computational::RAM(c)          => CW::RAM(wiring::RAMWiring::new(c)),
+            Computational::RAM(c)          => {
+                let intf = c.reflect();
+                let out_id = wire_id(&intf.outputs["data_out"]);
+                let device = bus_residents.iter().find_map(|res| match res {
+                    BusResident::RAM(h) if h.wire_id == out_id => Some(Rc::clone(&h.inner)),
+                    _ => None,
+                }).expect("RAM device not found in bus_residents");
+                CW::RAM(wiring::RAMWiring::new(c, device))
+            }
             Computational::ROM(c)          => CW::ROM(wiring::ROMWiring::new(c)),
-            Computational::MemorySystem(c) => CW::MemorySystem(wiring::MemorySystemWiring::new(c)),
+            Computational::MemorySystem(c) => {
+                let intf = c.reflect();
+                let out_id = wire_id(&intf.outputs["data_out"]);
+                let device = ms_handles.iter().find_map(|h| {
+                    if h.wire_id == out_id { Some(Rc::clone(&h.device)) } else { None }
+                }).expect("MS device not found in ms_handles");
+                CW::MemorySystem(wiring::MemorySystemWiring::new(c, device))
+            }
             Computational::Const(_)        => CW::Const,
         }
     }).collect();
@@ -81,7 +96,6 @@ where
         wire_state: HashMap::new(),
         reg_state,
         bus_residents,
-        ms_handles,
         dirty: false,
     };
     state.evaluate();
@@ -100,7 +114,6 @@ pub struct ChipState {
     reg_state: HashMap<WireID, u64>,
 
     bus_residents: Vec<BusResident>,
-    ms_handles: Vec<MSHandle>,
 }
 
 /// Arbitrary (ptr) value which identifies the storage location for some wire, used as a key to
@@ -110,9 +123,11 @@ struct WireID(usize);
 
 /// Pre-computed wiring info about components, used during evaluation.
 mod wiring {
+    use std::rc::Rc;
+    use std::cell::RefCell;
     use crate::component::{Nand, Register16, RAM16, ROM16, MemorySystem16};
     use crate::declare::{BusRef, Reflect};
-    use super::{WireID, wire_id};
+    use super::{WireID, wire_id, MSDevice};
 
     pub(super) enum ComponentWiring {
         Nand(NandWiring),
@@ -170,11 +185,12 @@ mod wiring {
         }
     }
 
-    pub(super) struct RAMWiring { pub(super) out: WireRef, pub(super) addr: WireRef, pub(super) write: BitRef, pub(super) data_in: WireRef }
+    pub(super) struct RAMWiring { pub(super) device: Rc<RefCell<crate::device::RAM>>, pub(super) out: WireRef, pub(super) addr: WireRef, pub(super) write: BitRef, pub(super) data_in: WireRef }
     impl RAMWiring {
-        pub(super) fn new(ram: &RAM16) -> Self {
+        pub(super) fn new(ram: &RAM16, device: Rc<RefCell<crate::device::RAM>>) -> Self {
             let intf = ram.reflect();
             Self {
+                device,
                 out:     WireRef::from(&intf.outputs["data_out"]),
                 addr:    WireRef::from(&intf.inputs["addr"]),
                 write:   BitRef::from(&intf.inputs["write"]),
@@ -183,11 +199,12 @@ mod wiring {
         }
     }
 
-    pub(super) struct MemorySystemWiring { pub(super) out: WireRef, pub(super) addr: WireRef, pub(super) write: BitRef, pub(super) data_in: WireRef }
+    pub(super) struct MemorySystemWiring { pub(super) device: Rc<RefCell<MSDevice>>, pub(super) out: WireRef, pub(super) addr: WireRef, pub(super) write: BitRef, pub(super) data_in: WireRef }
     impl MemorySystemWiring {
-        pub(super) fn new(ms: &MemorySystem16) -> Self {
+        pub(super) fn new(ms: &MemorySystem16, device: Rc<RefCell<MSDevice>>) -> Self {
             let intf = ms.reflect();
             Self {
+                device,
                 out:     WireRef::from(&intf.outputs["data_out"]),
                 addr:    WireRef::from(&intf.inputs["addr"]),
                 write:   BitRef::from(&intf.inputs["write"]),
@@ -234,8 +251,8 @@ impl ChipState {
 
         // Collect updates based on the current wire_state.
         let mut reg_updates: Vec<(WireID, u64)> = Vec::new();
-        let mut ram_writes: Vec<(WireID, u64)> = Vec::new();        // (out_id, val)
-        let mut ms_writes:  Vec<(WireID, u64)> = Vec::new();       // (out_id, val)
+        let mut ram_writes: Vec<(Rc<RefCell<crate::device::RAM>>, u64)> = Vec::new();
+        let mut ms_writes:  Vec<(Rc<RefCell<MSDevice>>, u64)> = Vec::new();
 
         for comp in &self.component_wiring {
             match comp {
@@ -248,13 +265,13 @@ impl ChipState {
                 wiring::ComponentWiring::RAM(ram) => {
                     if read_bit(&self.wire_state, &ram.write) {
                         let val = read_bus(&self.wire_state, &ram.data_in);
-                        ram_writes.push((ram.out.id, val));
+                        ram_writes.push((Rc::clone(&ram.device), val));
                     }
                 }
                 wiring::ComponentWiring::MemorySystem(ms) => {
                     if read_bit(&self.wire_state, &ms.write) {
                         let val = read_bus(&self.wire_state, &ms.data_in);
-                        ms_writes.push((ms.out.id, val));
+                        ms_writes.push((Rc::clone(&ms.device), val));
                     }
                 }
                 _ => {}
@@ -264,18 +281,12 @@ impl ChipState {
         for (id, val) in reg_updates {
             self.reg_state.insert(id, val);
         }
-        for (out_id, val) in ram_writes {
-            if let Some(BusResident::RAM(h)) = self.bus_residents.iter()
-                .find(|res| matches!(res, BusResident::RAM(h) if h.wire_id == out_id))
-            {
-                let _ = h.inner.borrow_mut().write(val);
-            }
+        for (device, val) in ram_writes {
+            let _ = device.borrow_mut().write(val);
         }
         // MS write uses device's currently-latched addr (from previous cycle).
-        for (out_id, val) in ms_writes {
-            if let Some(h) = self.ms_handles.iter().find(|h| h.wire_id == out_id) {
-                let _ = h.device.borrow_mut().write(val);
-            }
+        for (device, val) in ms_writes {
+            let _ = device.borrow_mut().write(val);
         }
 
         // Latch RAM and MS addr from the initial wire_state so the re-evaluate below
@@ -284,19 +295,13 @@ impl ChipState {
             match comp {
                 wiring::ComponentWiring::RAM(ram) => {
                     let new_addr = read_bus(&self.wire_state, &ram.addr);
-                    if let Some(BusResident::RAM(h)) = self.bus_residents.iter()
-                        .find(|res| matches!(res, BusResident::RAM(h) if h.wire_id == ram.out.id))
-                    {
-                        let _ = h.inner.borrow_mut().set_addr(new_addr as usize);
-                        h.inner.borrow_mut().ticktock();
-                    }
+                    let _ = ram.device.borrow_mut().set_addr(new_addr as usize);
+                    ram.device.borrow_mut().ticktock();
                 }
                 wiring::ComponentWiring::MemorySystem(ms) => {
                     let new_addr = read_bus(&self.wire_state, &ms.addr);
-                    if let Some(h) = self.ms_handles.iter_mut().find(|h| h.wire_id == ms.out.id) {
-                        let _ = h.device.borrow_mut().set_addr(new_addr as usize);
-                        h.device.borrow_mut().ticktock();
-                    }
+                    let _ = ms.device.borrow_mut().set_addr(new_addr as usize);
+                    ms.device.borrow_mut().ticktock();
                 }
                 _ => {}
             }
@@ -342,13 +347,7 @@ impl ChipState {
         for comp in &self.component_wiring {
             match comp {
                 wiring::ComponentWiring::RAM(ram) => {
-                    let val = self.bus_residents.iter()
-                        .find_map(|res| match res {
-                            BusResident::RAM(h) if h.wire_id == ram.out.id =>
-                                Some(h.inner.borrow().read().unwrap_or(0)),
-                            _ => None,
-                        })
-                        .unwrap_or(0);
+                    let val = ram.device.borrow().read().unwrap_or(0);
                     write_bus(&mut ws, &ram.out, val);
                 }
                 wiring::ComponentWiring::ROM(rom) => {
@@ -362,14 +361,7 @@ impl ChipState {
                     write_bus(&mut ws, &rom.out, val);
                 }
                 wiring::ComponentWiring::MemorySystem(ms) => {
-                    // Read from device's currently-latched addr (device handles routing).
-                    let val = self.ms_handles.iter()
-                        .find_map(|h| if h.wire_id == ms.out.id {
-                            Some(h.device.borrow().read().unwrap_or(0))
-                        } else {
-                            None
-                        })
-                        .unwrap_or(0);
+                    let val = ms.device.borrow().read().unwrap_or(0);
                     write_bus(&mut ws, &ms.out, val);
                 }
                 _ => {}
