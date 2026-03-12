@@ -62,9 +62,22 @@ where
             _ => {}
         }
     }
+    let component_wiring: Vec<wiring::ComponentWiring> = components.iter().map(|comp| {
+        use wiring::ComponentWiring as CW;
+        match comp {
+            Computational::Nand(c)         => CW::Nand(wiring::NandWiring::new(c)),
+            Computational::Register(c)     => CW::Register(wiring::RegisterWiring::new(c)),
+            Computational::RAM(c)          => CW::RAM(wiring::RAMWiring::new(c)),
+            Computational::ROM(c)          => CW::ROM(wiring::ROMWiring::new(c)),
+            Computational::MemorySystem(c) => CW::MemorySystem(wiring::MemorySystemWiring::new(c)),
+            Computational::Const(_)        => CW::Const,
+        }
+    }).collect();
+
     let mut state = ChipState {
         intf: chip.reflect(),
         components,
+        component_wiring,
         input_vals: HashMap::new(),
         wire_state: HashMap::new(),
         reg_state,
@@ -80,6 +93,7 @@ where
 pub struct ChipState {
     intf: Interface,
     components: Vec<Computational16>,
+    component_wiring: Vec<wiring::ComponentWiring>,
     input_vals: HashMap<String, u64>,
     wire_state: HashMap<usize, u64>,
     reg_state: HashMap<usize, u64>,
@@ -88,7 +102,99 @@ pub struct ChipState {
     dirty: bool,
 }
 
+type WireID = usize;
+
+/// Pre-computed wiring info about components, used during evaluation.
+mod wiring {
+    use crate::component::{Nand, Register16, RAM16, ROM16, MemorySystem16};
+    use crate::declare::{BusRef, Reflect};
+    use super::{WireID, wire_id};
+
+    pub(super) enum ComponentWiring {
+        Nand(NandWiring),
+        Register(RegisterWiring),
+        ROM(ROMWiring),
+        RAM(RAMWiring),
+        MemorySystem(MemorySystemWiring),
+        /// Note: output wiring for consts is not needed during evaluation because the bits are
+        /// never updated.
+        Const,
+    }
+
+    pub(super) struct BitRef { pub(super) id: WireID, pub(super) offset: usize }
+    impl BitRef {
+        pub(super) fn from(b: &BusRef) -> Self { BitRef { id: wire_id(b), offset: b.offset } }
+    }
+
+    pub(super) struct WireRef { pub(super) id: WireID, pub(super) offset: usize, pub(super) width: usize }
+    impl WireRef {
+        pub(super) fn from(b: &BusRef) -> Self { WireRef { id: wire_id(b), offset: b.offset, width: b.width } }
+    }
+
+    pub(super) struct NandWiring { pub(super) a: BitRef, pub(super) b: BitRef, pub(super) out: BitRef }
+    impl NandWiring {
+        pub(super) fn new(nand: &Nand) -> Self {
+            let intf = nand.reflect();
+            Self {
+                a:   BitRef::from(&intf.inputs["a"]),
+                b:   BitRef::from(&intf.inputs["b"]),
+                out: BitRef::from(&intf.outputs["out"]),
+            }
+        }
+    }
+
+    pub(super) struct RegisterWiring { pub(super) write: BitRef, pub(super) data_in: WireRef, pub(super) data_out: WireID }
+    impl RegisterWiring {
+        pub(super) fn new(reg: &Register16) -> Self {
+            let intf = reg.reflect();
+            Self {
+                write:    BitRef::from(&intf.inputs["write"]),
+                data_in:  WireRef::from(&intf.inputs["data_in"]),
+                data_out: wire_id(&intf.outputs["data_out"]),
+            }
+        }
+    }
+
+    pub(super) struct ROMWiring { pub(super) out: WireRef, pub(super) addr: WireRef }
+    impl ROMWiring {
+        pub(super) fn new(rom: &ROM16) -> Self {
+            let intf = rom.reflect();
+            Self {
+                out:  WireRef::from(&intf.outputs["out"]),
+                addr: WireRef::from(&intf.inputs["addr"]),
+            }
+        }
+    }
+
+    pub(super) struct RAMWiring { pub(super) out: WireRef, pub(super) addr: WireRef, pub(super) write: BitRef, pub(super) data_in: WireRef }
+    impl RAMWiring {
+        pub(super) fn new(ram: &RAM16) -> Self {
+            let intf = ram.reflect();
+            Self {
+                out:     WireRef::from(&intf.outputs["data_out"]),
+                addr:    WireRef::from(&intf.inputs["addr"]),
+                write:   BitRef::from(&intf.inputs["write"]),
+                data_in: WireRef::from(&intf.inputs["data_in"]),
+            }
+        }
+    }
+
+    pub(super) struct MemorySystemWiring { pub(super) out: WireRef, pub(super) addr: WireRef, pub(super) write: BitRef, pub(super) data_in: WireRef }
+    impl MemorySystemWiring {
+        pub(super) fn new(ms: &MemorySystem16) -> Self {
+            let intf = ms.reflect();
+            Self {
+                out:     WireRef::from(&intf.outputs["data_out"]),
+                addr:    WireRef::from(&intf.inputs["addr"]),
+                write:   BitRef::from(&intf.inputs["write"]),
+                data_in: WireRef::from(&intf.inputs["data_in"]),
+            }
+        }
+    }
+}
+
 impl ChipState {
+
     /// Set the value of an input. Combinational outputs will reflect this on the next `get()`.
     pub fn set(&mut self, name: &str, value: u64) {
         self.input_vals.insert(name.to_string(), value);
