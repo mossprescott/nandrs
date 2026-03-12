@@ -1,6 +1,6 @@
 use crate::component::{Register16, Sequential16, RAM16, Computational16};
 use crate::declare::{Chip as _, IC, Reflect as _};
-use crate::simulate::{synthesize, initialize, MemoryMap};
+use crate::simulate::{simulate, MemoryMap};
 
 #[test]
 fn register_behavior() {
@@ -10,7 +10,7 @@ fn register_behavior() {
         intf: reg.reflect(),
         components: vec![Sequential16::Register(reg)],
     };
-    let mut state = initialize(synthesize(&chip, MemoryMap::new(vec![])));
+    let mut state = simulate(&chip, MemoryMap::new(vec![]));
 
     assert_eq!(state.get("data_out"), 0);
 
@@ -42,7 +42,7 @@ fn ram_behavior() {
         intf: ram.reflect(),
         components: vec![Computational16::RAM(ram)],
     };
-    let mut state = initialize(synthesize(&chip, MemoryMap::new(vec![])));
+    let mut state = simulate(&chip, MemoryMap::new(vec![]));
 
     assert_eq!(state.get("data_out"), 0);
 

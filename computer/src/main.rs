@@ -8,7 +8,7 @@ use minifb::{Key, Window, WindowOptions};
 use assignments::project_05::{Computer, flatten, find_ram, find_rom, find_screen, memory_system};
 use assignments::project_06::{assemble, Program};
 use simulator::declare::Chip as _;
-use simulator::simulate::{synthesize, initialize, RAMHandle};
+use simulator::simulate::{simulate, RAMHandle};
 
 const WIDTH: usize = 512;
 const HEIGHT: usize = 256;
@@ -185,7 +185,7 @@ fn main() {
 
     eprint!("Synthesizing...");
     let chip = flatten(Computer::chip());
-    let mut state = initialize(synthesize(&chip, memory_system()));
+    let mut state = simulate(&chip, memory_system());
     eprintln!(" done.");
 
     find_rom(&state).flash(instructions.iter().map(|&v| v as u64).collect());

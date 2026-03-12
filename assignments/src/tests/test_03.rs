@@ -1,6 +1,6 @@
 use crate::project_03::{PC, flatten};
 use simulator::declare::{Chip as _};
-use simulator::simulate::{MemoryMap, synthesize, initialize};
+use simulator::simulate::{MemoryMap, simulate};
 use simulator::print_graph;
 
 #[test]
@@ -13,7 +13,7 @@ fn pc_behavior() {
     let chip = flatten(chip);
 
     let no_ram = MemoryMap::new(vec![]);
-    let mut state = initialize(synthesize(&chip, no_ram));
+    let mut state = simulate(&chip, no_ram);
 
     assert_eq!(state.get("out"), 0);
 

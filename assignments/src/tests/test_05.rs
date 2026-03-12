@@ -1,7 +1,7 @@
 use crate::project_05::{CPU, Computer, flatten, SCREEN_BASE, find_ram, find_screen, find_rom, memory_system};
 use crate::project_06::parse_statement;
 use simulator::declare::Chip as _;
-use simulator::simulate::{synthesize, initialize, MemoryMap};
+use simulator::simulate::{simulate, MemoryMap};
 use simulator::component::{Computational, MemorySystem16};
 use simulator::print_graph;
 
@@ -10,7 +10,7 @@ use simulator::print_graph;
 fn memory_system_behavior() {
     let chip = flatten(MemorySystem16::chip());
 
-    let mut state = initialize(synthesize(&chip, memory_system()));
+    let mut state = simulate(&chip, memory_system());
 
     let ram    = find_ram(&state);
     let screen = find_screen(&state);
@@ -71,7 +71,7 @@ fn cpu_behavior() {
     let chip = flatten(chip);
 
     let no_ram = MemoryMap::new(vec![]);
-    let mut state = initialize(synthesize(&chip, no_ram));
+    let mut state = simulate(&chip, no_ram);
 
     // Load constant 1234 into A
     state.set("instr", instr("@1234").into());
@@ -118,7 +118,7 @@ fn computer_add_behavior() {
 
     let chip = flatten(chip);
 
-    let mut state = initialize(synthesize(&chip, memory_system()));
+    let mut state = simulate(&chip, memory_system());
 
     let rom = find_rom(&state);
     let ram = find_ram(&state);
@@ -165,7 +165,7 @@ fn computer_max_behavior() {
 
     let chip = flatten(chip);
 
-    let mut state = initialize(synthesize(&chip, memory_system()));
+    let mut state = simulate(&chip, memory_system());
 
     let rom = find_rom(&state);
     let ram = find_ram(&state);
@@ -198,7 +198,7 @@ fn computer_max_behavior() {
 #[test]
 fn computer_indirect_write() {
     let chip = flatten(Computer::chip());
-    let mut state = initialize(synthesize(&chip, memory_system()));
+    let mut state = simulate(&chip, memory_system());
 
     let rom = find_rom(&state);
     let ram = find_ram(&state);
@@ -221,7 +221,7 @@ fn computer_indirect_write() {
 #[test]
 fn computer_indirect_jump() {
     let chip = flatten(Computer::chip());
-    let mut state = initialize(synthesize(&chip, memory_system()));
+    let mut state = simulate(&chip, memory_system());
 
     let rom = find_rom(&state);
     let ram = find_ram(&state);
@@ -243,7 +243,7 @@ fn computer_indirect_jump() {
 #[test]
 fn computer_stack_adjust() {
     let chip = flatten(Computer::chip());
-    let mut state = initialize(synthesize(&chip, memory_system()));
+    let mut state = simulate(&chip, memory_system());
 
     let rom = find_rom(&state);
     let ram = find_ram(&state);
