@@ -1,6 +1,7 @@
 pub mod bool;
 pub mod component;
 pub mod declare;
+pub mod device;
 pub mod eval;
 pub mod nat;
 pub mod simulate;
