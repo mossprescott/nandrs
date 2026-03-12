@@ -56,7 +56,6 @@ where
                 }
                 ms_handles.push(MSHandle {
                     wire_id: out_id,
-                    latched_addr: 0,
                     device: Rc::new(RefCell::new(MSDevice { devices: overlays })),
                 });
             }
@@ -184,7 +183,6 @@ impl ChipState {
                 let out_id = wire_id(&intf.outputs["data_out"]);
                 let new_addr = read_bus(&self.wire_state, &intf.inputs["addr"]);
                 if let Some(h) = self.ms_handles.iter_mut().find(|h| h.wire_id == out_id) {
-                    h.latched_addr = new_addr;
                     let _ = h.device.borrow_mut().set_addr(new_addr as usize);
                     h.device.borrow_mut().ticktock();
                 }
@@ -354,7 +352,6 @@ pub enum BusResident {
 /// Private: simulation state for a MemorySystem component.
 struct MSHandle {
     wire_id: usize,
-    latched_addr: u64,
     device: Rc<RefCell<MSDevice>>,
 }
 
