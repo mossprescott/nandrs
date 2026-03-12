@@ -27,20 +27,20 @@ where
             Computational::RAM(ram) => {
                 let intf = ram.reflect();
                 assert_eq!(intf.outputs["data_out"].width, 16);
-                let out_id = wire_id(&intf.outputs["data_out"]);
+                let out_id = WireID::from(&intf.outputs["data_out"]);
                 let inner: DeviceRAM = Rc::new(RefCell::new(crate::device::RAM::new(ram.size)));
                 bus_residents.push(BusResident::RAM(RAMHandle { wire_id: out_id, base: 0, inner }));
             }
             Computational::ROM(rom) => {
                 let intf = rom.reflect();
                 bus_residents.push(BusResident::ROM(ROMHandle {
-                    wire_id: wire_id(&intf.outputs["out"]),
+                    wire_id: WireID::from(&intf.outputs["out"]),
                     inner: Rc::new(RefCell::new(crate::device::ROM::new(rom.size))),
                 }));
             }
             Computational::MemorySystem(ms) => {
                 let intf = ms.reflect();
-                let out_id = wire_id(&intf.outputs["data_out"]);
+                let out_id = WireID::from(&intf.outputs["data_out"]);
                 let map = memory_map.take().expect("only one MemorySystem supported");
                 let mut overlays: Vec<crate::device::Overlay<DeviceRAM>> = Vec::new();
                 for r in map.contents {
@@ -65,45 +65,45 @@ where
         let mut next_index = 0usize;
         let mut assign = |id: WireID| {
             if let std::collections::hash_map::Entry::Vacant(e) = wire_indexes.entry(id) {
-                e.insert(WireIndex { index: next_index as u32 });
+                e.insert(WireIndex(next_index as u32));
                 next_index += 1;
             }
         };
         let intf = chip.reflect();
-        for b in intf.inputs.values()  { assign(wire_id(b)); }
-        for b in intf.outputs.values() { assign(wire_id(b)); }
+        for b in intf.inputs.values()  { assign(WireID::from(b)); }
+        for b in intf.outputs.values() { assign(WireID::from(b)); }
         for comp in &components {
             match comp {
                 Computational::Nand(c) => {
                     let intf = c.reflect();
-                    assign(wire_id(&intf.inputs["a"]));
-                    assign(wire_id(&intf.inputs["b"]));
-                    assign(wire_id(&intf.outputs["out"]));
+                    assign(WireID::from(&intf.inputs["a"]));
+                    assign(WireID::from(&intf.inputs["b"]));
+                    assign(WireID::from(&intf.outputs["out"]));
                 }
                 Computational::Register(c) => {
                     let intf = c.reflect();
-                    assign(wire_id(&intf.inputs["write"]));
-                    assign(wire_id(&intf.inputs["data_in"]));
-                    assign(wire_id(&intf.outputs["data_out"]));
+                    assign(WireID::from(&intf.inputs["write"]));
+                    assign(WireID::from(&intf.inputs["data_in"]));
+                    assign(WireID::from(&intf.outputs["data_out"]));
                 }
                 Computational::RAM(c) => {
                     let intf = c.reflect();
-                    assign(wire_id(&intf.outputs["data_out"]));
-                    assign(wire_id(&intf.inputs["addr"]));
-                    assign(wire_id(&intf.inputs["write"]));
-                    assign(wire_id(&intf.inputs["data_in"]));
+                    assign(WireID::from(&intf.outputs["data_out"]));
+                    assign(WireID::from(&intf.inputs["addr"]));
+                    assign(WireID::from(&intf.inputs["write"]));
+                    assign(WireID::from(&intf.inputs["data_in"]));
                 }
                 Computational::ROM(c) => {
                     let intf = c.reflect();
-                    assign(wire_id(&intf.outputs["out"]));
-                    assign(wire_id(&intf.inputs["addr"]));
+                    assign(WireID::from(&intf.outputs["out"]));
+                    assign(WireID::from(&intf.inputs["addr"]));
                 }
                 Computational::MemorySystem(c) => {
                     let intf = c.reflect();
-                    assign(wire_id(&intf.outputs["data_out"]));
-                    assign(wire_id(&intf.inputs["addr"]));
-                    assign(wire_id(&intf.inputs["write"]));
-                    assign(wire_id(&intf.inputs["data_in"]));
+                    assign(WireID::from(&intf.outputs["data_out"]));
+                    assign(WireID::from(&intf.inputs["addr"]));
+                    assign(WireID::from(&intf.inputs["write"]));
+                    assign(WireID::from(&intf.inputs["data_in"]));
                 }
                 Computational::Const(_) => {}
             }
@@ -117,7 +117,7 @@ where
             Computational::Register(c)     => CW::Register(wiring::RegisterWiring::new(c, &wire_indexes)),
             Computational::RAM(c)          => {
                 let intf = c.reflect();
-                let out_id = wire_id(&intf.outputs["data_out"]);
+                let out_id = WireID::from(&intf.outputs["data_out"]);
                 let device = bus_residents.iter().find_map(|res| match res {
                     BusResident::RAM(h) if h.wire_id == out_id => Some(Rc::clone(&h.inner)),
                     _ => None,
@@ -126,7 +126,7 @@ where
             }
             Computational::ROM(c)          => {
                 let intf = c.reflect();
-                let out_id = wire_id(&intf.outputs["out"]);
+                let out_id = WireID::from(&intf.outputs["out"]);
                 let device = bus_residents.iter().find_map(|res| match res {
                     BusResident::ROM(h) if h.wire_id == out_id => Some(Rc::clone(&h.inner)),
                     _ => None,
@@ -135,7 +135,7 @@ where
             }
             Computational::MemorySystem(c) => {
                 let intf = c.reflect();
-                let out_id = wire_id(&intf.outputs["data_out"]);
+                let out_id = WireID::from(&intf.outputs["data_out"]);
                 let device = ms_handles.iter().find_map(|h| {
                     if h.wire_id == out_id { Some(Rc::clone(&h.device)) } else { None }
                 }).expect("MS device not found in ms_handles");
@@ -207,12 +207,16 @@ pub struct ChipState {
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct WireID(usize);
 
+impl From<&BusRef> for WireID {
+    fn from(busref: &BusRef) -> Self {
+        WireID(Rc::as_ptr(&busref.id) as usize)
+    }
+}
+
 /// Index of the storage location of a wire within a flat buffer. Each wire has a unique index,
 /// running from 0 up to the total number of distinct wires in the circuit.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-struct WireIndex {
-    index: u32,
-}
+struct WireIndex(u32);
 
 /// Pre-computed wiring info about components, used during evaluation.
 mod wiring {
@@ -220,7 +224,7 @@ mod wiring {
     use std::cell::RefCell;
     use crate::component::{Nand, Register16, RAM16, ROM16, MemorySystem16};
     use crate::declare::{BusRef, Reflect};
-    use super::{WireIndex, Indexes, wire_id, MSDevice};
+    use super::{WireIndex, WireID, Indexes, MSDevice};
 
     pub(super) enum ComponentWiring {
         Nand(NandWiring),
@@ -236,13 +240,13 @@ mod wiring {
     #[derive(Clone, Copy, PartialEq, Eq, Hash)]
     pub(super) struct BitRef { pub(super) id: WireIndex, pub(super) offset: u8 }
     impl BitRef {
-        pub(super) fn new(b: &BusRef, ix: &Indexes) -> Self { BitRef { id: ix[&wire_id(b)], offset: b.offset as u8 } }
+        pub(super) fn new(b: &BusRef, ix: &Indexes) -> Self { BitRef { id: ix[&WireID::from(b)], offset: b.offset as u8 } }
     }
 
     #[derive(Clone, Copy, PartialEq, Eq, Hash)]
     pub(super) struct WireRef { pub(super) id: WireIndex, pub(super) offset: u8, pub(super) width: u8 }
     impl WireRef {
-        pub(super) fn new(b: &BusRef, ix: &Indexes) -> Self { WireRef { id: ix[&wire_id(b)], offset: b.offset as u8, width: b.width as u8 } }
+        pub(super) fn new(b: &BusRef, ix: &Indexes) -> Self { WireRef { id: ix[&WireID::from(b)], offset: b.offset as u8, width: b.width as u8 } }
     }
 
     pub(super) struct NandWiring { pub(super) a: BitRef, pub(super) b: BitRef, pub(super) out: BitRef }
@@ -264,7 +268,7 @@ mod wiring {
             Self {
                 write:    BitRef::new(&intf.inputs["write"], ix),
                 data_in:  WireRef::new(&intf.inputs["data_in"], ix),
-                data_out: ix[&wire_id(&intf.outputs["data_out"])],
+                data_out: ix[&WireID::from(&intf.outputs["data_out"])],
             }
         }
     }
@@ -352,7 +356,7 @@ impl ChipState {
                 wiring::ComponentWiring::Register(reg) => {
                     if read_bit(&self.wire_state, reg.write) {
                         let val = read_bus(&self.wire_state, reg.data_in);
-                        self.reg_state[reg.data_out.index as usize] = val;
+                        self.reg_state[reg.data_out.0 as usize] = val;
                     }
                 }
                 wiring::ComponentWiring::RAM(ram) => {
@@ -453,30 +457,26 @@ fn eval_nands(ws: &mut [u64], component_wiring: &[wiring::ComponentWiring]) {
     }
 }
 
-fn wire_id(busref: &BusRef) -> WireID {
-    WireID(Rc::as_ptr(&busref.id) as usize)
-}
-
 fn width_mask(width: usize) -> u64 {
     if width >= 64 { u64::MAX } else { (1u64 << width) - 1 }
 }
 
 fn read_bus(ws: &[u64], b: wiring::WireRef) -> u64 {
-    (ws[b.id.index as usize] >> b.offset) & width_mask(b.width as usize)
+    (ws[b.id.0 as usize] >> b.offset) & width_mask(b.width as usize)
 }
 
 fn write_bus(ws: &mut [u64], b: wiring::WireRef, value: u64) {
     let mask = width_mask(b.width as usize);
-    ws[b.id.index as usize] = (ws[b.id.index as usize] & !(mask << b.offset)) | ((value & mask) << b.offset);
+    ws[b.id.0 as usize] = (ws[b.id.0 as usize] & !(mask << b.offset)) | ((value & mask) << b.offset);
 }
 
 fn read_bit(ws: &[u64], b: wiring::BitRef) -> bool {
-    (ws[b.id.index as usize] >> b.offset) & 1 != 0
+    (ws[b.id.0 as usize] >> b.offset) & 1 != 0
 }
 
 fn write_bit(ws: &mut [u64], b: wiring::BitRef, value: bool) {
     let bit = 1u64 << b.offset;
-    if value { ws[b.id.index as usize] |= bit; } else { ws[b.id.index as usize] &= !bit; }
+    if value { ws[b.id.0 as usize] |= bit; } else { ws[b.id.0 as usize] &= !bit; }
 }
 
 /// Access to auxiliary devices "on the bus" which the harness needs to inspect.
