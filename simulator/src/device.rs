@@ -99,4 +99,48 @@ impl MemoryDevice for RAM {
     }
 }
 
+pub struct Overlay<T> {
+    base: Addr,
+    device: T,
+}
 
+/// Complete memory (sub)system by overlaying multiple devices at different locations in the address space.
+pub struct MemorySystem<T> {
+    devices: Vec<Overlay<T>>,
+    active: Option<usize>,
+}
+
+impl<T: MemoryDevice> MemoryDevice for MemorySystem<T> {
+    fn set_addr(&mut self, addr: Addr) -> Result<(), Error> {
+        for (i, overlay) in self.devices.iter_mut().enumerate() {
+            if addr >= overlay.base {
+                if overlay.device.set_addr(addr - overlay.base).is_ok() {
+                    self.active = Some(i);
+                    return Ok(());
+                }
+            }
+        }
+        self.active = None;
+        Err(Error::AddressOutOfRange(addr))
+    }
+
+    fn ticktock(&mut self) {
+        for overlay in &mut self.devices {
+            overlay.device.ticktock();
+        }
+    }
+
+    fn read(&self) -> Result<Data, Error> {
+        match self.active {
+            Some(i) => self.devices[i].device.read(),
+            None    => Err(Error::AddressOutOfRange(0)),
+        }
+    }
+
+    fn write(&mut self, word: Data) -> Result<(), Error> {
+        match self.active {
+            Some(i) => self.devices[i].device.write(word),
+            None    => Err(Error::AddressOutOfRange(0)),
+        }
+    }
+}
