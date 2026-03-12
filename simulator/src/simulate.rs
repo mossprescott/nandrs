@@ -186,8 +186,8 @@ pub struct ChipState {
     /// Static circuit description.
     wiring: ChipWiring,
 
-    /// Values from outside to be applied at the beginning of each evaluate().
-    input_vals: HashMap<String, u64>,
+    /// Current input values, keyed by pre-resolved wire location for direct use in evaluate().
+    input_vals: HashMap<wiring::WireRef, u64>,
 
     /// Any new inputs since last evaluate()?
     dirty: bool,
@@ -209,7 +209,7 @@ struct WireID(usize);
 
 /// Index of the storage location of a wire within a flat buffer. Each wire has a unique index,
 /// running from 0 up to the total number of distinct wires in the circuit.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct WireIndex {
     index: usize,
 }
@@ -233,13 +233,13 @@ mod wiring {
         Const,
     }
 
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, PartialEq, Eq, Hash)]
     pub(super) struct BitRef { pub(super) id: WireIndex, pub(super) offset: usize }
     impl BitRef {
         pub(super) fn new(b: &BusRef, ix: &Indexes) -> Self { BitRef { id: ix[&wire_id(b)], offset: b.offset } }
     }
 
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, PartialEq, Eq, Hash)]
     pub(super) struct WireRef { pub(super) id: WireIndex, pub(super) offset: usize, pub(super) width: usize }
     impl WireRef {
         pub(super) fn new(b: &BusRef, ix: &Indexes) -> Self { WireRef { id: ix[&wire_id(b)], offset: b.offset, width: b.width } }
@@ -314,7 +314,9 @@ impl ChipState {
 
     /// Set the value of an input. Combinational outputs will reflect this on the next `get()`.
     pub fn set(&mut self, name: &str, value: u64) {
-        self.input_vals.insert(name.to_string(), value);
+        if let Some(&wr) = self.wiring.input_wiring.get(name) {
+            self.input_vals.insert(wr, value);
+        }
         self.dirty = true;
     }
 
@@ -407,10 +409,8 @@ impl ChipState {
         self.wire_state.copy_from_slice(&self.reg_state);
 
         // Seed chip inputs (may overwrite reg values on shared wires).
-        for (name, &val) in &self.input_vals {
-            if let Some(&wr) = self.wiring.input_wiring.get(name) {
-                write_bus(&mut self.wire_state, wr, val);
-            }
+        for (&wr, &val) in &self.input_vals {
+            write_bus(&mut self.wire_state, wr, val);
         }
 
         // Seed RAM/ROM/MS outputs from their current addr input.
