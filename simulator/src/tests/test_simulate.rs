@@ -48,6 +48,7 @@ fn ram_behavior() {
 
     // Write 42 to address 5.
     state.set("addr", 5);
+    state.ticktock(); // latch the address
     state.set("data_in", 42);
     state.set("write", 1);
     state.ticktock();
@@ -58,25 +59,24 @@ fn ram_behavior() {
 
     // Write 99 to address 10.
     state.set("addr", 10);
+    state.ticktock(); // latch the address
     state.set("data_in", 99);
     state.set("write", 1);
     state.ticktock();
 
     state.set("write", 0);
-    state.ticktock(); // allow to latch before reading
     assert_eq!(state.get("data_out"), 99);
 
     // Read address 5 — other address unaffected.
     state.set("addr", 5);
+    state.ticktock(); // latch the address
     state.set("write", 0);
     state.ticktock();
-    state.ticktock(); // allow to latch before reading
     assert_eq!(state.get("data_out"), 42);
 
     // Unwritten address reads 0.
     state.set("addr", 0);
-    state.ticktock();
-    state.ticktock(); // allow to latch before reading
+    state.ticktock(); // latch the address
     assert_eq!(state.get("data_out"), 0);
 }
 

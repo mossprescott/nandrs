@@ -103,6 +103,8 @@ pub struct ChipState {
     ms_handles: Vec<MSHandle>,
 }
 
+/// Arbitrary (ptr) value which identifies the storage location for some wire, used as a key to
+/// store states in a HashMap, so it only needs to be unique to each wire and hashable.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct WireID(usize);
 
@@ -232,7 +234,7 @@ impl ChipState {
 
         // Collect updates based on the current wire_state.
         let mut reg_updates: Vec<(WireID, u64)> = Vec::new();
-        let mut ram_writes: Vec<(WireID, u64, u64)> = Vec::new();  // (out_id, addr, val)
+        let mut ram_writes: Vec<(WireID, u64)> = Vec::new();        // (out_id, val)
         let mut ms_writes:  Vec<(WireID, u64)> = Vec::new();       // (out_id, val)
 
         for comp in &self.component_wiring {
@@ -244,11 +246,9 @@ impl ChipState {
                     }
                 }
                 wiring::ComponentWiring::RAM(ram) => {
-                    // Write uses the addr computed in this cycle's initial evaluate().
                     if read_bit(&self.wire_state, &ram.write) {
-                        let addr = read_bus(&self.wire_state, &ram.addr);
-                        let val  = read_bus(&self.wire_state, &ram.data_in);
-                        ram_writes.push((ram.out.id, addr, val));
+                        let val = read_bus(&self.wire_state, &ram.data_in);
+                        ram_writes.push((ram.out.id, val));
                     }
                 }
                 wiring::ComponentWiring::MemorySystem(ms) => {
@@ -264,11 +264,11 @@ impl ChipState {
         for (id, val) in reg_updates {
             self.reg_state.insert(id, val);
         }
-        for (out_id, addr, val) in ram_writes {
+        for (out_id, val) in ram_writes {
             if let Some(BusResident::RAM(h)) = self.bus_residents.iter()
                 .find(|res| matches!(res, BusResident::RAM(h) if h.wire_id == out_id))
             {
-                h.poke(addr, val);
+                let _ = h.inner.borrow_mut().write(val);
             }
         }
         // MS write uses device's currently-latched addr (from previous cycle).
@@ -278,15 +278,27 @@ impl ChipState {
             }
         }
 
-        // Latch MS addr from the initial wire_state (Nand-computed from current inputs and
-        // reg_state) so the re-evaluate below shows the correct memory data.
+        // Latch RAM and MS addr from the initial wire_state so the re-evaluate below
+        // shows the correct memory data.
         for comp in &self.component_wiring {
-            if let wiring::ComponentWiring::MemorySystem(ms) = comp {
-                let new_addr = read_bus(&self.wire_state, &ms.addr);
-                if let Some(h) = self.ms_handles.iter_mut().find(|h| h.wire_id == ms.out.id) {
-                    let _ = h.device.borrow_mut().set_addr(new_addr as usize);
-                    h.device.borrow_mut().ticktock();
+            match comp {
+                wiring::ComponentWiring::RAM(ram) => {
+                    let new_addr = read_bus(&self.wire_state, &ram.addr);
+                    if let Some(BusResident::RAM(h)) = self.bus_residents.iter()
+                        .find(|res| matches!(res, BusResident::RAM(h) if h.wire_id == ram.out.id))
+                    {
+                        let _ = h.inner.borrow_mut().set_addr(new_addr as usize);
+                        h.inner.borrow_mut().ticktock();
+                    }
                 }
+                wiring::ComponentWiring::MemorySystem(ms) => {
+                    let new_addr = read_bus(&self.wire_state, &ms.addr);
+                    if let Some(h) = self.ms_handles.iter_mut().find(|h| h.wire_id == ms.out.id) {
+                        let _ = h.device.borrow_mut().set_addr(new_addr as usize);
+                        h.device.borrow_mut().ticktock();
+                    }
+                }
+                _ => {}
             }
         }
 
@@ -330,10 +342,10 @@ impl ChipState {
         for comp in &self.component_wiring {
             match comp {
                 wiring::ComponentWiring::RAM(ram) => {
-                    let addr = read_bus(&ws, &ram.addr);
                     let val = self.bus_residents.iter()
                         .find_map(|res| match res {
-                            BusResident::RAM(h) if h.wire_id == ram.out.id => Some(h.peek(addr)),
+                            BusResident::RAM(h) if h.wire_id == ram.out.id =>
+                                Some(h.inner.borrow().read().unwrap_or(0)),
                             _ => None,
                         })
                         .unwrap_or(0);
