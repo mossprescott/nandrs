@@ -18,7 +18,7 @@ where
     C: Clone + crate::Reflect + Into<Computational16>,
 {
     let components: Vec<Computational16> = chip.components.iter().cloned().map(Into::into).collect();
-    let mut reg_state: HashMap<usize, u64> = HashMap::new();
+    let mut reg_state: HashMap<WireID, u64> = HashMap::new();
     let mut bus_residents: Vec<BusResident> = Vec::new();
     let mut ms_handles: Vec<MSHandle> = Vec::new();
     let mut memory_map = Some(memory_map);
@@ -51,7 +51,7 @@ where
                 for r in map.contents {
                     let ram: DeviceRAM = Rc::new(RefCell::new(crate::device::RAM::new(r.size)));
                     // wire_id=0: MS-region RAMs have no direct component wire; base identifies the region.
-                    bus_residents.push(BusResident::RAM(RAMHandle { wire_id: 0, base: r.base, inner: Rc::clone(&ram) }));
+                    bus_residents.push(BusResident::RAM(RAMHandle { wire_id: WireID(0), base: r.base, inner: Rc::clone(&ram) }));
                     overlays.push(crate::device::Overlay { base: r.base, device: ram });
                 }
                 ms_handles.push(MSHandle {
@@ -92,15 +92,19 @@ where
 pub struct ChipState {
     intf: Interface,
     component_wiring: Vec<wiring::ComponentWiring>,
+
     input_vals: HashMap<String, u64>,
-    wire_state: HashMap<usize, u64>,
-    reg_state: HashMap<usize, u64>,
+    dirty: bool,
+
+    wire_state: HashMap<WireID, u64>,
+    reg_state: HashMap<WireID, u64>,
+
     bus_residents: Vec<BusResident>,
     ms_handles: Vec<MSHandle>,
-    dirty: bool,
 }
 
-type WireID = usize;
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct WireID(usize);
 
 /// Pre-computed wiring info about components, used during evaluation.
 mod wiring {
@@ -227,9 +231,9 @@ impl ChipState {
         self.evaluate();
 
         // Collect updates based on the current wire_state.
-        let mut reg_updates: Vec<(usize, u64)> = Vec::new();
-        let mut ram_writes: Vec<(usize, u64, u64)> = Vec::new();  // (out_id, addr, val)
-        let mut ms_writes:  Vec<(usize, u64)> = Vec::new();       // (out_id, val)
+        let mut reg_updates: Vec<(WireID, u64)> = Vec::new();
+        let mut ram_writes: Vec<(WireID, u64, u64)> = Vec::new();  // (out_id, addr, val)
+        let mut ms_writes:  Vec<(WireID, u64)> = Vec::new();       // (out_id, val)
 
         for comp in &self.component_wiring {
             match comp {
@@ -306,7 +310,7 @@ impl ChipState {
     }
 
     fn evaluate(&mut self) {
-        let mut ws: HashMap<usize, u64> = HashMap::new();
+        let mut ws: HashMap<WireID, u64> = HashMap::new();
 
         // Seed chip inputs.
         for (name, &val) in &self.input_vals {
@@ -371,7 +375,7 @@ impl ChipState {
     }
 }
 
-fn eval_nands(ws: &mut HashMap<usize, u64>, component_wiring: &[wiring::ComponentWiring]) {
+fn eval_nands(ws: &mut HashMap<WireID, u64>, component_wiring: &[wiring::ComponentWiring]) {
     for comp in component_wiring {
         if let wiring::ComponentWiring::Nand(nand) = comp {
             let a = read_bit(ws, &nand.a);
@@ -381,30 +385,30 @@ fn eval_nands(ws: &mut HashMap<usize, u64>, component_wiring: &[wiring::Componen
     }
 }
 
-fn wire_id(busref: &BusRef) -> usize {
-    Rc::as_ptr(&busref.id) as usize
+fn wire_id(busref: &BusRef) -> WireID {
+    WireID(Rc::as_ptr(&busref.id) as usize)
 }
 
 fn width_mask(width: usize) -> u64 {
     if width >= 64 { u64::MAX } else { (1u64 << width) - 1 }
 }
 
-fn read_bus(ws: &HashMap<usize, u64>, b: &wiring::WireRef) -> u64 {
+fn read_bus(ws: &HashMap<WireID, u64>, b: &wiring::WireRef) -> u64 {
     let raw = ws.get(&b.id).copied().unwrap_or(0);
     (raw >> b.offset) & width_mask(b.width)
 }
 
-fn write_bus(ws: &mut HashMap<usize, u64>, b: &wiring::WireRef, value: u64) {
+fn write_bus(ws: &mut HashMap<WireID, u64>, b: &wiring::WireRef, value: u64) {
     let mask = width_mask(b.width);
     let entry = ws.entry(b.id).or_insert(0);
     *entry = (*entry & !(mask << b.offset)) | ((value & mask) << b.offset);
 }
 
-fn read_bit(ws: &HashMap<usize, u64>, b: &wiring::BitRef) -> bool {
+fn read_bit(ws: &HashMap<WireID, u64>, b: &wiring::BitRef) -> bool {
     (ws.get(&b.id).copied().unwrap_or(0) >> b.offset) & 1 != 0
 }
 
-fn write_bit(ws: &mut HashMap<usize, u64>, b: &wiring::BitRef, value: bool) {
+fn write_bit(ws: &mut HashMap<WireID, u64>, b: &wiring::BitRef, value: bool) {
     let entry = ws.entry(b.id).or_insert(0);
     let bit = 1u64 << b.offset;
     if value { *entry |= bit; } else { *entry &= !bit; }
@@ -420,7 +424,7 @@ pub enum BusResident {
 
 /// Private: simulation state for a MemorySystem component.
 struct MSHandle {
-    wire_id: usize,
+    wire_id: WireID,
     device: Rc<RefCell<MSDevice>>,
 }
 
@@ -430,7 +434,7 @@ struct MSHandle {
 /// `base` is the region's base address in the memory map (0 for standalone RAM).
 #[derive(Clone)]
 pub struct RAMHandle {
-    pub(crate) wire_id: usize,
+    wire_id: WireID,
     pub base: usize,
     inner: Rc<RefCell<crate::device::RAM>>,
 }
@@ -444,7 +448,7 @@ impl RAMHandle {
 /// A clonable handle to a ROM instance in the simulated circuit.
 #[derive(Clone)]
 pub struct ROMHandle {
-    wire_id: usize,
+    wire_id: WireID,
     inner: Rc<RefCell<crate::device::ROM>>,
 }
 
