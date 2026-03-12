@@ -76,7 +76,6 @@ where
 
     let mut state = ChipState {
         intf: chip.reflect(),
-        components,
         component_wiring,
         input_vals: HashMap::new(),
         wire_state: HashMap::new(),
@@ -92,7 +91,6 @@ where
 /// Runtime state of a simulated chip, and access to its inputs and outputs.
 pub struct ChipState {
     intf: Interface,
-    components: Vec<Computational16>,
     component_wiring: Vec<wiring::ComponentWiring>,
     input_vals: HashMap<String, u64>,
     wire_state: HashMap<usize, u64>,
@@ -313,7 +311,7 @@ impl ChipState {
         // Seed chip inputs.
         for (name, &val) in &self.input_vals {
             if let Some(b) = self.intf.inputs.get(name) {
-                write_bus(&mut ws, b, val);
+                write_bus(&mut ws, &wiring::WireRef::from(b), val);
             }
         }
 
@@ -325,44 +323,38 @@ impl ChipState {
         // Seed RAM/ROM/MS outputs from their current addr input.
         // The addr wire is either an external chip input (seeded above) or a register output
         // (seeded from reg_state above), so it's available in ws before the Nand passes.
-        for comp in &self.components {
+        for comp in &self.component_wiring {
             match comp {
-                Computational::RAM(ram) => {
-                    let intf = ram.reflect();
-                    let out_id = wire_id(&intf.outputs["data_out"]);
-                    let addr = read_bus(&ws, &wiring::WireRef::from(&intf.inputs["addr"]));
+                wiring::ComponentWiring::RAM(ram) => {
+                    let addr = read_bus(&ws, &ram.addr);
                     let val = self.bus_residents.iter()
                         .find_map(|res| match res {
-                            BusResident::RAM(h) if h.wire_id == out_id => Some(h.peek(addr)),
+                            BusResident::RAM(h) if h.wire_id == ram.out.id => Some(h.peek(addr)),
                             _ => None,
                         })
                         .unwrap_or(0);
-                    write_bus(&mut ws, &intf.outputs["data_out"], val);
+                    write_bus(&mut ws, &ram.out, val);
                 }
-                Computational::ROM(rom) => {
-                    let intf = rom.reflect();
-                    let out_id = wire_id(&intf.outputs["out"]);
+                wiring::ComponentWiring::ROM(rom) => {
                     let val = self.bus_residents.iter()
                         .find_map(|res| match res {
-                            BusResident::ROM(h) if h.wire_id == out_id =>
+                            BusResident::ROM(h) if h.wire_id == rom.out.id =>
                                 Some(h.inner.borrow().read().unwrap_or(0)),
                             _ => None,
                         })
                         .unwrap_or(0);
-                    write_bus(&mut ws, &intf.outputs["out"], val);
+                    write_bus(&mut ws, &rom.out, val);
                 }
-                Computational::MemorySystem(ms) => {
-                    let intf = ms.reflect();
-                    let out_id = wire_id(&intf.outputs["data_out"]);
+                wiring::ComponentWiring::MemorySystem(ms) => {
                     // Read from device's currently-latched addr (device handles routing).
                     let val = self.ms_handles.iter()
-                        .find_map(|h| if h.wire_id == out_id {
+                        .find_map(|h| if h.wire_id == ms.out.id {
                             Some(h.device.borrow().read().unwrap_or(0))
                         } else {
                             None
                         })
                         .unwrap_or(0);
-                    write_bus(&mut ws, &intf.outputs["data_out"], val);
+                    write_bus(&mut ws, &ms.out, val);
                 }
                 _ => {}
             }
@@ -372,20 +364,19 @@ impl ChipState {
         // (e.g. MemorySystem muxes), second lets downstream gates (ALU) use the
         // correctly computed values. Needed because component order puts CPU before
         // MemorySystem in the flattened list.
-        eval_nands(&mut ws, &self.components);
-        eval_nands(&mut ws, &self.components);
+        eval_nands(&mut ws, &self.component_wiring);
+        eval_nands(&mut ws, &self.component_wiring);
 
         self.wire_state = ws;
     }
 }
 
-fn eval_nands(ws: &mut HashMap<usize, u64>, components: &[Computational16]) {
-    for comp in components {
-        if let Computational::Nand(nand) = comp {
-            let intf = nand.reflect();
-            let a = read_bit(ws, &wiring::BitRef::from(&intf.inputs["a"]));
-            let b = read_bit(ws, &wiring::BitRef::from(&intf.inputs["b"]));
-            write_bit(ws, &intf.outputs["out"], !(a & b));
+fn eval_nands(ws: &mut HashMap<usize, u64>, component_wiring: &[wiring::ComponentWiring]) {
+    for comp in component_wiring {
+        if let wiring::ComponentWiring::Nand(nand) = comp {
+            let a = read_bit(ws, &nand.a);
+            let b = read_bit(ws, &nand.b);
+            write_bit(ws, &nand.out, !(a & b));
         }
     }
 }
@@ -403,9 +394,9 @@ fn read_bus(ws: &HashMap<usize, u64>, b: &wiring::WireRef) -> u64 {
     (raw >> b.offset) & width_mask(b.width)
 }
 
-fn write_bus(ws: &mut HashMap<usize, u64>, b: &BusRef, value: u64) {
+fn write_bus(ws: &mut HashMap<usize, u64>, b: &wiring::WireRef, value: u64) {
     let mask = width_mask(b.width);
-    let entry = ws.entry(wire_id(b)).or_insert(0);
+    let entry = ws.entry(b.id).or_insert(0);
     *entry = (*entry & !(mask << b.offset)) | ((value & mask) << b.offset);
 }
 
@@ -413,8 +404,8 @@ fn read_bit(ws: &HashMap<usize, u64>, b: &wiring::BitRef) -> bool {
     (ws.get(&b.id).copied().unwrap_or(0) >> b.offset) & 1 != 0
 }
 
-fn write_bit(ws: &mut HashMap<usize, u64>, b: &BusRef, value: bool) {
-    let entry = ws.entry(wire_id(b)).or_insert(0);
+fn write_bit(ws: &mut HashMap<usize, u64>, b: &wiring::BitRef, value: bool) {
+    let entry = ws.entry(b.id).or_insert(0);
     let bit = 1u64 << b.offset;
     if value { *entry |= bit; } else { *entry &= !bit; }
 }
