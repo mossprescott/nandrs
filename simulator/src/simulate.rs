@@ -4,6 +4,10 @@ use std::rc::Rc;
 
 use crate::declare::{BusRef, IC, Interface, Reflect as _};
 use crate::component::{Computational, Computational16};
+use crate::device::MemoryDevice as _;
+
+type DeviceRAM = Rc<RefCell<crate::device::RAM>>;
+type MSDevice   = crate::device::MemorySystem<DeviceRAM>;
 
 /// Transform circuit description for simulation.
 ///
@@ -16,6 +20,7 @@ where
     let components: Vec<Computational16> = chip.components.iter().cloned().map(Into::into).collect();
     let mut reg_state: HashMap<usize, u64> = HashMap::new();
     let mut bus_residents: Vec<BusResident> = Vec::new();
+    let mut ms_handles: Vec<MSHandle> = Vec::new();
     let mut memory_map = Some(memory_map);
     for comp in &components {
         match comp {
@@ -27,11 +32,9 @@ where
             Computational::RAM(ram) => {
                 let intf = ram.reflect();
                 assert_eq!(intf.outputs["data_out"].width, 16);
-                bus_residents.push(BusResident::RAM(RAMHandle(Rc::new(RefCell::new(RAMState {
-                    wire_id: wire_id(&intf.outputs["data_out"]),
-                    size: ram.size,
-                    data: vec![0u64; ram.size],
-                })))));
+                let out_id = wire_id(&intf.outputs["data_out"]);
+                let inner: DeviceRAM = Rc::new(RefCell::new(crate::device::RAM::new(ram.size)));
+                bus_residents.push(BusResident::RAM(RAMHandle { wire_id: out_id, base: 0, inner }));
             }
             Computational::ROM(rom) => {
                 let intf = rom.reflect();
@@ -44,22 +47,32 @@ where
             }
             Computational::MemorySystem(ms) => {
                 let intf = ms.reflect();
-                bus_residents.push(BusResident::MemorySystem(MemorySystemHandle::new(
-                    wire_id(&intf.outputs["data_out"]),
-                    memory_map.take().expect("only one MemorySystem supported"),
-                )));
+                let out_id = wire_id(&intf.outputs["data_out"]);
+                let map = memory_map.take().expect("only one MemorySystem supported");
+                let mut overlays: Vec<crate::device::Overlay<DeviceRAM>> = Vec::new();
+                for r in map.contents {
+                    let ram: DeviceRAM = Rc::new(RefCell::new(crate::device::RAM::new(r.size)));
+                    // wire_id=0: MS-region RAMs have no direct component wire; base identifies the region.
+                    bus_residents.push(BusResident::RAM(RAMHandle { wire_id: 0, base: r.base, inner: Rc::clone(&ram) }));
+                    overlays.push(crate::device::Overlay { base: r.base, device: ram });
+                }
+                ms_handles.push(MSHandle {
+                    wire_id: out_id,
+                    latched_addr: 0,
+                    device: Rc::new(RefCell::new(MSDevice { devices: overlays })),
+                });
             }
             _ => {}
         }
     }
     let mut state = ChipState {
         intf: chip.reflect(),
-        // name: chip.name().to_string(),
         components,
         input_vals: HashMap::new(),
         wire_state: HashMap::new(),
         reg_state,
         bus_residents,
+        ms_handles,
         dirty: false,
     };
     state.evaluate();
@@ -69,12 +82,12 @@ where
 /// Runtime state of a simulated chip, and access to its inputs and outputs.
 pub struct ChipState {
     intf: Interface,
-    //name: String,
     components: Vec<Computational16>,
     input_vals: HashMap<String, u64>,
     wire_state: HashMap<usize, u64>,
     reg_state: HashMap<usize, u64>,
     bus_residents: Vec<BusResident>,
+    ms_handles: Vec<MSHandle>,
     dirty: bool,
 }
 
@@ -115,7 +128,7 @@ impl ChipState {
         // Collect updates based on the current wire_state.
         let mut reg_updates: Vec<(usize, u64)> = Vec::new();
         let mut ram_writes: Vec<(usize, u64, u64)> = Vec::new();  // (out_id, addr, val)
-        let mut ms_writes:  Vec<(usize, u64)> = Vec::new();  // (out_id, val)
+        let mut ms_writes:  Vec<(usize, u64)> = Vec::new();       // (out_id, val)
 
         for comp in &self.components {
             match comp {
@@ -153,16 +166,15 @@ impl ChipState {
         }
         for (out_id, addr, val) in ram_writes {
             if let Some(BusResident::RAM(h)) = self.bus_residents.iter()
-                .find(|res| matches!(res, BusResident::RAM(h) if h.0.borrow().wire_id == out_id))
+                .find(|res| matches!(res, BusResident::RAM(h) if h.wire_id == out_id))
             {
                 h.poke(addr, val);
             }
         }
+        // MS write uses device's currently-latched addr (from previous cycle).
         for (out_id, val) in ms_writes {
-            if let Some(BusResident::MemorySystem(h)) = self.bus_residents.iter()
-                .find(|res| matches!(res, BusResident::MemorySystem(h) if h.wire_id == out_id))
-            {
-                h.poke(h.latched_addr, val);
+            if let Some(h) = self.ms_handles.iter().find(|h| h.wire_id == out_id) {
+                let _ = h.device.borrow_mut().write(val);
             }
         }
 
@@ -173,10 +185,10 @@ impl ChipState {
                 let intf = ms.reflect();
                 let out_id = wire_id(&intf.outputs["data_out"]);
                 let new_addr = read_bus(&self.wire_state, &intf.inputs["addr"]);
-                if let Some(BusResident::MemorySystem(h)) = self.bus_residents.iter_mut()
-                    .find(|res| matches!(res, BusResident::MemorySystem(h) if h.wire_id == out_id))
-                {
+                if let Some(h) = self.ms_handles.iter_mut().find(|h| h.wire_id == out_id) {
                     h.latched_addr = new_addr;
+                    let _ = h.device.borrow_mut().set_addr(new_addr as usize);
+                    h.device.borrow_mut().ticktock();
                 }
             }
         }
@@ -228,9 +240,7 @@ impl ChipState {
                     let addr = read_bus(&ws, &intf.inputs["addr"]);
                     let val = self.bus_residents.iter()
                         .find_map(|res| match res {
-                            BusResident::RAM(h) if h.0.borrow().wire_id == out_id => {
-                                h.0.borrow().data.get(addr as usize).copied()
-                            }
+                            BusResident::RAM(h) if h.wire_id == out_id => Some(h.peek(addr)),
                             _ => None,
                         })
                         .unwrap_or(0);
@@ -253,12 +263,12 @@ impl ChipState {
                 Computational::MemorySystem(ms) => {
                     let intf = ms.reflect();
                     let out_id = wire_id(&intf.outputs["data_out"]);
-                    let val = self.bus_residents.iter()
-                        .find_map(|res| match res {
-                            BusResident::MemorySystem(h) if h.wire_id == out_id => {
-                                Some(h.peek(h.latched_addr))
-                            }
-                            _ => None,
+                    // Read from device's currently-latched addr (device handles routing).
+                    let val = self.ms_handles.iter()
+                        .find_map(|h| if h.wire_id == out_id {
+                            Some(h.device.borrow().read().unwrap_or(0))
+                        } else {
+                            None
                         })
                         .unwrap_or(0);
                     write_bus(&mut ws, &intf.outputs["data_out"], val);
@@ -318,67 +328,55 @@ fn write_bit(ws: &mut HashMap<usize, u64>, b: &BusRef, value: bool) {
     if value { *entry |= bit; } else { *entry &= !bit; }
 }
 
-/// A view into a contiguous region of a MemorySystem, using region-local addresses.
+/// A view into a contiguous RAM region, using region-local addresses.
 ///
-/// `peek(0)` returns the first word of the region regardless of its base address.
+/// `peek(0)` returns the first word of the region regardless of its base address in the map.
 #[derive(Clone)]
 pub struct RegionHandle {
-    inner: MemorySystemHandle,
-    pub base: u64,
+    pub base: usize,
+    inner: RAMHandle,
 }
 
 impl RegionHandle {
-    pub fn new(inner: MemorySystemHandle, base: u64) -> Self { RegionHandle { inner, base } }
-    pub fn peek(&self, addr: u64) -> u64       { self.inner.peek(self.base + addr) }
-    pub fn poke(&self, addr: u64, val: u64)    { self.inner.poke(self.base + addr, val) }
-    pub fn size(&self) -> usize                { self.inner.size() }
+    pub fn new(inner: RAMHandle) -> Self {
+        let base = inner.base;
+        RegionHandle { base, inner }
+    }
+    pub fn peek(&self, addr: u64) -> u64    { self.inner.peek(addr) }
+    pub fn poke(&self, addr: u64, val: u64) { self.inner.poke(addr, val) }
+    pub fn size(&self) -> usize             { self.inner.size() }
 }
 
-/// Access to auxiliary chips "on the bus", which the harness needs to access.
-/// Which components – and how many of each – are present depends on the chip design.
-///
-/// Realistically, there will be two RAMs present if the conventional HACK MemorySystem is used.
-/// In that case, the RAM sizes will differ.
+/// Access to auxiliary devices "on the bus" which the harness needs to inspect.
 pub enum BusResident {
     RAM(RAMHandle),
     ROM(ROMHandle),
-    MemorySystem(MemorySystemHandle),
-    // Keyboard(KeyboardHandle),
-    // TTY(TTYHandle),
+    // Future: Keyboard(KeyboardHandle),
+    // Future: TTY(TTYHandle),
 }
 
-/// Track the contents and simulation state of a RAM.
-///
-/// Every word is initialized to 0.
-///
-/// Future: for versimillitude, each RAM should have a defined read latency. The address input
-/// will have to be presented one or more cycles *before* the output value is actually used. For
-/// example, the HACK CPU always latches the address into register A (and presents it to the RAM)
-/// at least one cycle before any read/write. In "realistic" designs, one or two cycles or latency
-/// was typical, even decades ago.
-pub struct RAMState {
+/// Private: simulation state for a MemorySystem component.
+struct MSHandle {
     wire_id: usize,
-    pub size: usize,
-    data: Vec<u64>,
+    latched_addr: u64,
+    device: Rc<RefCell<MSDevice>>,
 }
 
-impl RAMState {
-    /// Read a word. If the address is out-of-range, returns 0.
-    pub fn peek(&self, addr: u64) -> u64 {
-        self.data.get(addr as usize).copied().unwrap_or_else(|| {
-            println!("Out of range read: RAM[{}]", addr);
-            0
-        })
-    }
+/// A clonable handle to a RAM instance (standalone or a region within a MemorySystem).
+///
+/// `wire_id` is the component's output wire id for standalone RAM, or 0 for MemorySystem regions.
+/// `base` is the region's base address in the memory map (0 for standalone RAM).
+#[derive(Clone)]
+pub struct RAMHandle {
+    pub(crate) wire_id: usize,
+    pub base: usize,
+    inner: Rc<RefCell<crate::device::RAM>>,
+}
 
-    /// Write a word. If the address is out-of-range, ignore.
-    pub fn poke(&mut self, addr: u64, val: u64) {
-        if let Some(cell) = self.data.get_mut(addr as usize) {
-            *cell = val;
-        } else {
-            println!("Out of range write: {} -> RAM[{}]", val, addr);
-        }
-    }
+impl RAMHandle {
+    pub fn peek(&self, addr: u64) -> u64    { self.inner.borrow().peek(addr as usize).unwrap_or(0) }
+    pub fn poke(&self, addr: u64, val: u64) { let _ = self.inner.borrow_mut().poke(addr as usize, val); }
+    pub fn size(&self) -> usize             { self.inner.borrow().size }
 }
 
 /// Hold pre-initialized ROM contents.
@@ -404,11 +402,14 @@ impl ROMState {
     }
 }
 
-/// Trait for custom memory system implementations supplied at simulation time.
-pub trait MemorySystemState {
-    fn peek(&self, addr: u64) -> u64;
-    fn poke(&mut self, addr: u64, val: u64);
-    fn size(&self) -> usize;
+/// A clonable handle to a ROM instance in the simulated circuit.
+#[derive(Clone)]
+pub struct ROMHandle(Rc<RefCell<ROMState>>);
+
+impl ROMHandle {
+    pub fn read(&self, addr: u64) -> u64 { self.0.borrow().read(addr) }
+    pub fn flash(&self, data: Vec<u64>) { self.0.borrow_mut().flash(data) }
+    pub fn size(&self) -> usize         { self.0.borrow().size }
 }
 
 /// Descriptor for one contiguous RAM region in a memory map.
@@ -417,109 +418,16 @@ pub struct RAMMap {
     pub base: usize,
 }
 
-/// A multi-region memory system that implements [`MemorySystemState`].
+/// Descriptor for the memory layout passed to [`synthesize`].
 ///
-/// Constructed from a list of [`RAMMap`] region descriptors; all regions are zero-initialized.
-/// Addresses outside every declared region read as 0 and writes are silently dropped.
-///
-/// When regions' address spaces overlap, they're applied top-to-bottom; the first region in
-/// `contents` that can handle an address gets used.
-///
-/// FIXME: this struct should just define the mapping. Some internal type (MemorySystemState?)
-/// will hold onto the values and handle access.
+/// Specifies which regions exist and where they appear in the address space.
+/// All actual data storage lives in [`device::RAM`] instances created by the simulator.
 pub struct MemoryMap {
     pub contents: Vec<RAMMap>,
-    data: Vec<Vec<u64>>,
 }
 
 impl MemoryMap {
     pub fn new(contents: Vec<RAMMap>) -> Self {
-        let data = contents.iter().map(|r| vec![0u64; r.size]).collect();
-        MemoryMap { contents, data }
+        MemoryMap { contents }
     }
-
-    /// Peek directly into region `i` (bypasses address translation).
-    pub fn peek_region(&self, region: usize, addr: u64) -> u64 {
-        self.data[region].get(addr as usize).copied().unwrap_or(0)
-    }
-
-    /// Poke directly into region `i` (bypasses address translation).
-    pub fn poke_region(&mut self, region: usize, addr: u64, val: u64) {
-        if let Some(cell) = self.data[region].get_mut(addr as usize) {
-            *cell = val;
-        }
-    }
-}
-
-impl MemorySystemState for MemoryMap {
-    fn peek(&self, addr: u64) -> u64 {
-        let a = addr as usize;
-        for (i, r) in self.contents.iter().enumerate() {
-            if a >= r.base && a < r.base + r.size {
-                let val = self.data[i][a - r.base];
-                // eprintln!("Read: region{i}[{a} (0x{a:04x})] = {val}");
-                return val;
-            }
-        }
-        // TODO: record/report these in some legit way. Tests might want to fail, for example.
-        eprintln!("Bus error: no region when reading from location {} (0x{:04X})", addr, addr);
-        0
-    }
-
-    fn poke(&mut self, addr: u64, val: u64) {
-        let a = addr as usize;
-        for (i, r) in self.contents.iter().enumerate() {
-            if a >= r.base && a < r.base + r.size {
-                // eprintln!("Write: {val} -> region{i}[{a} (0x{a:04x})]");
-                self.data[i][a - r.base] = val;
-                return;
-            }
-        }
-        // TODO: record/report these in some legit way. Tests might want to fail, for example.
-        eprintln!("Bus error: no region when writing to location {} (0x{:04X}) <- {} (0x{:04X})", addr, addr, val, val);
-    }
-
-    /// TODO: this doesn't seem useful. Maybe should report the range of valid addresses? Seems
-    /// like it's always contiguous, at least for Hack and pynand's BigComputer.
-    fn size(&self) -> usize {
-        self.contents.iter().map(|r| r.base + r.size).max().unwrap_or(0)
-    }
-}
-
-/// A clonable handle to a MemorySystem implementation in the simulated circuit.
-#[derive(Clone)]
-pub struct MemorySystemHandle {
-    pub(crate) wire_id: usize,
-    pub(crate) latched_addr: u64,
-    inner: Rc<RefCell<dyn MemorySystemState>>,
-}
-
-impl MemorySystemHandle {
-    pub fn new(wire_id: usize, state: impl MemorySystemState + 'static) -> Self {
-        MemorySystemHandle { wire_id, latched_addr: 0, inner: Rc::new(RefCell::new(state)) }
-    }
-    pub fn peek(&self, addr: u64) -> u64       { self.inner.borrow().peek(addr) }
-    pub fn poke(&self, addr: u64, val: u64)    { self.inner.borrow_mut().poke(addr, val) }
-    pub fn size(&self) -> usize                { self.inner.borrow().size() }
-}
-
-/// A clonable handle to a RAM instance in the simulated circuit.
-/// Cloning the handle gives another reference to the same underlying RAM.
-#[derive(Clone)]
-pub struct RAMHandle(Rc<RefCell<RAMState>>);
-
-impl RAMHandle {
-    pub fn peek(&self, addr: u64) -> u64       { self.0.borrow().peek(addr) }
-    pub fn poke(&self, addr: u64, val: u64)    { self.0.borrow_mut().poke(addr, val) }
-    pub fn size(&self) -> usize                { self.0.borrow().size }
-}
-
-/// A clonable handle to a ROM instance in the simulated circuit.
-#[derive(Clone)]
-pub struct ROMHandle(Rc<RefCell<ROMState>>);
-
-impl ROMHandle {
-    pub fn read(&self, addr: u64) -> u64       { self.0.borrow().read(addr) }
-    pub fn flash(&self, data: Vec<u64>)        { self.0.borrow_mut().flash(data) }
-    pub fn size(&self) -> usize                { self.0.borrow().size }
 }

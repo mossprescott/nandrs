@@ -4,7 +4,7 @@ use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, 
 use simulator::Reflect as _;
 use simulator::Chip as _;
 use simulator::component::{Nand, Register16, RAM16, ROM16, MemorySystem16, Sequential, Computational, Computational16};
-use simulator::simulate::{ChipState, BusResident, RAMHandle, ROMHandle, MemoryMap, RAMMap, RegionHandle};
+use simulator::simulate::{ChipState, BusResident, ROMHandle, MemoryMap, RAMMap, RegionHandle};
 use crate::project_01::{Project01Component, Not, And, Or, Mux16};
 use crate::project_02::{Project02Component, ALU};
 use crate::project_03::{Project03Component, PC};
@@ -231,15 +231,15 @@ pub const KEYBOARD:    u16 = 24 * 1024;
 /// Access the main RAM region (base address 0) of the MemorySystem.
 pub fn find_ram(state: &ChipState) -> RegionHandle {
     state.bus_residents().iter()
-        .find_map(|r| if let BusResident::MemorySystem(h) = r { Some(RegionHandle::new(h.clone(), 0)) } else { None })
-        .expect("no MemorySystem found")
+        .find_map(|r| if let BusResident::RAM(h) = r { if h.base == 0 { Some(RegionHandle::new(h.clone())) } else { None } } else { None })
+        .expect("no RAM region at base 0")
 }
 
 /// Access the screen RAM region (base address 16384) of the MemorySystem.
 pub fn find_screen(state: &ChipState) -> RegionHandle {
     state.bus_residents().iter()
-        .find_map(|r| if let BusResident::MemorySystem(h) = r { Some(RegionHandle::new(h.clone(), SCREEN_BASE.into())) } else { None })
-        .expect("no MemorySystem found")
+        .find_map(|r| if let BusResident::RAM(h) = r { if h.base == SCREEN_BASE as usize { Some(RegionHandle::new(h.clone())) } else { None } } else { None })
+        .expect("no RAM region at SCREEN_BASE")
 }
 
 /// Access the ROM, assuming a normal MemorySystem is present. Otherwise panic.

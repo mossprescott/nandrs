@@ -93,6 +93,10 @@ pub struct RAM {
 }
 
 impl RAM {
+    pub fn new(size: usize) -> Self {
+        RAM { size, data: vec![0u64; size].into_boxed_slice(), addr: 0, next_addr: 0, valid: false }
+    }
+
     /// For "external" users (not the simulation); modify the contents of a location immediately.
     pub fn poke(&mut self, addr: Addr, word: Data) -> Result<(), Error> {
         if addr >= self.size {
@@ -195,4 +199,13 @@ impl<T: MemoryDevice> MemoryDevice for MemorySystem<T> {
         }
         Err(Error::Unmapped)
     }
+}
+
+/// Allow `Rc<RefCell<RAM>>` to be used as a `MemoryDevice`, enabling shared ownership of a RAM
+/// region (e.g. between a `MemorySystem` overlay and an external handle).
+impl MemoryDevice for std::rc::Rc<std::cell::RefCell<RAM>> {
+    fn set_addr(&mut self, addr: Addr) -> Result<(), Error>   { self.borrow_mut().set_addr(addr) }
+    fn ticktock(&mut self)                                    { self.borrow_mut().ticktock(); }
+    fn read(&self)                     -> Result<Data, Error> { self.borrow().read() }
+    fn write(&mut self, word: Data)    -> Result<(), Error>   { self.borrow_mut().write(word) }
 }
