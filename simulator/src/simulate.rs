@@ -65,7 +65,7 @@ where
         let mut next_index = 0usize;
         let mut assign = |id: WireID| {
             if let std::collections::hash_map::Entry::Vacant(e) = wire_indexes.entry(id) {
-                e.insert(WireIndex { index: next_index });
+                e.insert(WireIndex { index: next_index as u32 });
                 next_index += 1;
             }
         };
@@ -211,7 +211,7 @@ struct WireID(usize);
 /// running from 0 up to the total number of distinct wires in the circuit.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct WireIndex {
-    index: usize,
+    index: u32,
 }
 
 /// Pre-computed wiring info about components, used during evaluation.
@@ -234,15 +234,15 @@ mod wiring {
     }
 
     #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-    pub(super) struct BitRef { pub(super) id: WireIndex, pub(super) offset: usize }
+    pub(super) struct BitRef { pub(super) id: WireIndex, pub(super) offset: u8 }
     impl BitRef {
-        pub(super) fn new(b: &BusRef, ix: &Indexes) -> Self { BitRef { id: ix[&wire_id(b)], offset: b.offset } }
+        pub(super) fn new(b: &BusRef, ix: &Indexes) -> Self { BitRef { id: ix[&wire_id(b)], offset: b.offset as u8 } }
     }
 
     #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-    pub(super) struct WireRef { pub(super) id: WireIndex, pub(super) offset: usize, pub(super) width: usize }
+    pub(super) struct WireRef { pub(super) id: WireIndex, pub(super) offset: u8, pub(super) width: u8 }
     impl WireRef {
-        pub(super) fn new(b: &BusRef, ix: &Indexes) -> Self { WireRef { id: ix[&wire_id(b)], offset: b.offset, width: b.width } }
+        pub(super) fn new(b: &BusRef, ix: &Indexes) -> Self { WireRef { id: ix[&wire_id(b)], offset: b.offset as u8, width: b.width as u8 } }
     }
 
     pub(super) struct NandWiring { pub(super) a: BitRef, pub(super) b: BitRef, pub(super) out: BitRef }
@@ -352,7 +352,7 @@ impl ChipState {
                 wiring::ComponentWiring::Register(reg) => {
                     if read_bit(&self.wire_state, reg.write) {
                         let val = read_bus(&self.wire_state, reg.data_in);
-                        self.reg_state[reg.data_out.index] = val;
+                        self.reg_state[reg.data_out.index as usize] = val;
                     }
                 }
                 wiring::ComponentWiring::RAM(ram) => {
@@ -462,21 +462,21 @@ fn width_mask(width: usize) -> u64 {
 }
 
 fn read_bus(ws: &[u64], b: wiring::WireRef) -> u64 {
-    (ws[b.id.index] >> b.offset) & width_mask(b.width)
+    (ws[b.id.index as usize] >> b.offset) & width_mask(b.width as usize)
 }
 
 fn write_bus(ws: &mut [u64], b: wiring::WireRef, value: u64) {
-    let mask = width_mask(b.width);
-    ws[b.id.index] = (ws[b.id.index] & !(mask << b.offset)) | ((value & mask) << b.offset);
+    let mask = width_mask(b.width as usize);
+    ws[b.id.index as usize] = (ws[b.id.index as usize] & !(mask << b.offset)) | ((value & mask) << b.offset);
 }
 
 fn read_bit(ws: &[u64], b: wiring::BitRef) -> bool {
-    (ws[b.id.index] >> b.offset) & 1 != 0
+    (ws[b.id.index as usize] >> b.offset) & 1 != 0
 }
 
 fn write_bit(ws: &mut [u64], b: wiring::BitRef, value: bool) {
     let bit = 1u64 << b.offset;
-    if value { ws[b.id.index] |= bit; } else { ws[b.id.index] &= !bit; }
+    if value { ws[b.id.index as usize] |= bit; } else { ws[b.id.index as usize] &= !bit; }
 }
 
 /// Access to auxiliary devices "on the bus" which the harness needs to inspect.
