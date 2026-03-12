@@ -159,8 +159,22 @@ fn main() {
         println!("  {asm}")
     };
 
-    if trace || verbose {
+    let print_fn_entry = |pc: u16, cycle: u64| {
+        if let Some(labels) = symbols_by_addr.get(&pc) {
+            let fn_labels: Vec<&str> = labels.iter()
+                .filter(|l| l.contains('.') && !l.contains('$') && !l.contains('_'))
+                .map(|l| l.as_str())
+                .collect();
+            if !fn_labels.is_empty() {
+                println!("pc={pc} [{}] (cycle {cycle})", fn_labels.join(", "));
+            }
+        }
+    };
+
+    if verbose {
         print_state(state.get("pc") as u16, cycle);
+    } else if trace {
+        print_fn_entry(state.get("pc") as u16, cycle);
     }
 
     while window.is_open() {
@@ -172,12 +186,14 @@ fn main() {
             interval_cycles += 1;
             batch += 1;
 
-            if trace || verbose {
+            if verbose {
                 let pc = state.get("pc") as u16;
                 let labels = symbols_by_addr.get(&pc).map(|v| format!(" [{}]", v.join(", "))).unwrap_or_default();
-                if verbose || !labels.is_empty() {
+                if !labels.is_empty() {
                     print_state(pc, cycle);
                 }
+            } else if trace {
+                print_fn_entry(state.get("pc") as u16, cycle);
             }
 
             // Check the clock every 256 cycles to avoid calling it every iteration.
