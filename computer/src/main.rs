@@ -151,6 +151,16 @@ fn hack_keycode(window: &Window) -> u64 {
     0
 }
 
+fn fmt_commas(n: u64) -> String {
+    let s = n.to_string();
+    let mut out = String::new();
+    for (i, c) in s.chars().rev().enumerate() {
+        if i > 0 && i % 3 == 0 { out.push(','); }
+        out.push(c);
+    }
+    out.chars().rev().collect()
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let trace   = args.contains(&"--trace".to_string());
@@ -197,20 +207,22 @@ fn main() {
 
     let print_state = |pc: u16, cycle: u64| {
         let labels = symbols_by_addr.get(&pc).map(|v| format!(" [{}]", v.join(", "))).unwrap_or_default();
-        println!("pc={pc}{labels}: (cycle {cycle})");
+        println!("pc={pc}{labels}: (cycle {})", fmt_commas(cycle));
         println!("  SP: {}", ram.peek(0));
         let asm = instructions.get(pc as usize).map(|&i| disassemble(i)).unwrap_or("?".to_string());
         println!("  {asm}")
     };
 
+    const TRACE_SKIP: &[&str] = &["math.abs", "math.multiply"];
     let print_fn_entry = |pc: u16, cycle: u64| {
         if let Some(labels) = symbols_by_addr.get(&pc) {
             let fn_labels: Vec<&str> = labels.iter()
                 .filter(|l| l.contains('.') && !l.contains('$') && !l.contains('_'))
+                .filter(|l| !TRACE_SKIP.contains(&l.as_str()))
                 .map(|l| l.as_str())
                 .collect();
             if !fn_labels.is_empty() {
-                println!("pc={pc} [{}] (cycle {cycle})", fn_labels.join(", "));
+                println!("pc={pc} [{}] (cycle {})", fn_labels.join(", "), fmt_commas(cycle));
             }
         }
     };

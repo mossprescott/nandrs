@@ -12,6 +12,10 @@
 // authors. It has been formatted and some labels have been added, but the assembled binary
 // should be identical. At least, I think that's where it came from; it's been a while.
 
+// main.main is called at about 3.9M cycles.
+// The first visible output comes after about 4.8M cycles.
+// After that, it's about 100K cycles per frame.
+
 (addr0)
 @256
 D=A
