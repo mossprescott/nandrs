@@ -76,7 +76,15 @@ where
                 }).expect("RAM device not found in bus_residents");
                 CW::RAM(wiring::RAMWiring::new(c, device))
             }
-            Computational::ROM(c)          => CW::ROM(wiring::ROMWiring::new(c)),
+            Computational::ROM(c)          => {
+                let intf = c.reflect();
+                let out_id = wire_id(&intf.outputs["out"]);
+                let device = bus_residents.iter().find_map(|res| match res {
+                    BusResident::ROM(h) if h.wire_id == out_id => Some(Rc::clone(&h.inner)),
+                    _ => None,
+                }).expect("ROM device not found in bus_residents");
+                CW::ROM(wiring::ROMWiring::new(c, device))
+            }
             Computational::MemorySystem(c) => {
                 let intf = c.reflect();
                 let out_id = wire_id(&intf.outputs["data_out"]);
@@ -174,11 +182,12 @@ mod wiring {
         }
     }
 
-    pub(super) struct ROMWiring { pub(super) out: WireRef, pub(super) addr: WireRef }
+    pub(super) struct ROMWiring { pub(super) device: Rc<RefCell<crate::device::ROM>>, pub(super) out: WireRef, pub(super) addr: WireRef }
     impl ROMWiring {
-        pub(super) fn new(rom: &ROM16) -> Self {
+        pub(super) fn new(rom: &ROM16, device: Rc<RefCell<crate::device::ROM>>) -> Self {
             let intf = rom.reflect();
             Self {
+                device,
                 out:  WireRef::from(&intf.outputs["out"]),
                 addr: WireRef::from(&intf.inputs["addr"]),
             }
@@ -301,11 +310,7 @@ impl ChipState {
         for comp in &self.component_wiring {
             if let wiring::ComponentWiring::ROM(rom) = comp {
                 let new_addr = read_bus(&self.wire_state, &rom.addr);
-                if let Some(BusResident::ROM(h)) = self.bus_residents.iter()
-                    .find(|res| matches!(res, BusResident::ROM(h) if h.wire_id == rom.out.id))
-                {
-                    let _ = h.inner.borrow_mut().set_addr(new_addr as usize);
-                }
+                let _ = rom.device.borrow_mut().set_addr(new_addr as usize);
             }
         }
     }
@@ -335,13 +340,7 @@ impl ChipState {
                     write_bus(&mut ws, &ram.out, val);
                 }
                 wiring::ComponentWiring::ROM(rom) => {
-                    let val = self.bus_residents.iter()
-                        .find_map(|res| match res {
-                            BusResident::ROM(h) if h.wire_id == rom.out.id =>
-                                Some(h.inner.borrow().read().unwrap_or(0)),
-                            _ => None,
-                        })
-                        .unwrap_or(0);
+                    let val = rom.device.borrow().read().unwrap_or(0);
                     write_bus(&mut ws, &rom.out, val);
                 }
                 wiring::ComponentWiring::MemorySystem(ms) => {
