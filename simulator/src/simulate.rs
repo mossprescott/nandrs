@@ -208,7 +208,7 @@ impl ChipState {
             self.dirty = false;
         }
         self.intf.outputs.get(name)
-            .map(|b| read_bus(&self.wire_state, b))
+            .map(|b| read_bus(&self.wire_state, &wiring::WireRef::from(b)))
             .unwrap_or(0)
     }
 
@@ -233,31 +233,26 @@ impl ChipState {
         let mut ram_writes: Vec<(usize, u64, u64)> = Vec::new();  // (out_id, addr, val)
         let mut ms_writes:  Vec<(usize, u64)> = Vec::new();       // (out_id, val)
 
-        for comp in &self.components {
+        for comp in &self.component_wiring {
             match comp {
-                Computational::Register(reg) => {
-                    let intf = reg.reflect();
-                    if read_bit(&self.wire_state, &intf.inputs["write"]) {
-                        let val = read_bus(&self.wire_state, &intf.inputs["data_in"]);
-                        reg_updates.push((wire_id(&intf.outputs["data_out"]), val));
+                wiring::ComponentWiring::Register(reg) => {
+                    if read_bit(&self.wire_state, &reg.write) {
+                        let val = read_bus(&self.wire_state, &reg.data_in);
+                        reg_updates.push((reg.data_out, val));
                     }
                 }
-                Computational::RAM(ram) => {
-                    let intf = ram.reflect();
-                    let out_id = wire_id(&intf.outputs["data_out"]);
+                wiring::ComponentWiring::RAM(ram) => {
                     // Write uses the addr computed in this cycle's initial evaluate().
-                    if read_bit(&self.wire_state, &intf.inputs["write"]) {
-                        let addr = read_bus(&self.wire_state, &intf.inputs["addr"]);
-                        let val = read_bus(&self.wire_state, &intf.inputs["data_in"]);
-                        ram_writes.push((out_id, addr, val));
+                    if read_bit(&self.wire_state, &ram.write) {
+                        let addr = read_bus(&self.wire_state, &ram.addr);
+                        let val  = read_bus(&self.wire_state, &ram.data_in);
+                        ram_writes.push((ram.out.id, addr, val));
                     }
                 }
-                Computational::MemorySystem(ms) => {
-                    let intf = ms.reflect();
-                    let out_id = wire_id(&intf.outputs["data_out"]);
-                    if read_bit(&self.wire_state, &intf.inputs["write"]) {
-                        let val = read_bus(&self.wire_state, &intf.inputs["data_in"]);
-                        ms_writes.push((out_id, val));
+                wiring::ComponentWiring::MemorySystem(ms) => {
+                    if read_bit(&self.wire_state, &ms.write) {
+                        let val = read_bus(&self.wire_state, &ms.data_in);
+                        ms_writes.push((ms.out.id, val));
                     }
                 }
                 _ => {}
@@ -283,12 +278,10 @@ impl ChipState {
 
         // Latch MS addr from the initial wire_state (Nand-computed from current inputs and
         // reg_state) so the re-evaluate below shows the correct memory data.
-        for comp in &self.components {
-            if let Computational::MemorySystem(ms) = comp {
-                let intf = ms.reflect();
-                let out_id = wire_id(&intf.outputs["data_out"]);
-                let new_addr = read_bus(&self.wire_state, &intf.inputs["addr"]);
-                if let Some(h) = self.ms_handles.iter_mut().find(|h| h.wire_id == out_id) {
+        for comp in &self.component_wiring {
+            if let wiring::ComponentWiring::MemorySystem(ms) = comp {
+                let new_addr = read_bus(&self.wire_state, &ms.addr);
+                if let Some(h) = self.ms_handles.iter_mut().find(|h| h.wire_id == ms.out.id) {
                     let _ = h.device.borrow_mut().set_addr(new_addr as usize);
                     h.device.borrow_mut().ticktock();
                 }
@@ -302,13 +295,11 @@ impl ChipState {
         // Latch ROM addr after re-evaluate so the next cycle processes the *current*
         // instruction, which lets the CPU's feed-forward next_addr_mux set the right MS
         // addr latch for the cycle after.
-        for comp in &self.components {
-            if let Computational::ROM(rom) = comp {
-                let intf = rom.reflect();
-                let out_id = wire_id(&intf.outputs["out"]);
-                let new_addr = read_bus(&self.wire_state, &intf.inputs["addr"]);
+        for comp in &self.component_wiring {
+            if let wiring::ComponentWiring::ROM(rom) = comp {
+                let new_addr = read_bus(&self.wire_state, &rom.addr);
                 if let Some(BusResident::ROM(h)) = self.bus_residents.iter()
-                    .find(|res| matches!(res, BusResident::ROM(h) if h.wire_id == out_id))
+                    .find(|res| matches!(res, BusResident::ROM(h) if h.wire_id == rom.out.id))
                 {
                     let _ = h.inner.borrow_mut().set_addr(new_addr as usize);
                 }
@@ -339,7 +330,7 @@ impl ChipState {
                 Computational::RAM(ram) => {
                     let intf = ram.reflect();
                     let out_id = wire_id(&intf.outputs["data_out"]);
-                    let addr = read_bus(&ws, &intf.inputs["addr"]);
+                    let addr = read_bus(&ws, &wiring::WireRef::from(&intf.inputs["addr"]));
                     let val = self.bus_residents.iter()
                         .find_map(|res| match res {
                             BusResident::RAM(h) if h.wire_id == out_id => Some(h.peek(addr)),
@@ -392,8 +383,8 @@ fn eval_nands(ws: &mut HashMap<usize, u64>, components: &[Computational16]) {
     for comp in components {
         if let Computational::Nand(nand) = comp {
             let intf = nand.reflect();
-            let a = read_bit(ws, &intf.inputs["a"]);
-            let b = read_bit(ws, &intf.inputs["b"]);
+            let a = read_bit(ws, &wiring::BitRef::from(&intf.inputs["a"]));
+            let b = read_bit(ws, &wiring::BitRef::from(&intf.inputs["b"]));
             write_bit(ws, &intf.outputs["out"], !(a & b));
         }
     }
@@ -407,8 +398,8 @@ fn width_mask(width: usize) -> u64 {
     if width >= 64 { u64::MAX } else { (1u64 << width) - 1 }
 }
 
-fn read_bus(ws: &HashMap<usize, u64>, b: &BusRef) -> u64 {
-    let raw = ws.get(&wire_id(b)).copied().unwrap_or(0);
+fn read_bus(ws: &HashMap<usize, u64>, b: &wiring::WireRef) -> u64 {
+    let raw = ws.get(&b.id).copied().unwrap_or(0);
     (raw >> b.offset) & width_mask(b.width)
 }
 
@@ -418,8 +409,8 @@ fn write_bus(ws: &mut HashMap<usize, u64>, b: &BusRef, value: u64) {
     *entry = (*entry & !(mask << b.offset)) | ((value & mask) << b.offset);
 }
 
-fn read_bit(ws: &HashMap<usize, u64>, b: &BusRef) -> bool {
-    (ws.get(&wire_id(b)).copied().unwrap_or(0) >> b.offset) & 1 != 0
+fn read_bit(ws: &HashMap<usize, u64>, b: &wiring::BitRef) -> bool {
+    (ws.get(&b.id).copied().unwrap_or(0) >> b.offset) & 1 != 0
 }
 
 fn write_bit(ws: &mut HashMap<usize, u64>, b: &BusRef, value: bool) {
