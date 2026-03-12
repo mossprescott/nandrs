@@ -97,6 +97,33 @@ where
         }
     }).collect();
 
+    let mut wire_indexes: HashMap<WireID, WireIndex> = HashMap::new();
+    {
+        let mut next_index = 0usize;
+        let mut assign = |id: WireID| {
+            if let std::collections::hash_map::Entry::Vacant(e) = wire_indexes.entry(id) {
+                e.insert(WireIndex { index: next_index });
+                next_index += 1;
+            }
+        };
+        // Chip interface wires (inputs seeded each evaluate(), outputs read via get())
+        let intf = chip.reflect();
+        for b in intf.inputs.values()  { assign(wire_id(b)); }
+        for b in intf.outputs.values() { assign(wire_id(b)); }
+        // All wires referenced by component wiring
+        use wiring::ComponentWiring as CW;
+        for comp in &component_wiring {
+            match comp {
+                CW::Nand(n)         => { assign(n.a.id); assign(n.b.id); assign(n.out.id); }
+                CW::Register(r)     => { assign(r.write.id); assign(r.data_in.id); assign(r.data_out); }
+                CW::ROM(r)          => { assign(r.out.id); assign(r.addr.id); }
+                CW::RAM(r)          => { assign(r.out.id); assign(r.addr.id); assign(r.write.id); assign(r.data_in.id); }
+                CW::MemorySystem(m) => { assign(m.out.id); assign(m.addr.id); assign(m.write.id); assign(m.data_in.id); }
+                CW::Const           => {}
+            }
+        }
+    }
+
     let mut state = ChipState {
         intf: chip.reflect(),
         component_wiring,
@@ -104,6 +131,7 @@ where
         wire_state: HashMap::new(),
         reg_state,
         bus_residents,
+        wire_indexes,
         dirty: false,
     };
     state.evaluate();
@@ -130,6 +158,9 @@ pub struct ChipState {
     /// State of every wire as of the last evaluate(), for inspecting outputs.
     wire_state: HashMap<WireID, u64>,
 
+    /// TEMP: Mapping from wire identity to flat buffer index, assigned at synthesis time.
+    wire_indexes: HashMap<WireID, WireIndex>,
+
     /// Handles to (memory) devices for inspection from outside.
     bus_residents: Vec<BusResident>,
 }
@@ -138,6 +169,14 @@ pub struct ChipState {
 /// store states in a HashMap, so it only needs to be unique to each wire and hashable.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct WireID(usize);
+
+/// Index of the storage location of a wire within a storage buffer. Each wire has a unique index,
+/// running from zero up to some pre-allocated buffer size (roughly, the number of simulated
+/// components.)
+#[derive(Clone, Copy)]
+struct WireIndex {
+    index: usize,
+}
 
 /// Pre-computed wiring info about components, used during evaluation.
 mod wiring {
