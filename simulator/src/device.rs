@@ -37,10 +37,23 @@ pub trait MemoryDevice {
 pub struct ROM {
     pub size: usize,
 
-    data: Box<[u64]>,
+    data: Box<[Data]>,
 
     addr: Addr,
     valid: bool,
+}
+
+impl ROM {
+    /// For "external" users (not the simulation); overwrite the contents of the ROM
+    /// during configuration.
+    pub fn flash(&mut self, data: Box<[Data]>) -> Result<(), Error> {
+        if data.len() > self.size {
+            Err(Error::AddressOutOfRange(data.len()))
+        } else {
+            self.data = data;
+            Ok(())
+        }
+    }
 }
 
 impl MemoryDevice for ROM {
@@ -72,11 +85,32 @@ impl MemoryDevice for ROM {
 pub struct RAM {
     pub size: usize,
 
-    data: Box<[u64]>,
+    data: Box<[Data]>,
 
     addr: Addr,
     next_addr: Addr,
     valid: bool,
+}
+
+impl RAM {
+    /// For "external" users (not the simulation); modify the contents of a location immediately.
+    pub fn poke(&mut self, addr: Addr, word: Data) -> Result<(), Error> {
+        if addr >= self.size {
+            Err(Error::AddressOutOfRange(addr))
+        } else {
+            self.data[addr] = word;
+            Ok(())
+        }
+    }
+
+    /// For "external" users (not the simulation); inspect the contents of a location.
+    pub fn peek(&self, addr: Addr) -> Result<Data, Error> {
+        if addr >= self.size {
+            Err(Error::AddressOutOfRange(addr))
+        } else {
+            Ok(self.data[addr])
+        }
+    }
 }
 
 impl MemoryDevice for RAM {
