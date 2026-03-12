@@ -8,7 +8,7 @@ use minifb::{Key, Window, WindowOptions};
 use assignments::project_05::{Computer, flatten, find_ram, find_rom, find_screen, memory_system};
 use assignments::project_06::{assemble, Program};
 use simulator::declare::Chip as _;
-use simulator::simulate::{synthesize, RegionHandle};
+use simulator::simulate::{synthesize, RAMHandle};
 
 const WIDTH: usize = 512;
 const HEIGHT: usize = 256;
@@ -16,7 +16,7 @@ const BEZEL: usize = 20;
 const FRAME_TIME: Duration = Duration::from_millis(16);
 const BEZEL_PNG: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/bezel.png");
 
-fn render_screen(screen: &RegionHandle, pixels: &mut [u32], scale: usize) {
+fn render_screen(screen: &RAMHandle, pixels: &mut [u32], scale: usize) {
     let win_width = (WIDTH + 2 * BEZEL) * scale;
     for word_idx in 0..(WIDTH / 16 * HEIGHT) {
         let word = screen.peek(word_idx as u64) as u16;

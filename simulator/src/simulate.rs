@@ -322,25 +322,6 @@ fn write_bit(ws: &mut HashMap<usize, u64>, b: &BusRef, value: bool) {
     if value { *entry |= bit; } else { *entry &= !bit; }
 }
 
-/// A view into a contiguous RAM region, using region-local addresses.
-///
-/// `peek(0)` returns the first word of the region regardless of its base address in the map.
-#[derive(Clone)]
-pub struct RegionHandle {
-    pub base: usize,
-    inner: RAMHandle,
-}
-
-impl RegionHandle {
-    pub fn new(inner: RAMHandle) -> Self {
-        let base = inner.base;
-        RegionHandle { base, inner }
-    }
-    pub fn peek(&self, addr: u64) -> u64    { self.inner.peek(addr) }
-    pub fn poke(&self, addr: u64, val: u64) { self.inner.poke(addr, val) }
-    pub fn size(&self) -> usize             { self.inner.size() }
-}
-
 /// Access to auxiliary devices "on the bus" which the harness needs to inspect.
 pub enum BusResident {
     RAM(RAMHandle),
