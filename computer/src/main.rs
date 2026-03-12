@@ -14,14 +14,20 @@ const WIDTH: usize = 512;
 const HEIGHT: usize = 256;
 const FRAME_TIME: Duration = Duration::from_millis(16);
 
-fn render_screen(screen: &RegionHandle, pixels: &mut [u32]) {
+fn render_screen(screen: &RegionHandle, pixels: &mut [u32], scale: usize) {
+    let win_width = WIDTH * scale;
     for word_idx in 0..(WIDTH / 16 * HEIGHT) {
         let word = screen.peek(word_idx as u64) as u16;
         let row = word_idx / (WIDTH / 16);
         let col_word = word_idx % (WIDTH / 16);
         for bit in 0..16usize {
-            let pixel_idx = row * WIDTH + col_word * 16 + bit;
-            pixels[pixel_idx] = if (word >> bit) & 1 == 1 { 0x000000 } else { 0xFFFFFF };
+            let color = if (word >> bit) & 1 == 1 { 0x000000 } else { 0xFFFFFF };
+            let src_x = col_word * 16 + bit;
+            for dy in 0..scale {
+                for dx in 0..scale {
+                    pixels[(row * scale + dy) * win_width + src_x * scale + dx] = color;
+                }
+            }
         }
     }
 }
@@ -114,8 +120,9 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let trace   = args.contains(&"--trace".to_string());
     let verbose = args.contains(&"--verbose".to_string());
+    let scale   = if args.contains(&"--2x".to_string()) { 2 } else { 1 };
     let path = args.iter().find(|a| !a.starts_with('-') && *a != &args[0])
-        .expect("usage: computer [--trace] [--verbose] <rom-file>");
+        .expect("usage: computer [--trace] [--verbose] [--2x] <rom-file>");
 
     let src = fs::read_to_string(path).unwrap_or_else(|e| {
         eprintln!("error reading {path}: {e}");
@@ -140,9 +147,11 @@ fn main() {
 
     let ram = find_ram(&state);
     let screen = find_screen(&state);
-    let mut pixels = vec![0u32; WIDTH * HEIGHT];
+    let win_width  = WIDTH  * scale;
+    let win_height = HEIGHT * scale;
+    let mut pixels = vec![0u32; win_width * win_height];
 
-    let mut window = Window::new(path, WIDTH, HEIGHT, WindowOptions::default())
+    let mut window = Window::new(path, win_width, win_height, WindowOptions::default())
         .expect("failed to create window");
 
     eprintln!("Running.");
@@ -205,8 +214,8 @@ fn main() {
         // TODO: inject hack_keycode into simulator once keyboard RAM support is added
         let _key = hack_keycode(&window);
 
-        render_screen(&screen, &mut pixels);
-        window.update_with_buffer(&pixels, WIDTH, HEIGHT).unwrap();
+        render_screen(&screen, &mut pixels, scale);
+        window.update_with_buffer(&pixels, win_width, win_height).unwrap();
 
         let elapsed = interval_start.elapsed();
         if elapsed.as_secs() >= 1 {
