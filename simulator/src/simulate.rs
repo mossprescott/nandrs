@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::declare::{BusRef, IC, Interface, Reflect as _};
+use crate::declare::{BusRef, IC, Reflect as _};
 use crate::component::{Computational, Computational16};
 use crate::device::MemoryDevice as _;
 
@@ -145,28 +145,46 @@ where
         }
     }).collect();
 
-    let n = wire_indexes.len();
-    let mut state = ChipState {
-        intf: chip.reflect(),
+    let n_wires = wire_indexes.len();
+    let intf = chip.reflect();
+    let chip_wiring = ChipWiring {
         component_wiring,
+        input_wiring:  intf.inputs.iter().map(|(name, b)|  (name.clone(), wiring::WireRef::new(b, &wire_indexes))).collect(),
+        output_wiring: intf.outputs.iter().map(|(name, b)| (name.clone(), wiring::WireRef::new(b, &wire_indexes))).collect(),
+        n_wires,
+    };
+    let mut state = ChipState {
+        wire_state: vec![0u64; n_wires],
+        reg_state:  vec![0u64; n_wires],
         input_vals: HashMap::new(),
-        wire_state: vec![0u64; n],
-        reg_state:  vec![0u64; n],
         bus_residents,
-        wire_indexes,
+        wiring: chip_wiring,
         dirty: false,
     };
     state.evaluate();
     state
 }
 
+/// Static, synthesized description of the circuit's wiring. Computed once and never mutated.
+struct ChipWiring {
+    /// Pre-computed locations for propagating signals through each component.
+    component_wiring: Vec<wiring::ComponentWiring>,
+
+    /// Pre-computed wire locations for chip-level inputs, for use in evaluate().
+    input_wiring: HashMap<String, wiring::WireRef>,
+
+    /// Pre-computed wire locations for chip-level outputs, for use in get().
+    output_wiring: HashMap<String, wiring::WireRef>,
+
+    /// Total number of distinct wires; the required size of wire/register state buffers.
+    #[allow(dead_code)]
+    n_wires: usize,
+}
+
 /// Runtime state of a simulated chip, and access to its inputs and outputs.
 pub struct ChipState {
-    /// Locations of input/output signals for external access
-    intf: Interface,
-
-    /// Pre-computed locations for propagating signals
-    component_wiring: Vec<wiring::ComponentWiring>,
+    /// Static circuit description.
+    wiring: ChipWiring,
 
     /// Values from outside to be applied at the beginning of each evaluate().
     input_vals: HashMap<String, u64>,
@@ -179,9 +197,6 @@ pub struct ChipState {
 
     /// State of every wire as of the last evaluate(), for inspecting outputs.
     wire_state: Vec<u64>,
-
-    /// Mapping from wire identity to flat buffer index, assigned at synthesis time.
-    wire_indexes: Indexes,
 
     /// Handles to (memory) devices for inspection from outside.
     bus_residents: Vec<BusResident>,
@@ -309,8 +324,8 @@ impl ChipState {
             self.evaluate();
             self.dirty = false;
         }
-        self.intf.outputs.get(name)
-            .map(|b| read_bus(&self.wire_state, wiring::WireRef::new(b, &self.wire_indexes)))
+        self.wiring.output_wiring.get(name)
+            .map(|&wr| read_bus(&self.wire_state, wr))
             .unwrap_or(0)
     }
 
@@ -330,7 +345,7 @@ impl ChipState {
         self.dirty = false;
         self.evaluate();
 
-        for comp in &self.component_wiring {
+        for comp in &self.wiring.component_wiring {
             match comp {
                 wiring::ComponentWiring::Register(reg) => {
                     if read_bit(&self.wire_state, reg.write) {
@@ -356,7 +371,7 @@ impl ChipState {
 
         // Latch RAM and MS addr from the initial wire_state so the re-evaluate below
         // shows the correct memory data.
-        for comp in &self.component_wiring {
+        for comp in &self.wiring.component_wiring {
             match comp {
                 wiring::ComponentWiring::RAM(ram) => {
                     let new_addr = read_bus(&self.wire_state, ram.addr);
@@ -379,7 +394,7 @@ impl ChipState {
         // Latch ROM addr after re-evaluate so the next cycle processes the *current*
         // instruction, which lets the CPU's feed-forward next_addr_mux set the right MS
         // addr latch for the cycle after.
-        for comp in &self.component_wiring {
+        for comp in &self.wiring.component_wiring {
             if let wiring::ComponentWiring::ROM(rom) = comp {
                 let new_addr = read_bus(&self.wire_state, rom.addr);
                 let _ = rom.device.borrow_mut().set_addr(new_addr as usize);
@@ -393,8 +408,7 @@ impl ChipState {
 
         // Seed chip inputs (may overwrite reg values on shared wires).
         for (name, &val) in &self.input_vals {
-            if let Some(b) = self.intf.inputs.get(name) {
-                let wr = wiring::WireRef::new(b, &self.wire_indexes);
+            if let Some(&wr) = self.wiring.input_wiring.get(name) {
                 write_bus(&mut self.wire_state, wr, val);
             }
         }
@@ -402,7 +416,7 @@ impl ChipState {
         // Seed RAM/ROM/MS outputs from their current addr input.
         // The addr wire is either an external chip input (seeded above) or a register output
         // (seeded from reg_state above), so it's available in wire_state before the Nand passes.
-        for comp in &self.component_wiring {
+        for comp in &self.wiring.component_wiring {
             match comp {
                 wiring::ComponentWiring::RAM(ram) => {
                     let val = ram.device.borrow().read().unwrap_or(0);
@@ -424,8 +438,8 @@ impl ChipState {
         // (e.g. MemorySystem muxes), second lets downstream gates (ALU) use the
         // correctly computed values. Needed because component order puts CPU before
         // MemorySystem in the flattened list.
-        eval_nands(&mut self.wire_state, &self.component_wiring);
-        eval_nands(&mut self.wire_state, &self.component_wiring);
+        eval_nands(&mut self.wire_state, &self.wiring.component_wiring);
+        eval_nands(&mut self.wire_state, &self.wiring.component_wiring);
     }
 }
 
