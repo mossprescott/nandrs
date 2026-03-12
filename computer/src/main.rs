@@ -12,24 +12,59 @@ use simulator::simulate::{synthesize, RegionHandle};
 
 const WIDTH: usize = 512;
 const HEIGHT: usize = 256;
+const BEZEL: usize = 20;
 const FRAME_TIME: Duration = Duration::from_millis(16);
+const BEZEL_PNG: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/bezel.png");
 
 fn render_screen(screen: &RegionHandle, pixels: &mut [u32], scale: usize) {
-    let win_width = WIDTH * scale;
+    let win_width = (WIDTH + 2 * BEZEL) * scale;
     for word_idx in 0..(WIDTH / 16 * HEIGHT) {
         let word = screen.peek(word_idx as u64) as u16;
         let row = word_idx / (WIDTH / 16);
         let col_word = word_idx % (WIDTH / 16);
         for bit in 0..16usize {
             let color = if (word >> bit) & 1 == 1 { 0x000000 } else { 0xFFFFFF };
-            let src_x = col_word * 16 + bit;
+            let px_x = BEZEL + col_word * 16 + bit;
+            let px_y = BEZEL + row;
             for dy in 0..scale {
                 for dx in 0..scale {
-                    pixels[(row * scale + dy) * win_width + src_x * scale + dx] = color;
+                    pixels[(px_y * scale + dy) * win_width + px_x * scale + dx] = color;
                 }
             }
         }
     }
+}
+
+fn load_bezel(scale: usize) -> Vec<u32> {
+    let file = std::fs::File::open(BEZEL_PNG)
+        .unwrap_or_else(|e| panic!("cannot open {BEZEL_PNG}: {e}"));
+    let decoder = png::Decoder::new(file);
+    let mut reader = decoder.read_info().expect("png read_info");
+    let mut buf = vec![0u8; reader.output_buffer_size()];
+    let info = reader.next_frame(&mut buf).expect("png next_frame");
+    let bytes = &buf[..info.buffer_size()];
+    let src_w = info.width as usize;
+    let src_h = info.height as usize;
+    let bpp = match info.color_type {
+        png::ColorType::Rgb  => 3,
+        png::ColorType::Rgba => 4,
+        _ => panic!("unsupported bezel PNG color type"),
+    };
+    let dst_w = src_w * scale;
+    let dst_h = src_h * scale;
+    let mut out = vec![0u32; dst_w * dst_h];
+    for sy in 0..src_h {
+        for sx in 0..src_w {
+            let i = (sy * src_w + sx) * bpp;
+            let c = ((bytes[i] as u32) << 16) | ((bytes[i+1] as u32) << 8) | (bytes[i+2] as u32);
+            for dy in 0..scale {
+                for dx in 0..scale {
+                    out[(sy * scale + dy) * dst_w + sx * scale + dx] = c;
+                }
+            }
+        }
+    }
+    out
 }
 
 fn disassemble(instr: u16) -> String {
@@ -147,9 +182,9 @@ fn main() {
 
     let ram = find_ram(&state);
     let screen = find_screen(&state);
-    let win_width  = WIDTH  * scale;
-    let win_height = HEIGHT * scale;
-    let mut pixels = vec![0u32; win_width * win_height];
+    let win_width  = (WIDTH  + 2 * BEZEL) * scale;
+    let win_height = (HEIGHT + 2 * BEZEL) * scale;
+    let mut pixels = load_bezel(scale);
 
     let mut window = Window::new(path, win_width, win_height, WindowOptions::default())
         .expect("failed to create window");
