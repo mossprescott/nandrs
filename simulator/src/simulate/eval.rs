@@ -215,10 +215,14 @@ fn width_mask(width: usize) -> u64 {
     if width >= 64 { u64::MAX } else { (1u64 << width) - 1 }
 }
 
+/// Read a range of bits from a certain location. Now used only for extracting chip outputs from the
+/// wire state.
 fn read_bus(ws: &[u64], b: wiring::WireRef) -> u64 {
     (ws[b.id.0 as usize] >> b.offset) & width_mask(b.width as usize)
 }
 
+/// Write a range of bits into a certain location. Now used only for injecting chip inputs into the
+/// initial wire state.
 fn write_bus(ws: &mut [u64], b: wiring::WireRef, value: u64) {
     let mask = width_mask(b.width as usize);
     ws[b.id.0 as usize] = (ws[b.id.0 as usize] & !(mask << b.offset)) | ((value & mask) << b.offset);

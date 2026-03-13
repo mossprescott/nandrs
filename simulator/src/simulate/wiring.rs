@@ -63,6 +63,10 @@ impl NandWiring {
 
 /// N parallel single-bit nands: out[i] = !(a[i] & b[i]). When multiple nands can be packed into the
 /// same input/output locations, this is more efficient.
+///
+/// TODO: if we discover patterns where only a sub-range of bits can be handled in parallel, we'll
+/// add back offset/width fields *here*, applying to all three input/outputs, with a single
+/// mask/shift.
 pub(super) struct ParallelNandWiring { pub(super) a: WireIndex, pub(super) b: WireIndex, pub(super) out: WireIndex }
 impl ParallelNandWiring {
     // TODO: as yet unclear how these will get built
