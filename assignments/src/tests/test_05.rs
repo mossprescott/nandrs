@@ -1,8 +1,8 @@
-use crate::project_05::{CPU, Computer, flatten, SCREEN_BASE, find_ram, find_screen, find_rom, memory_system};
+use crate::project_05::{CPU, Computer, Decode, flatten, SCREEN_BASE, find_ram, find_screen, find_rom, memory_system};
 use crate::project_06::parse_statement;
-use simulator::declare::Chip as _;
-use simulator::simulate::{simulate, MemoryMap};
-use simulator::component::{Computational, MemorySystem16};
+use simulator::declare::{Chip as _, IC};
+use simulator::simulate::{simulate, ChipState, MemoryMap};
+use simulator::component::{Computational, Computational16, MemorySystem16};
 use simulator::print_graph;
 
 /// Mostly this is testing the simulator's handling of the memory mapping we specified.
@@ -57,8 +57,46 @@ fn memory_system_behavior() {
 //     assert_eq!(rams,    2);
 // }
 
+fn simulate_loud(chip: IC<Computational16>, mmap: MemoryMap) -> ChipState {
+    use simulator::simulate::{initialize, synthesize};
+
+    let wiring = synthesize(&chip, mmap);
+
+    // When it breaks, it's nice to see what the simulator translated it to
+    println!("{}", wiring);
+    initialize(wiring)
+}
+
 fn instr(stmt: &str) -> u16 {
     parse_statement(stmt).unwrap().raw().unwrap()
+}
+
+#[test]
+fn decode_truth_table() {
+     let chip = Decode::chip();
+
+    // When it breaks, it's nice to see what it tried to do
+    println!("{}", print_graph(&chip));
+
+    let chip = flatten(chip);
+
+    let no_ram = MemoryMap::new(vec![]);
+    let mut state = simulate_loud(chip, no_ram);
+
+    state.set("instr", instr("@1234").into());
+    assert_eq!(state.get("is_c"), 0);
+
+    state.set("instr", instr("D=0").into());
+    assert_eq!(state.get("is_c"), 1);
+    assert_eq!(state.get("write_d"), 1);
+    assert_eq!(state.get("jmp_eq"), 0);
+}
+
+#[test]
+fn decode_optimal() {
+    let components = flatten(Decode::chip()).components;
+    let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
+    assert_eq!(nands, 0);
 }
 
 #[test]
@@ -66,12 +104,12 @@ fn cpu_behavior() {
     let chip = CPU::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    print!("{}", print_graph(&chip));
+    println!("{}", print_graph(&chip));
 
     let chip = flatten(chip);
 
     let no_ram = MemoryMap::new(vec![]);
-    let mut state = simulate(&chip, no_ram);
+    let mut state = simulate_loud(chip, no_ram);
 
     // Load constant 1234 into A
     state.set("instr", instr("@1234").into());
@@ -100,7 +138,7 @@ fn cpu_optimal() {
     // TODO: actually what?
     let components = flatten(CPU::chip()).components;
     let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
-    assert_eq!(nands, 959);
+    assert_eq!(nands, 931);
 }
 
 fn add_program() -> Vec<u64> {
