@@ -85,6 +85,17 @@ impl fmt::Display for ChipWiring {
             for r in &ms.regions { writeln!(f, "    {} words @ 0x{:04x}", r.size, r.base)?; }
         }
 
+        let mut inputs: Vec<_> = self.input_wiring.iter().collect();
+        inputs.sort_by_key(|(name, _)| name.clone());
+        for (name, wr) in &inputs {
+            writeln!(f, "  in  {name}: w{}[{}..{}]", wr.id.0, wr.offset, wr.offset + wr.width)?;
+        }
+        let mut outputs: Vec<_> = self.output_wiring.iter().collect();
+        outputs.sort_by_key(|(name, _)| name.clone());
+        for (name, wr) in &outputs {
+            writeln!(f, "  out {name}: w{}[{}..{}]", wr.id.0, wr.offset, wr.offset + wr.width)?;
+        }
+
         for (i, comp) in self.component_wiring.iter().enumerate() {
             match comp {
                 wiring::ComponentWiring::Nand(n) =>
