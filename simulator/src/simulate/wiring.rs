@@ -32,12 +32,14 @@ pub(super) enum ComponentWiring {
     Const,
 }
 
+/// Location of the storage for a single-bit wire, at a certain word index and bit offset within the word.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct BitRef { pub(super) id: WireIndex, pub(super) offset: u8 }
 impl BitRef {
     pub(super) fn new(b: &BusRef, ix: &Indexes) -> Self { BitRef { id: ix[&WireID::from(b)], offset: b.offset as u8 } }
 }
 
+/// Location of the storage for a multi-bit wire (aka a bus), at a certain word index, .
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct WireRef { pub(super) id: WireIndex, pub(super) offset: u8, pub(super) width: u8 }
 impl WireRef {
@@ -60,6 +62,7 @@ impl NandWiring {
 /// same input/output locations, this is more efficient.
 pub(super) struct ParallelNandWiring { pub(super) a: WireRef, pub(super) b: WireRef, pub(super) out: WireRef }
 impl ParallelNandWiring {
+    // TODO: as yet unclear how these will get built
     pub(super) fn new(a: WireRef, b: WireRef, out: WireRef) -> Self { Self { a, b, out } }
 }
 
