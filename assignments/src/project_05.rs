@@ -191,8 +191,6 @@ impl Component for Decode {
     type Target = Project05Component;
 
     fn expand(&self) -> Option<IC<Project05Component>> {
-        let mut components: Vec<Project05Component> = vec![];
-
         fn wrap<C>(comp: C) -> Project05Component
             where Project01Component: From<C>
         {

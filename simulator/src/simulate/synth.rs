@@ -245,28 +245,79 @@ where
     let mut rom_specs: Vec<ROMSpec> = Vec::new();
     let mut ms_specs:  Vec<MemorySystemSpec>  = Vec::new();
 
+    let ref_for = |b: &BusRef| {
+        let id = &WireID::from(b);
+        if let Some((offset, src, _)) = renamed.get(id) {
+            wiring::BitRef {
+                id: wire_indexes[src],
+                offset: *offset as u8,
+            }
+        }
+        else {
+            wiring::BitRef {
+                id: wire_indexes[id],
+                offset: b.offset as u8,
+            }
+        }
+    };
     let component_wiring: Vec<wiring::ComponentWiring> = components.iter().flat_map(|comp| {
         use wiring::ComponentWiring as CW;
         match comp {
-            Computational::Nand(c)         => Some(CW::Nand(wiring::NandWiring::new(c, &wire_indexes))),
+            Computational::Nand(c) => {
+                let intf = c.reflect();
+                Some(CW::Nand(wiring::NandWiring {
+                    a:   ref_for(&intf.inputs["a"]),
+                    b:   ref_for(&intf.inputs["b"]),
+                    out: ref_for(&intf.outputs["out"]),
+                }))
+            }
             Computational::Const(_)        => None,
             Computational::Buffer(_)       => None,
-            Computational::Register(c)     => Some(CW::Register(wiring::RegisterWiring::new(c, &wire_indexes))),
+            Computational::Register(c)     => {
+                let intf = c.reflect();
+                Some(CW::Register(wiring::RegisterWiring  {
+                    write:    ref_for(&intf.inputs["write"]),
+                    data_in:  wire_indexes[&WireID::from(&intf.inputs["data_in"])],
+                    data_out: wire_indexes[&WireID::from(&intf.outputs["data_out"])],
+                }))
+            }
             Computational::RAM(c)          => {
                 let slot = ram_specs.len();
                 ram_specs.push(RAMSpec { size: c.size });
-                Some(CW::RAM(wiring::RAMWiring::new(c, slot, &wire_indexes)))
+
+                let intf = c.reflect();
+                Some(CW::RAM(wiring::RAMWiring {
+                    device_slot: slot,
+                    out:     wire_indexes[&WireID::from(&intf.outputs["data_out"])],
+                    addr:    wire_indexes[&WireID::from(&intf.inputs["addr"])],
+                    write:   ref_for(&intf.inputs["write"]),
+                    data_in: wire_indexes[&WireID::from(&intf.inputs["data_in"])],
+                }))
             }
             Computational::ROM(c)          => {
                 let slot = rom_specs.len();
                 rom_specs.push(ROMSpec { size: c.size });
-                Some(CW::ROM(wiring::ROMWiring::new(c, slot, &wire_indexes)))
+
+                let intf = c.reflect();
+                Some(CW::ROM(wiring::ROMWiring{
+                    device_slot: slot,
+                    out:  wire_indexes[&WireID::from(&intf.outputs["out"])],
+                    addr: wire_indexes[&WireID::from(&intf.inputs["addr"])],
+                }))
             }
             Computational::MemorySystem(c) => {
                 let slot = ms_specs.len();
                 let regions = memory_map.take().expect("only one MemorySystem supported").contents;
                 ms_specs.push(MemorySystemSpec { regions });
-                Some(CW::MemorySystem(wiring::MemorySystemWiring::new(c, slot, &wire_indexes)))
+
+                let intf = c.reflect();
+                Some(CW::MemorySystem(wiring::MemorySystemWiring {
+                    device_slot: slot,
+                    out:     wire_indexes[&WireID::from(&intf.outputs["data_out"])],
+                    addr:    wire_indexes[&WireID::from(&intf.inputs["addr"])],
+                    write:   ref_for(&intf.inputs["write"]),
+                    data_in: wire_indexes[&WireID::from(&intf.inputs["data_in"])],
+                }))
             }
         }
     }).collect();
