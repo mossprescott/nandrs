@@ -8,7 +8,7 @@ use minifb::{Key, Window, WindowOptions};
 use assignments::project_05::{Computer, flatten, find_ram, find_rom, find_screen, memory_system};
 use assignments::project_06::{assemble, Program};
 use simulator::declare::Chip as _;
-use simulator::simulate::{simulate, RAMHandle};
+use simulator::simulate::{simulate, synthesize, initialize, RAMHandle};
 
 const WIDTH: usize = 512;
 const HEIGHT: usize = 256;
@@ -165,6 +165,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let trace   = args.contains(&"--trace".to_string());
     let verbose = args.contains(&"--verbose".to_string());
+    let print   = args.contains(&"--print".to_string());
     let scale   = if args.contains(&"--2x".to_string()) { 2 } else { 1 };
     let path = args.iter().find(|a| !a.starts_with('-') && *a != &args[0])
         .expect("usage: computer [--trace] [--verbose] [--2x] <rom-file>");
@@ -185,8 +186,16 @@ fn main() {
 
     eprint!("Synthesizing...");
     let chip = flatten(Computer::chip());
-    let mut state = simulate(&chip, memory_system());
-    eprintln!(" done.");
+    let mut state = if print {
+        let wiring = synthesize(&chip, memory_system());
+        eprintln!(" done.");
+        print!("{wiring}");
+        initialize(wiring)
+    } else {
+        let s = simulate(&chip, memory_system());
+        eprintln!(" done.");
+        s
+    };
 
     find_rom(&state).flash(instructions.iter().map(|&v| v as u64).collect());
 

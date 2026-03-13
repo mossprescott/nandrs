@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt;
 
 use crate::component::{Computational, Computational16};
 use crate::declare::{IC, Reflect as _};
@@ -45,6 +46,83 @@ pub struct MemoryMap {
 impl MemoryMap {
     pub fn new(contents: Vec<RAMMap>) -> Self {
         MemoryMap { contents }
+    }
+}
+
+fn fmt_wire(w: wiring::WireIndex) -> impl fmt::Display { w.0 }
+
+fn fmt_bit(b: wiring::BitRef) -> impl fmt::Display {
+    struct D(wiring::BitRef);
+    impl fmt::Display for D {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "w{}.{}", self.0.id.0, self.0.offset)
+        }
+    }
+    D(b)
+}
+
+fn fmt_bus(b: wiring::WireRef) -> impl fmt::Display {
+    struct D(wiring::WireRef);
+    impl fmt::Display for D {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            if self.0.offset == 0 {
+                write!(f, "w{}[{}]", self.0.id.0, self.0.width)
+            } else {
+                write!(f, "w{}[{}..{}]", self.0.id.0, self.0.offset, self.0.offset + self.0.width)
+            }
+        }
+    }
+    D(b)
+}
+
+impl fmt::Display for ChipWiring {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut nands = 0u32;
+        let mut registers = 0u32;
+        for comp in &self.component_wiring {
+            match comp {
+                wiring::ComponentWiring::Nand(_)     => nands += 1,
+                wiring::ComponentWiring::Register(_) => registers += 1,
+                _ => {}
+            }
+        }
+        writeln!(f, "ChipWiring:")?;
+        writeln!(f, "  wires:     {}", self.n_wires)?;
+        writeln!(f, "  nands:     {}", nands)?;
+        if registers > 0 { writeln!(f, "  registers: {}", registers)?; }
+        for (i, s) in self.ram_specs.iter().enumerate() {
+            writeln!(f, "  ram[{}]:    {} words", i, s.size)?;
+        }
+        for (i, s) in self.rom_specs.iter().enumerate() {
+            writeln!(f, "  rom[{}]:    {} words", i, s.size)?;
+        }
+        for (i, ms) in self.ms_specs.iter().enumerate() {
+            writeln!(f, "  memory[{}]:", i)?;
+            for r in &ms.regions { writeln!(f, "    {} words @ 0x{:04x}", r.size, r.base)?; }
+        }
+
+        for (i, comp) in self.component_wiring.iter().enumerate() {
+            match comp {
+                wiring::ComponentWiring::Nand(n) =>
+                    writeln!(f, "  [{i}] nand  a={} b={} out={}",
+                        fmt_bit(n.a), fmt_bit(n.b), fmt_bit(n.out))?,
+                wiring::ComponentWiring::Register(r) =>
+                    writeln!(f, "  [{i}] reg   write={} in={} out={}",
+                        fmt_bit(r.write), fmt_bus(r.data_in), fmt_wire(r.data_out))?,
+                wiring::ComponentWiring::ROM(r) =>
+                    writeln!(f, "  [{i}] rom[{}]  addr={} out={}",
+                        r.device_slot, fmt_bus(r.addr), fmt_bus(r.out))?,
+                wiring::ComponentWiring::RAM(r) =>
+                    writeln!(f, "  [{i}] ram[{}]  addr={} write={} in={} out={}",
+                        r.device_slot, fmt_bus(r.addr), fmt_bit(r.write), fmt_bus(r.data_in), fmt_bus(r.out))?,
+                wiring::ComponentWiring::MemorySystem(m) =>
+                    writeln!(f, "  [{i}] mem[{}]  addr={} write={} in={} out={}",
+                        m.device_slot, fmt_bus(m.addr), fmt_bit(m.write), fmt_bus(m.data_in), fmt_bus(m.out))?,
+                wiring::ComponentWiring::Const =>
+                    writeln!(f, "  [{i}] const")?,
+            }
+        }
+        Ok(())
     }
 }
 
