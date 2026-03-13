@@ -106,6 +106,9 @@ impl fmt::Display for ChipWiring {
                 wiring::ComponentWiring::Nand(n) =>
                     writeln!(f, "  [{i}] nand  a={} b={} out={}",
                         fmt_bit(n.a), fmt_bit(n.b), fmt_bit(n.out))?,
+                wiring::ComponentWiring::ParallelNand(n) =>
+                    writeln!(f, "  [{i}] pnand a={} b={} out={}",
+                        fmt_bus(n.a), fmt_bus(n.b), fmt_bus(n.out))?,
                 wiring::ComponentWiring::Register(r) =>
                     writeln!(f, "  [{i}] reg   write={} in={} out={}",
                         fmt_bit(r.write), fmt_bus(r.data_in), fmt_wire(r.data_out))?,

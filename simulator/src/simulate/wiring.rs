@@ -22,6 +22,7 @@ pub(super) type Indexes = HashMap<WireID, WireIndex>;
 
 pub(super) enum ComponentWiring {
     Nand(NandWiring),
+    ParallelNand(ParallelNandWiring),
     Register(RegisterWiring),
     ROM(ROMWiring),
     RAM(RAMWiring),
@@ -53,6 +54,13 @@ impl NandWiring {
             out: BitRef::new(&intf.outputs["out"], ix),
         }
     }
+}
+
+/// N parallel single-bit nands: out[i] = !(a[i] & b[i]). When multiple nands can be packed into the
+/// same input/output locations, this is more efficient.
+pub(super) struct ParallelNandWiring { pub(super) a: WireRef, pub(super) b: WireRef, pub(super) out: WireRef }
+impl ParallelNandWiring {
+    pub(super) fn new(a: WireRef, b: WireRef, out: WireRef) -> Self { Self { a, b, out } }
 }
 
 pub(super) struct RegisterWiring { pub(super) write: BitRef, pub(super) data_in: WireRef, pub(super) data_out: WireIndex }

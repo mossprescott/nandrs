@@ -204,10 +204,20 @@ impl ChipState {
 
 fn eval_nands(ws: &mut [u64], component_wiring: &[wiring::ComponentWiring]) {
     for comp in component_wiring {
-        if let wiring::ComponentWiring::Nand(nand) = comp {
-            let a = read_bit(ws, nand.a);
-            let b = read_bit(ws, nand.b);
-            write_bit(ws, nand.out, !(a & b));
+        match comp {
+            // This variant is cheaper to evaluate; just one bit without masking:
+            wiring::ComponentWiring::Nand(nand) => {
+                let a = read_bit(ws, nand.a);
+                let b = read_bit(ws, nand.b);
+                write_bit(ws, nand.out, !(a & b));
+            }
+            // This variant gets more done in a single iteration:
+            wiring::ComponentWiring::ParallelNand(nand) => {
+                let a = read_bus(ws, nand.a);
+                let b = read_bus(ws, nand.b);
+                write_bus(ws, nand.out, !(a & b));
+            }
+            _ => {}
         }
     }
 }
