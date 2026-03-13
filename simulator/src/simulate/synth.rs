@@ -59,6 +59,21 @@ fn fmt_bit(b: wiring::BitRef) -> impl fmt::Display {
     D(b)
 }
 
+fn fmt_wire(wr: wiring::WireRef) -> impl fmt::Display {
+    struct D(wiring::WireRef);
+    impl fmt::Display for D {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            if self.0.width == 1 {
+                write!(f, "w{}[{}]", self.0.id.0, self.0.offset)
+            }
+            else {
+                write!(f, "w{}[{}..{}]", self.0.id.0, self.0.offset, self.0.offset + self.0.width)
+            }
+        }
+    }
+    D(wr)
+}
+
 impl fmt::Display for ChipWiring {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut nands = 0u32;
@@ -88,12 +103,12 @@ impl fmt::Display for ChipWiring {
         let mut inputs: Vec<_> = self.input_wiring.iter().collect();
         inputs.sort_by_key(|(name, _)| name.clone());
         for (name, wr) in &inputs {
-            writeln!(f, "  in  {name}: w{}[{}..{}]", wr.id.0, wr.offset, wr.offset + wr.width)?;
+            writeln!(f, "  in  {name}: {}", fmt_wire(**wr))?;
         }
         let mut outputs: Vec<_> = self.output_wiring.iter().collect();
         outputs.sort_by_key(|(name, _)| name.clone());
         for (name, wr) in &outputs {
-            writeln!(f, "  out {name}: w{}[{}..{}]", wr.id.0, wr.offset, wr.offset + wr.width)?;
+            writeln!(f, "  out {name}: {}", fmt_wire(**wr))?;
         }
 
         for (i, comp) in self.component_wiring.iter().enumerate() {
