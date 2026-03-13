@@ -150,9 +150,6 @@ pub fn find_rom(state: &ChipState) -> ROMHandle {
 
 /// Pure wiring; this component just makes the unpacking of instructions easier to test and
 /// to use separately.
-///
-/// Note: due to the deficient way this kind of wiring is currently handled, it would be better
-/// at the moment to express this another way, but this is probably the right way to go eventually.
 #[derive(Reflect, Chip)]
 pub struct Decode {
     /// Instuction word from the ROM
