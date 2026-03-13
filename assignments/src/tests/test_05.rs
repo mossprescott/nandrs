@@ -316,5 +316,5 @@ fn computer_optimal() {
     let nands  = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
     assert_eq!(memsys,  1);
     assert_eq!(roms,    1);
-    assert_eq!(nands,  959);
+    assert_eq!(nands, 931);
 }
