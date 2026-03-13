@@ -14,6 +14,8 @@ pub enum Project02Component {
     Add16(Add16),
     Zero16(Zero16),
     Neg16(Neg16),
+    ZeroIf16(ZeroIf16),
+    NotIf16(NotIf16),
     ALU(ALU),
 }
 
@@ -24,6 +26,8 @@ impl From<Inc16>     for Project02Component { fn from(c: Inc16)     -> Self { Pr
 impl From<Add16>     for Project02Component { fn from(c: Add16)     -> Self { Project02Component::Add16(c)     } }
 impl From<Zero16>    for Project02Component { fn from(c: Zero16)    -> Self { Project02Component::Zero16(c)    } }
 impl From<Neg16>     for Project02Component { fn from(c: Neg16)     -> Self { Project02Component::Neg16(c)     } }
+impl From<ZeroIf16>  for Project02Component { fn from(c: ZeroIf16)  -> Self { Project02Component::ZeroIf16(c)  } }
+impl From<NotIf16>   for Project02Component { fn from(c: NotIf16)   -> Self { Project02Component::NotIf16(c)   } }
 impl From<ALU>       for Project02Component { fn from(c: ALU)       -> Self { Project02Component::ALU(c)       } }
 
 impl Component for Project02Component {
@@ -38,6 +42,8 @@ impl Component for Project02Component {
             Project02Component::Add16(c)     => c.expand(),
             Project02Component::Zero16(c)    => c.expand(),
             Project02Component::Neg16(c)     => c.expand(),
+            Project02Component::ZeroIf16(c)  => c.expand(),
+            Project02Component::NotIf16(c)   => c.expand(),
             Project02Component::ALU(c)       => c.expand(),
         }
     }
@@ -53,6 +59,8 @@ impl Reflect for Project02Component {
             Project02Component::Add16(c)     => c.reflect(),
             Project02Component::Zero16(c)    => c.reflect(),
             Project02Component::Neg16(c)     => c.reflect(),
+            Project02Component::ZeroIf16(c)  => c.reflect(),
+            Project02Component::NotIf16(c)   => c.reflect(),
             Project02Component::ALU(c)       => c.reflect(),
         }
     }
@@ -65,6 +73,8 @@ impl Reflect for Project02Component {
             Project02Component::Add16(c)     => c.name(),
             Project02Component::Zero16(c)    => c.name(),
             Project02Component::Neg16(c)     => c.name(),
+            Project02Component::ZeroIf16(c)  => c.name(),
+            Project02Component::NotIf16(c)   => c.name(),
             Project02Component::ALU(c)       => c.name(),
         }
     }
@@ -297,6 +307,65 @@ impl Component for Neg16 {
     }
 }
 
+/// Sort of the opposite of Zero16...Conditionally replace all the bits with 0. if z, out = 0,
+/// otherwise out = a
+///
+/// This is fewer gates than Mux16 with 0 as one of the inputs, by 16 Nands. Worth the effort? A
+/// little simplification of the flattened graph probably accomplishes the same thing by eliminating
+/// Nands with 0 on one side. pynand has that pass.
+#[derive(Reflect, Chip)]
+pub struct ZeroIf16 {
+    a: Input16,
+    z: Input,
+    out: Output16,
+}
+
+impl Component for ZeroIf16 {
+    type Target = Project02Component;
+
+    /*
+     not_z = Not { a: inputs.z }
+     outputs.out[0] = And { a: inputs.a[i], b: not_z }
+     */
+    fn expand(&self) -> Option<IC<Project02Component>> {
+        let not_z = Not { a: self.z.clone(), out: Output::new() };
+        let not_z_out = not_z.out.clone();
+        let mut components: Vec<Project02Component> = vec![Project01Component::from(not_z).into()];
+        for i in 0..16 {
+            let and = And { a: self.a.bit(i), b: not_z_out.clone().into(), out: self.out.bit(i) };
+            components.push(Project01Component::from(and).into());
+        }
+        Some(IC { name: self.name().to_string(), intf: self.reflect(), components })
+    }
+}
+
+/// Conditionally negate all the bits.
+///
+/// The savings here are much more modest than the similar-looking ZeroIf16 – just one gate.
+#[derive(Reflect, Chip)]
+pub struct NotIf16 {
+    a: Input16,
+    n: Input,
+    out: Output16,
+}
+
+impl Component for NotIf16 {
+    type Target = Project02Component;
+
+    /*
+     out[i] = Xor { a: inputs.a[i], b: inputs.n }
+     XOR with 1 flips the bit; XOR with 0 passes it through.
+     */
+    fn expand(&self) -> Option<IC<Project02Component>> {
+        let mut components: Vec<Project02Component> = Vec::new();
+        for i in 0..16 {
+            let xor = Xor { a: self.a.bit(i), b: self.n.clone(), out: self.out.bit(i) };
+            components.push(Project01Component::from(xor).into());
+        }
+        Some(IC { name: self.name().to_string(), intf: self.reflect(), components })
+    }
+}
+
 /// Hack ALU: computes one of several functions of x and y selected by control bits.
 #[derive(Reflect, Chip)]
 pub struct ALU {
@@ -329,16 +398,11 @@ impl Component for ALU {
     type Target = Project02Component;
 
     fn expand(&self) -> Option<IC<Project02Component>> {
-        let zero = Const { value: 0, out: Output16::new() };
+        let x1 = ZeroIf16 { a: self.x.clone(), z: self.zx.clone(), out: Output16::new() };
+        let x2 = NotIf16 { a: x1.out.clone().into(), n: self.nx.clone(), out: Output16::new() };
 
-        // Wasteful. Not; spread the bit across the whole word; And16. Is that about right?
-        let x1 = Mux16 { a0: self.x.clone(), a1: zero.out.clone().into(), sel: self.zx.clone(), out: Output16::new() };
-        let xn = Not16 { a: x1.out.clone().into(), out: Output16::new() };
-        let x2 = Mux16 { a0: x1.out.clone().into(), a1: xn.out.clone().into(), sel: self.nx.clone(), out: Output16::new() };
-
-        let y1 = Mux16 { a0: self.y.clone(), a1: zero.out.clone().into(), sel: self.zy.clone(), out: Output16::new() };
-        let yn = Not16 { a: y1.out.clone().into(), out: Output16::new() };
-        let y2 = Mux16 { a0: y1.out.clone().into(), a1: yn.out.clone().into(), sel: self.ny.clone(), out: Output16::new() };
+        let y1 = ZeroIf16 { a: self.y.clone(), z: self.zy.clone(), out: Output16::new() };
+        let y2 = NotIf16 { a: y1.out.clone().into(), n: self.ny.clone(), out: Output16::new() };
 
         let and = And16 { a: x2.out.clone().into(), b: y2.out.clone().into(), out: Output16::new() };
         let add = Add16 { a: x2.out.clone().into(), b: y2.out.clone().into(), out: Output16::new() };
@@ -351,13 +415,10 @@ impl Component for ALU {
         let rneg = Neg16 { a: out.out.clone().into(), out: self.ng.clone() };
 
         Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![
-            Project01Component::from(zero).into(),
-            Project01Component::from(x1).into(),
-            Project01Component::from(xn).into(),
-            Project01Component::from(x2).into(),
-            Project01Component::from(y1).into(),
-            Project01Component::from(yn).into(),
-            Project01Component::from(y2).into(),
+            x1.into(),
+            x2.into(),
+            y1.into(),
+            y2.into(),
             Project01Component::from(and).into(),
             add.into(),
             Project01Component::from(result).into(),
