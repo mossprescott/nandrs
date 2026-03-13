@@ -110,8 +110,8 @@ impl fmt::Display for ChipWiring {
                     writeln!(f, "  [{i}] pnand a={} b={} out={}",
                         fmt_bus(n.a), fmt_bus(n.b), fmt_bus(n.out))?,
                 wiring::ComponentWiring::Register(r) =>
-                    writeln!(f, "  [{i}] reg   write={} in={} out={}",
-                        fmt_bit(r.write), fmt_bus(r.data_in), fmt_wire(r.data_out))?,
+                    writeln!(f, "  [{i}] reg   write={} in={} out=w{}[16]",
+                        fmt_bit(r.write), fmt_bus(r.data_in), r.data_out.0)?,
                 wiring::ComponentWiring::ROM(r) =>
                     writeln!(f, "  [{i}] rom[{}]  addr={} out={}",
                         r.device_slot, fmt_bus(r.addr), fmt_bus(r.out))?,
