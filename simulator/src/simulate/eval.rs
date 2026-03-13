@@ -202,10 +202,6 @@ fn eval_nands(ws: &mut [u64], component_wiring: &[wiring::ComponentWiring]) {
                 let b = read_bit(ws, nand.b);
                 write_bit(ws, nand.out, !(a & b));
             }
-            // This variant gets more done in a single iteration:
-            wiring::ComponentWiring::ParallelNand(nand) => {
-                ws[nand.out.0 as usize] = !(ws[nand.a.0 as usize] & ws[nand.b.0 as usize]);
-            }
             _ => {}
         }
     }
