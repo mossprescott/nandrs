@@ -20,31 +20,36 @@ pub(super) struct WireIndex(pub(super) u32);
 
 pub(super) type Indexes = HashMap<WireID, WireIndex>;
 
+/// Records connections involved in one step of evaluation. Could be called "Op", maybe?
 pub(super) enum ComponentWiring {
     Nand(NandWiring),
     Register(RegisterWiring),
     ROM(ROMWiring),
     RAM(RAMWiring),
     MemorySystem(MemorySystemWiring),
-    /// Note: output wiring for consts is not needed during evaluation because the bits are
-    /// never updated.
-    Const,
+    // /// Note: output wiring for consts is not needed during evaluation because the bits are
+    // /// never updated.
+    // Const,
+    // TODO: Not? And? Other re-constructed primitives to save ops?
 }
 
 /// Location of the storage for a single-bit wire, at a certain word index and bit offset within the word.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct BitRef { pub(super) id: WireIndex, pub(super) offset: u8 }
 impl BitRef {
-    pub(super) fn new(b: &BusRef, ix: &Indexes) -> Self { BitRef { id: ix[&WireID::from(b)], offset: b.offset as u8 } }
+    // FIXME: new() doesn't really say it.
+    pub(super) fn new(b: &BusRef, ix: &Indexes) -> Self {
+        BitRef {
+            id: ix[&WireID::from(b)],
+            offset: b.offset as u8
+        }
+    }
 }
 
 /// Location of the storage for a multi-bit wire (aka a bus), at a certain word index. Now used only
 /// for input/output wiring when sub-component chips are tested in isolation. If then.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct WireRef { pub(super) id: WireIndex, pub(super) offset: u8, pub(super) width: u8 }
-impl WireRef {
-    pub(super) fn new(b: &BusRef, ix: &Indexes) -> Self { WireRef { id: ix[&WireID::from(b)], offset: b.offset as u8, width: b.width as u8 } }
-}
 
 /// A single nand, referring to completely arbitrary bits of the words where it input and outputs
 /// are stored.

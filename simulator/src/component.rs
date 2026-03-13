@@ -85,27 +85,65 @@ impl Component for Const {
     }
 }
 
-/// Type of components that participate in "combinational" circuits: only Nand and Const.
+/// "Gate" that just connects its input to its output without modifying it. For our purposes,
+/// this is useful for connecting an input directly to an ouput in an IC.
+#[derive(Clone)]
+pub struct Buffer {
+    pub a: Input,
+    pub out: Output,
+}
+
+impl Reflect for Buffer {
+    fn reflect(&self) -> Interface {
+        Interface {
+            inputs:  HashMap::from([
+                ("a".to_string(),   self.a.clone().into()),
+            ]),
+            outputs: HashMap::from([
+                ("out".to_string(), self.out.clone().into()),
+            ]),
+        }
+    }
+    fn name(&self) -> String { "Buffer".into() }
+}
+
+impl AsConst for Buffer {
+    fn as_const(&self) -> Option<u64> { None }
+}
+
+/// Nothing to expand; Buffer is primitive.
+impl Component for Buffer {
+    type Target = Buffer;
+
+    fn expand(&self) -> Option<IC<Buffer>> {
+        None
+    }
+}
+/// Type of components that participate in "combinational" circuits: only Nand plus the
+/// pseudo-comoponents Const and Buffer.
 pub enum Combinational {
     Nand(Nand),
     Const(Const),
-    // ROM?
+    Buffer(Buffer),
 }
 
 impl From<Nand>  for Combinational { fn from(c: Nand)  -> Self { Combinational::Nand(c)  } }
 impl From<Const> for Combinational { fn from(c: Const) -> Self { Combinational::Const(c) } }
+impl From<Buffer> for Combinational { fn from(c: Buffer) -> Self { Combinational::Buffer(c) } }
 
 impl Reflect for Combinational {
     fn reflect(&self) -> Interface {
         match self {
             Self::Nand(c)  => c.reflect(),
             Self::Const(c) => c.reflect(),
+            Self::Buffer(c) => c.reflect(),
         }
     }
     fn name(&self) -> String {
         match self {
             Self::Nand(c)  => c.name(),
             Self::Const(c) => c.name(),
+            Self::Buffer(c) => c.name(),
         }
     }
 }
@@ -157,6 +195,7 @@ pub type Register16 = Register<N16>;
 pub enum Sequential<Width: Nat> {
     Nand(Nand),
     Const(Const),
+    Buffer(Buffer),
     Register(Register<Width>),
 }
 
@@ -165,6 +204,7 @@ impl<Width: Nat + Clone> Reflect for Sequential<Width> {
         match self {
             Self::Nand(c)     => c.reflect(),
             Self::Const(c)    => c.reflect(),
+            Self::Buffer(c)   => c.reflect(),
             Self::Register(c) => c.reflect(),
         }
     }
@@ -172,6 +212,7 @@ impl<Width: Nat + Clone> Reflect for Sequential<Width> {
         match self {
             Self::Nand(c)     => c.name(),
             Self::Const(c)    => c.name(),
+            Self::Buffer(c)   => c.name(),
             Self::Register(c) => c.name(),
         }
     }
@@ -331,6 +372,7 @@ impl<A: Nat, D: Nat> AsConst for MemorySystem<A, D> {
 pub enum Computational<A: Nat, D: Nat> {
     Nand(Nand),
     Const(Const),
+    Buffer(Buffer),
     Register(Register<D>),
     RAM(RAM<A, D>),
     ROM(ROM<A, D>),
@@ -343,6 +385,7 @@ impl<A: Nat + Clone, D: Nat + Clone> Reflect for Computational<A, D> {
         match self {
             Self::Nand(c)         => c.reflect(),
             Self::Const(c)        => c.reflect(),
+            Self::Buffer(c)       => c.reflect(),
             Self::Register(c)     => c.reflect(),
             Self::RAM(c)          => c.reflect(),
             Self::ROM(c)          => c.reflect(),
@@ -353,6 +396,7 @@ impl<A: Nat + Clone, D: Nat + Clone> Reflect for Computational<A, D> {
         match self {
             Self::Nand(c)         => c.name(),
             Self::Const(c)        => c.name(),
+            Self::Buffer(c)       => c.name(),
             Self::Register(c)     => c.name(),
             Self::RAM(c)          => c.name(),
             Self::ROM(c)          => c.name(),
@@ -379,6 +423,7 @@ impl<A: Nat, D: Nat> From<Sequential<D>> for Computational<A, D> {
         match s {
             Sequential::Nand(n)     => Computational::Nand(n),
             Sequential::Const(n)    => Computational::Const(n),
+            Sequential::Buffer(n)   => Computational::Buffer(n),
             Sequential::Register(r) => Computational::Register(r),
         }
     }

@@ -1,10 +1,11 @@
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::fmt;
 
 use crate::component::{Computational, Computational16};
-use crate::declare::{IC, Reflect as _};
+use crate::declare::{BusRef, IC, Reflect as _};
 
-use super::wiring::{self, Indexes, WireID, WireIndex};
+use super::wiring::{self, Indexes, WireID, WireIndex, WireRef};
 
 /// Static, synthesized description of the circuit's wiring. Computed once and never mutated.
 pub struct ChipWiring {
@@ -128,8 +129,8 @@ impl fmt::Display for ChipWiring {
                 wiring::ComponentWiring::MemorySystem(m) =>
                     writeln!(f, "  [{i}] mem[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
                         m.device_slot, m.addr.0, fmt_bit(m.write), m.data_in.0, m.out.0)?,
-                wiring::ComponentWiring::Const =>
-                    writeln!(f, "  [{i}] const")?,
+                // wiring::ComponentWiring::Const =>
+                //     writeln!(f, "  [{i}] const")?,
             }
         }
         Ok(())
@@ -150,17 +151,50 @@ where
     let components: Vec<Computational16> = chip.components.iter().cloned().map(Into::into).collect();
     let mut memory_map = Some(memory_map);
 
+    // Build map of wires that have been connected directly to some existing wire; when the Buffer's
+    // "out" wire (the key in renamed) is encountered, the "a" wire should be substituted (the value
+    // here)
+    // Value is (bit offset for the src, WireID, bit offset of the dst)
+    let mut renamed: HashMap<WireID, (usize, WireID, usize)> = HashMap::new();
+    for comp in &components {
+        match comp {
+            Computational::Buffer(c) => {
+                let intf = c.reflect();
+                let a = &intf.inputs["a"];
+                let out = &intf.outputs["out"];
+                renamed.insert(WireID::from(out), (a.offset, WireID::from(a), out.offset));
+            }
+            _ => {}
+        }
+    }
+
     // Build wire_indexes: assign a contiguous WireIndex to every unique wire in the circuit.
     // This must be done before building component_wiring, which uses WireIndex directly.
     let mut wire_indexes: Indexes = HashMap::new();
     {
         let mut next_index = 0usize;
         let mut assign = |id: WireID| {
-            if let std::collections::hash_map::Entry::Vacant(e) = wire_indexes.entry(id) {
+            if let Some(src) = renamed.get(&id) {
+                // assign index to the src, insert id with that index
+                let index: WireIndex;
+                match wire_indexes.entry(src.1) {
+                    Entry::Vacant(e) => {
+                        index = WireIndex(next_index as u32);
+                        e.insert(index);
+                        next_index += 1;
+                    }
+                    Entry::Occupied(e) => {
+                        index = *e.get();
+                    }
+                }
+                wire_indexes.insert(id, index);
+            }
+            else if let Entry::Vacant(e) = wire_indexes.entry(id) {
                 e.insert(WireIndex(next_index as u32));
                 next_index += 1;
             }
         };
+
         let intf = chip.reflect();
         for b in intf.inputs.values()  { assign(WireID::from(b)); }
         for b in intf.outputs.values() { assign(WireID::from(b)); }
@@ -171,6 +205,12 @@ where
                     assign(WireID::from(&intf.inputs["a"]));
                     assign(WireID::from(&intf.inputs["b"]));
                     assign(WireID::from(&intf.outputs["out"]));
+                }
+                Computational::Const(_) => {
+                    // TODO: non-zero const needs output wire here, most likely
+                }
+                Computational::Buffer(_) => {
+                    // Ignore; already recorded in `renamed`
                 }
                 Computational::Register(c) => {
                     let intf = c.reflect();
@@ -197,7 +237,6 @@ where
                     assign(WireID::from(&intf.inputs["write"]));
                     assign(WireID::from(&intf.inputs["data_in"]));
                 }
-                Computational::Const(_) => {}
             }
         }
     }
@@ -206,37 +245,57 @@ where
     let mut rom_specs: Vec<ROMSpec> = Vec::new();
     let mut ms_specs:  Vec<MemorySystemSpec>  = Vec::new();
 
-    let component_wiring: Vec<wiring::ComponentWiring> = components.iter().map(|comp| {
+    let component_wiring: Vec<wiring::ComponentWiring> = components.iter().flat_map(|comp| {
         use wiring::ComponentWiring as CW;
         match comp {
-            Computational::Nand(c)         => CW::Nand(wiring::NandWiring::new(c, &wire_indexes)),
-            Computational::Register(c)     => CW::Register(wiring::RegisterWiring::new(c, &wire_indexes)),
+            Computational::Nand(c)         => Some(CW::Nand(wiring::NandWiring::new(c, &wire_indexes))),
+            Computational::Const(_)        => None,
+            Computational::Buffer(_)       => None,
+            Computational::Register(c)     => Some(CW::Register(wiring::RegisterWiring::new(c, &wire_indexes))),
             Computational::RAM(c)          => {
                 let slot = ram_specs.len();
                 ram_specs.push(RAMSpec { size: c.size });
-                CW::RAM(wiring::RAMWiring::new(c, slot, &wire_indexes))
+                Some(CW::RAM(wiring::RAMWiring::new(c, slot, &wire_indexes)))
             }
             Computational::ROM(c)          => {
                 let slot = rom_specs.len();
                 rom_specs.push(ROMSpec { size: c.size });
-                CW::ROM(wiring::ROMWiring::new(c, slot, &wire_indexes))
+                Some(CW::ROM(wiring::ROMWiring::new(c, slot, &wire_indexes)))
             }
             Computational::MemorySystem(c) => {
                 let slot = ms_specs.len();
                 let regions = memory_map.take().expect("only one MemorySystem supported").contents;
                 ms_specs.push(MemorySystemSpec { regions });
-                CW::MemorySystem(wiring::MemorySystemWiring::new(c, slot, &wire_indexes))
+                Some(CW::MemorySystem(wiring::MemorySystemWiring::new(c, slot, &wire_indexes)))
             }
-            Computational::Const(_)        => CW::Const,
         }
     }).collect();
 
     let n_wires = wire_indexes.len();
     let intf = chip.reflect();
+
+    let to_wr = |(name, b): (&String, &BusRef)| {
+        if let Some((offset, _, _)) = renamed.get(&WireID::from(b)) {
+           (name.clone(),
+            WireRef {
+                id: wire_indexes[&WireID::from(b)],
+                offset: *offset as u8,
+                width: b.width as u8
+            })
+       }
+        else {
+            (name.clone(),
+            WireRef {
+                id: wire_indexes[&WireID::from(b)],
+                offset: b.offset as u8,
+                width: b.width as u8
+            })
+        }
+    };
     ChipWiring {
         component_wiring,
-        input_wiring:  intf.inputs.iter().map(|(name, b)|  (name.clone(), wiring::WireRef::new(b, &wire_indexes))).collect(),
-        output_wiring: intf.outputs.iter().map(|(name, b)| (name.clone(), wiring::WireRef::new(b, &wire_indexes))).collect(),
+        input_wiring:  intf.inputs.iter().map(to_wr).collect(),
+        output_wiring: intf.outputs.iter().map(to_wr).collect(),
         n_wires,
         ram_specs,
         rom_specs,

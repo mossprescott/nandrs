@@ -3,7 +3,7 @@
 use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, AsConst, Chip};
 use simulator::Reflect as _;
 use simulator::Chip as _;
-use simulator::component::{Nand, Register16, RAM16, ROM16, MemorySystem16, Sequential, Computational, Computational16};
+use simulator::component::{Buffer, Nand, Register16, RAM16, ROM16, MemorySystem16, Sequential, Computational, Computational16};
 use simulator::simulate::{ChipState, BusResident, ROMHandle, RAMHandle, MemoryMap, RAMMap};
 use crate::project_01::{Project01Component, Not, And, Or, Mux16};
 use crate::project_02::{Project02Component, ALU};
@@ -96,6 +96,7 @@ pub fn flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Computation
                         .map(|s| match s {
                             Sequential::Nand(n)     => Computational::Nand(n),
                             Sequential::Const(c)    => Computational::Const(c),
+                            Sequential::Buffer(c)   => Computational::Buffer(c),
                             Sequential::Register(r) => Computational::Register(r),
                         })
                         .collect(),
@@ -188,52 +189,47 @@ pub struct Decode {
 }
 
 impl Component for Decode {
-    // Note: in fact, this is only using Nots and really shouldn't even need that, but it keeps
+    // Note: in fact, this is only using Buffer, which is only Combinational, but it keeps
     // life simple if everything in this file flattens to the same type.
     type Target = Project05Component;
 
     fn expand(&self) -> Option<IC<Project05Component>> {
         let mut components: Vec<Project05Component> = vec![];
 
-        fn wrap(not: Not) -> Project05Component {
-            let p01: Project01Component = not.into();
+        fn wrap<C>(comp: C) -> Project05Component
+            where Project01Component: From<C>
+        {
+            let p01: Project01Component = comp.into();
             let p02: Project02Component = p01.into();
             let p03: Project03Component = p02.into();
             p03.into()
         }
-        let mut wire = |src: Input, dst: Output| {
-            // NOT(NOT(src)) = src: a dumb way to express a plain wire using Nand gates.
-            // This is a workaround because there's currently no way to express wiring without some
-            // component.
-            let mid  = Not { a: src, out: Not::chip().out };
-            let pass = Not { a: mid.out.clone().into(), out: dst };
-            for not in [mid, pass] { components.push(wrap(not)); }
-        };
-
-        wire(self.instr.bit(15).clone(), self.is_c.clone());
-        // bit-14: unused
-        // bit-13: unused
-        wire(self.instr.bit(12).clone(), self.read_m.clone());
-
-        wire(self.instr.bit(11).clone(), self.zx.clone());
-        wire(self.instr.bit(10).clone(), self.nx.clone());
-        wire(self.instr.bit( 9).clone(), self.zy.clone());
-        wire(self.instr.bit( 8).clone(), self.ny.clone());
-        wire(self.instr.bit( 7).clone(), self.f.clone());
-        wire(self.instr.bit( 6).clone(), self.no.clone());
-
-        wire(self.instr.bit( 5).clone(), self.write_a.clone());
-        wire(self.instr.bit( 4).clone(), self.write_d.clone());
-        wire(self.instr.bit( 3).clone(), self.write_m.clone());
-
-        wire(self.instr.bit( 2).clone(), self.jmp_lt.clone());
-        wire(self.instr.bit( 1).clone(), self.jmp_eq.clone());
-        wire(self.instr.bit( 0).clone(), self.jmp_gt.clone());
 
         Some(IC {
             name: self.name().to_string(),
             intf: self.reflect(),
-            components,
+            components: vec![
+                wrap(Buffer { a: self.instr.bit(15).clone(), out: self.is_c.clone() }),
+                // bit-14: unused
+                // bit-13: unused
+
+                wrap(Buffer { a: self.instr.bit(12).clone(), out: self.read_m.clone() }),
+
+                wrap(Buffer { a: self.instr.bit(11).clone(), out: self.zx.clone() }),
+                wrap(Buffer { a: self.instr.bit(10).clone(), out: self.nx.clone() }),
+                wrap(Buffer { a: self.instr.bit( 9).clone(), out: self.zy.clone() }),
+                wrap(Buffer { a: self.instr.bit( 8).clone(), out: self.ny.clone() }),
+                wrap(Buffer { a: self.instr.bit( 7).clone(), out: self.f.clone() }),
+                wrap(Buffer { a: self.instr.bit( 6).clone(), out: self.no.clone() }),
+
+                wrap(Buffer { a: self.instr.bit( 5).clone(), out: self.write_a.clone() }),
+                wrap(Buffer { a: self.instr.bit( 4).clone(), out: self.write_d.clone() }),
+                wrap(Buffer { a: self.instr.bit( 3).clone(), out: self.write_m.clone() }),
+
+                wrap(Buffer { a: self.instr.bit( 2).clone(), out: self.jmp_lt.clone() }),
+                wrap(Buffer { a: self.instr.bit( 1).clone(), out: self.jmp_eq.clone() }),
+                wrap(Buffer { a: self.instr.bit( 0).clone(), out: self.jmp_gt.clone() }),
+            ],
         })
     }
 }

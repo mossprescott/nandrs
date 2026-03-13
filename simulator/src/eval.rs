@@ -48,6 +48,11 @@ where
                 let entry = wire_state.entry(id).or_insert(0);
                 *entry = (*entry & !mask) | ((c.value << busref.offset) & mask);
             }
+            Combinational::Buffer(buffer) => {
+                let intf = buffer.reflect();
+                let a = read_bit(&wire_state, &intf.inputs["a"]);
+                write_bit(&mut wire_state, &intf.outputs["out"], a);
+            }
         }
     }
 

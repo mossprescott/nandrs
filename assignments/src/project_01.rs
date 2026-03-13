@@ -8,10 +8,11 @@ use simulator::Chip as _;
 use std::collections::HashMap;
 
 // Re-export since the other components here parallel Nand:
-pub use simulator::component::{Nand, Const};
+pub use simulator::component::{Nand, Const, Buffer};
 
 /// Components implemented in this project: simple, logical components for 1 and 16 bits.
 pub enum Project01Component {
+    Buffer(Buffer),
     Const(Const),
     Nand(Nand),
     Not(Not),
@@ -26,6 +27,7 @@ pub enum Project01Component {
     Mux16(Mux16),
 }
 
+impl From<Buffer> for Project01Component { fn from(c: Buffer) -> Self { Project01Component::Buffer(c) } }
 impl From<Const> for Project01Component { fn from(c: Const) -> Self { Project01Component::Const(c) } }
 impl From<Nand>  for Project01Component { fn from(c: Nand)  -> Self { Project01Component::Nand(c)  } }
 impl From<Not>   for Project01Component { fn from(c: Not)   -> Self { Project01Component::Not(c)   } }
@@ -44,6 +46,7 @@ impl Component for Project01Component {
 
     fn expand(&self) -> Option<IC<Project01Component>> {
         match self {
+            Project01Component::Buffer(c) => c.expand().map(|ic| unreachable!()),
             Project01Component::Const(c) => c.expand().map(|ic| unreachable!()),
             Project01Component::Nand(c)  => c.expand().map(|ic| unreachable!()),
             Project01Component::Not(c)   => c.expand(),
@@ -61,6 +64,7 @@ impl Component for Project01Component {
 impl Reflect for Project01Component {
     fn reflect(&self) -> simulator::Interface {
         match self {
+            Project01Component::Buffer(c) => c.reflect(),
             Project01Component::Const(c) => c.reflect(),
             Project01Component::Nand(c)  => c.reflect(),
             Project01Component::Not(c)   => c.reflect(),
@@ -76,6 +80,7 @@ impl Reflect for Project01Component {
     }
     fn name(&self) -> String {
         match self {
+            Project01Component::Buffer(c) => c.name(),
             Project01Component::Const(c) => c.name(),
             Project01Component::Nand(c)  => c.name(),
             Project01Component::Not(c)   => c.name(),
@@ -104,6 +109,7 @@ pub fn flatten<C: Reflect + Into<Project01Component>>(chip: C) -> IC<Combination
             None => match comp {
                 Project01Component::Nand(c) => vec![c.into()],
                 Project01Component::Const(c) => vec![c.into()],
+                Project01Component::Buffer(c) => vec![c.into()],
                 _ => panic!("Did not reduce to Nand: {:?}", comp.name()),
             },
             Some(ic) => ic.components.into_iter().flat_map(go).collect(),
