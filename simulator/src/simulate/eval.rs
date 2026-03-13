@@ -110,20 +110,17 @@ impl ChipState {
             match comp {
                 wiring::ComponentWiring::Register(reg) => {
                     if read_bit(&self.wire_state, reg.write) {
-                        let val = read_bus(&self.wire_state, reg.data_in);
-                        self.reg_state[reg.data_out.0 as usize] = val;
+                        self.reg_state[reg.data_out.0 as usize] = self.wire_state[reg.data_in.0 as usize];
                     }
                 }
                 wiring::ComponentWiring::RAM(ram) => {
                     if read_bit(&self.wire_state, ram.write) {
-                        let val = read_bus(&self.wire_state, ram.data_in);
-                        let _ = self.ram_devices[ram.device_slot].borrow_mut().write(val);
+                        let _ = self.ram_devices[ram.device_slot].borrow_mut().write(self.wire_state[ram.data_in.0 as usize]);
                     }
                 }
                 wiring::ComponentWiring::MemorySystem(ms) => {
                     if read_bit(&self.wire_state, ms.write) {
-                        let val = read_bus(&self.wire_state, ms.data_in);
-                        let _ = self.ms_devices[ms.device_slot].borrow_mut().write(val);
+                        let _ = self.ms_devices[ms.device_slot].borrow_mut().write(self.wire_state[ms.data_in.0 as usize]);
                     }
                 }
                 _ => {}
@@ -135,13 +132,11 @@ impl ChipState {
         for comp in &self.wiring.component_wiring {
             match comp {
                 wiring::ComponentWiring::RAM(ram) => {
-                    let new_addr = read_bus(&self.wire_state, ram.addr);
-                    let _ = self.ram_devices[ram.device_slot].borrow_mut().set_addr(new_addr as usize);
+                    let _ = self.ram_devices[ram.device_slot].borrow_mut().set_addr(self.wire_state[ram.addr.0 as usize] as usize);
                     self.ram_devices[ram.device_slot].borrow_mut().ticktock();
                 }
                 wiring::ComponentWiring::MemorySystem(ms) => {
-                    let new_addr = read_bus(&self.wire_state, ms.addr);
-                    let _ = self.ms_devices[ms.device_slot].borrow_mut().set_addr(new_addr as usize);
+                    let _ = self.ms_devices[ms.device_slot].borrow_mut().set_addr(self.wire_state[ms.addr.0 as usize] as usize);
                     self.ms_devices[ms.device_slot].borrow_mut().ticktock();
                 }
                 _ => {}
@@ -157,8 +152,7 @@ impl ChipState {
         // addr latch for the cycle after.
         for comp in &self.wiring.component_wiring {
             if let wiring::ComponentWiring::ROM(rom) = comp {
-                let new_addr = read_bus(&self.wire_state, rom.addr);
-                let _ = self.rom_devices[rom.device_slot].borrow_mut().set_addr(new_addr as usize);
+                let _ = self.rom_devices[rom.device_slot].borrow_mut().set_addr(self.wire_state[rom.addr.0 as usize] as usize);
             }
         }
     }
@@ -178,16 +172,13 @@ impl ChipState {
         for comp in &self.wiring.component_wiring {
             match comp {
                 wiring::ComponentWiring::RAM(ram) => {
-                    let val = self.ram_devices[ram.device_slot].borrow().read().unwrap_or(0);
-                    write_bus(&mut self.wire_state, ram.out, val);
+                    self.wire_state[ram.out.0 as usize] = self.ram_devices[ram.device_slot].borrow().read().unwrap_or(0);
                 }
                 wiring::ComponentWiring::ROM(rom) => {
-                    let val = self.rom_devices[rom.device_slot].borrow().read().unwrap_or(0);
-                    write_bus(&mut self.wire_state, rom.out, val);
+                    self.wire_state[rom.out.0 as usize] = self.rom_devices[rom.device_slot].borrow().read().unwrap_or(0);
                 }
                 wiring::ComponentWiring::MemorySystem(ms) => {
-                    let val = self.ms_devices[ms.device_slot].borrow().read().unwrap_or(0);
-                    write_bus(&mut self.wire_state, ms.out, val);
+                    self.wire_state[ms.out.0 as usize] = self.ms_devices[ms.device_slot].borrow().read().unwrap_or(0);
                 }
                 _ => {}
             }
@@ -213,9 +204,7 @@ fn eval_nands(ws: &mut [u64], component_wiring: &[wiring::ComponentWiring]) {
             }
             // This variant gets more done in a single iteration:
             wiring::ComponentWiring::ParallelNand(nand) => {
-                let a = read_bus(ws, nand.a);
-                let b = read_bus(ws, nand.b);
-                write_bus(ws, nand.out, !(a & b));
+                ws[nand.out.0 as usize] = !(ws[nand.a.0 as usize] & ws[nand.b.0 as usize]);
             }
             _ => {}
         }

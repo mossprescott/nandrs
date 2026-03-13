@@ -49,27 +49,11 @@ impl MemoryMap {
     }
 }
 
-fn fmt_wire(w: wiring::WireIndex) -> impl fmt::Display { w.0 }
-
 fn fmt_bit(b: wiring::BitRef) -> impl fmt::Display {
     struct D(wiring::BitRef);
     impl fmt::Display for D {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "w{}.{}", self.0.id.0, self.0.offset)
-        }
-    }
-    D(b)
-}
-
-fn fmt_bus(b: wiring::WireRef) -> impl fmt::Display {
-    struct D(wiring::WireRef);
-    impl fmt::Display for D {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            if self.0.offset == 0 {
-                write!(f, "w{}[{}]", self.0.id.0, self.0.width)
-            } else {
-                write!(f, "w{}[{}..{}]", self.0.id.0, self.0.offset, self.0.offset + self.0.width)
-            }
+            write!(f, "w{}[{}]", self.0.id.0, self.0.offset)
         }
     }
     D(b)
@@ -107,20 +91,20 @@ impl fmt::Display for ChipWiring {
                     writeln!(f, "  [{i}] nand  a={} b={} out={}",
                         fmt_bit(n.a), fmt_bit(n.b), fmt_bit(n.out))?,
                 wiring::ComponentWiring::ParallelNand(n) =>
-                    writeln!(f, "  [{i}] pnand a={} b={} out={}",
-                        fmt_bus(n.a), fmt_bus(n.b), fmt_bus(n.out))?,
+                    writeln!(f, "  [{i}] pnand a=w{}[..] b=w{}[..] out=w{}[..]",
+                        n.a.0, n.b.0, n.out.0)?,
                 wiring::ComponentWiring::Register(r) =>
-                    writeln!(f, "  [{i}] reg   write={} in={} out=w{}[16]",
-                        fmt_bit(r.write), fmt_bus(r.data_in), r.data_out.0)?,
+                    writeln!(f, "  [{i}] reg   write={} in=w{}[..] out=w{}[..]",
+                        fmt_bit(r.write), r.data_in.0, r.data_out.0)?,
                 wiring::ComponentWiring::ROM(r) =>
-                    writeln!(f, "  [{i}] rom[{}]  addr={} out={}",
-                        r.device_slot, fmt_bus(r.addr), fmt_bus(r.out))?,
+                    writeln!(f, "  [{i}] rom[{}]  addr=w{}[..] out=w{}[..]",
+                        r.device_slot, r.addr.0, r.out.0)?,
                 wiring::ComponentWiring::RAM(r) =>
-                    writeln!(f, "  [{i}] ram[{}]  addr={} write={} in={} out={}",
-                        r.device_slot, fmt_bus(r.addr), fmt_bit(r.write), fmt_bus(r.data_in), fmt_bus(r.out))?,
+                    writeln!(f, "  [{i}] ram[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
+                        r.device_slot, r.addr.0, fmt_bit(r.write), r.data_in.0, r.out.0)?,
                 wiring::ComponentWiring::MemorySystem(m) =>
-                    writeln!(f, "  [{i}] mem[{}]  addr={} write={} in={} out={}",
-                        m.device_slot, fmt_bus(m.addr), fmt_bit(m.write), fmt_bus(m.data_in), fmt_bus(m.out))?,
+                    writeln!(f, "  [{i}] mem[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
+                        m.device_slot, m.addr.0, fmt_bit(m.write), m.data_in.0, m.out.0)?,
                 wiring::ComponentWiring::Const =>
                     writeln!(f, "  [{i}] const")?,
             }
