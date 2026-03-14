@@ -18,6 +18,16 @@ Support alternative chip designs equally well:
 - simulate every gate and wire, with acceptable performance
 - that is, run any reasonable design at approx. 1 MHz or better.
 
+On the other hand, some concessions are made in the interest of simulation speed, as long as they don't
+get in the way of experimenting:
+- max bus width is 64 bits; you could build a bigger chip with extra hassle, but you won't
+- a multi-bit Mux component is provided as primitive; this allows the simulator to easily identify
+  portions of the chip that are active in each cycle
+
+Focus on *processor* design considerations. Overall system design issues like bus timing, memory
+hierarchies, etc. are beside the point. I want to play with different ISAs, functional unit
+selection and design, things like that.
+
 Don't try to implement the more academic aspects of the orignal materials. For example, a RAM
 implemented out of raw gates is a mere exercise; here we always assume a better-performing,
 "native" RAM component.
@@ -35,18 +45,40 @@ Have a rust toolchain...
 
 An initial, naive simulator ran at about 900Hz (Apple M2, ca. 2026.)
 
-After pre-computing storage location to avoid lookups in the simulation loop, we're up to about 5KHz.
+After pre-computing storage location to avoid lookups in the simulation loop, we're up to about
+5KHz.
+
+Storing all the state in Vec<u64> with dense indices instead of HashMaps: about 100KHz.
 
 
 ## Simulation
 
-A single chip/computer simulator is implemented. The user/learner writes a description of their
-chip design, using the provided Rust API. When the program is compiled, that description is
-transformed into a form that can be efficiently simulated. During simulation, the state of
-every simulated logic gate is tracked, cycle-by-cycle. *Any* circuit can be simulated, based on
-the idealized behavior of clocked and unclocked NAND gates. That is, there's no special provision
-for particular computation units, bit widths, or design strategies. On the other hand, there's no
-way to exploit non-ideal behavior like propagation delay, etc.
+A single chip/computer [simulator](simulator/src/simulate/mod.rs) is implemented. The user/learner
+writes a description of their chip design, using the provided Rust API. When the program is
+compiled, that description is transformed into a form that can be efficiently simulated. During
+simulation, the state of every simulated logic gate is tracked, cycle-by-cycle. *Any* circuit can be
+simulated, based on the idealized behavior of clocked and unclocked NAND gates. That is, there's no
+special provision for particular computation units, bit widths, or design strategies. On the other
+hand, there's no way to exploit non-ideal behavior like propagation delay, etc.
+
+### Combinational Evaluation
+
+For purely combinational chips (no registers or memory), a simple, tree-walking
+[evaluator](simulator/src/eval.rs) is also provided. This evaluator isn't intended to be fast; it
+was easy to write, probably doesn't have bugs, and it can be a helpful sanity check when hacking on
+the fancier simulator.
+
+
+## Primitives
+
+In addition to the essential primitive, `Nand`, the following are provided to help define designs in
+a natural way that can also be simulated efficiently:
+
+- `Const`: no inputs, output is a fixed set of bits. No runtime cost.
+- `Buffer`: passes its singl, singe-bit input directly to its output. This is just a convenience
+  components can use, often to connect inputs directly to outputs. No runtime cost.
+- `Mux`: two (muti-bit) inputs, and a `sel` input controlling which one is used. During simulation, `sel` is evaluated first; then the simulator only evaluates as needed for the "active" input.
+
 
 ## Support Chips
 
@@ -57,15 +89,26 @@ same way as any other component.
 - Register
     - `bits`: arbitrary word size
     - inputs: `load`, `data[bits]`, `out[bits]`
-- (TODO) RAM
+- ROM
+    - read-only memory, configured via `flash()`
     - `data_bits`: arbitrary word size (up to the host word size in bits, most likely 64)
     - `address_bits`: arbitrary address size (limited by available host memory)
-    - (TODO) configurable read/write delay, in terms of cycles (default 1)
-    - inputs: `address[address_bits]`, `write`, `in[data_bits]`
+    - inputs: `addr[address_bits]`,
     - outputs: `out[data_bits]`
+    - Note: `addr` can be applied and `out` read within the same cycle.
+- RAM
+    - `data_bits`: arbitrary word size (up to the host word size in bits, most likely 64)
+    - `address_bits`: arbitrary address size (limited by available host memory)
+    - inputs: `addr[address_bits]`, `write`, `data_in[data_bits]`
+    - outputs: `data_out[data_bits]`
+    - `addr` is latched; the address that was applied in the *previous* cycle is   in effect
+    - TODO: configurable "read" latency beyond the one cycle that the Hack design requires.
 - (TODO) I/O
     - `Keyboard`: for reading one word at a time from the keyboard, serial interface, or other simulated device.
     - `TTY`: for writing one word at a time to a printer, screen, serial interface, or other imaginary interface.
+- MemoryMap
+    - exposes the same interface as RAM, and internally maps writes and reads to one or more
+      components (RAMs, ROMs, etc.), so they all share a flat address space.
 
 ## I/O
 
@@ -73,8 +116,9 @@ Terminal-style: see "I/O" above. Characters can be written and read to and from 
 using the builtin components for minimal overhead. During the simulation, the components can be
 wired to stdin/out, captured for testing, etc.
 
-Graphical displays: character and/or pixel-mode graphics are provided by mapping (a portion of)
-a RAM as a screen buffer. The simulator takes care of rendering that data to the actual screen.
+Graphical displays: character and/or pixel-mode graphics are provided by mapping (a portion of) a
+RAM as a screen buffer. The [harness](computer/src/main.rs) takes care of rendering that data to the
+actual screen.
 
 ## The Chip DSL
 
@@ -104,14 +148,15 @@ chip; for example, when testing a single logic unit. See `Chip::chip()`.
 
 ### Expansion
 
-The complete chip is expanded recursively so that all sub-components are reduced to primitive gates
-(except for external components.)
+The complete chip is expanded recursively so that all sub-components are reduced to just the
+pre-defined primitives and support chips descibed above.
 
-Before and/or after expansion, the graph may be transformed, for example to eliminate unused elements.
+Before and/or after expansion, the graph may be transformed, for example to eliminate unused
+elements.
 
 ### Evaluation
 
-Simple "combinational" circuits, which expand to nothing bu Nand gates, can be evaluated in
+Simple "combinational" circuits, which expand to nothing but Nand gates, can be evaluated in
 a stateless way using `simulator::eval::eval()`.
 
 ### Synthesis
@@ -125,6 +170,6 @@ The state of entire chip is traced, cycle-by-cycle, simulating the behavior of t
 detail. The internal representation is optimized for speed of simulation, but the simulator might
 provide affordances for inspecting internal state for debugging purposes.
 
-"External" components like the keyboard and display are handled by native code in the simulator.
-Depending on what components are needed, the simulator can map I/O to the terminal or capture it
+"External" components like the keyboard and display are handled by native code in the harness.
+Depending on what components are needed, the harness can map I/O to the terminal or capture it
 for tests, etc.
