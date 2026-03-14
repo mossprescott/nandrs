@@ -124,6 +124,9 @@ impl fmt::Display for ChipWiring {
                 wiring::ComponentWiring::Nand(n) =>
                     writeln!(f, "  [{i}] nand  a={} b={} out={}",
                         fmt_bit(n.a), fmt_bit(n.b), fmt_bit(n.out))?,
+                wiring::ComponentWiring::Mux(m) =>
+                    writeln!(f, "  [{i}] mux   sel={} a0=w{}[..] a1=w{}[..] out=w{}[..]",
+                        fmt_bit(m.sel), m.a0.0, m.a1.0, m.out.0)?,
                 wiring::ComponentWiring::Register(r) =>
                     writeln!(f, "  [{i}] reg   write={} in=w{}[..] out=w{}[..]",
                         fmt_bit(r.write), r.data_in.0, r.data_out.0)?,
@@ -218,6 +221,20 @@ where
                 Computational::Buffer(_) => {
                     // Ignore; already recorded in `renamed`
                 }
+                Computational::Mux1(c) => {
+                    let intf = c.reflect();
+                    assign(WireID::from(&intf.inputs["a0"]));
+                    assign(WireID::from(&intf.inputs["a1"]));
+                    assign(WireID::from(&intf.inputs["sel"]));
+                    assign(WireID::from(&intf.outputs["out"]));
+                }
+                Computational::Mux(c) => {
+                    let intf = c.reflect();
+                    assign(WireID::from(&intf.inputs["a0"]));
+                    assign(WireID::from(&intf.inputs["a1"]));
+                    assign(WireID::from(&intf.inputs["sel"]));
+                    assign(WireID::from(&intf.outputs["out"]));
+                }
                 Computational::Register(c) => {
                     let intf = c.reflect();
                     assign(WireID::from(&intf.inputs["write"]));
@@ -293,6 +310,24 @@ where
             }
             Computational::Const(_)        => None,
             Computational::Buffer(_)       => None,
+            Computational::Mux1(c)         => {
+                let intf = c.reflect();
+                Some(CW::Mux(wiring::MuxWiring {
+                    sel: ref_for(&intf.inputs["sel"]),
+                    a0:  wire_indexes[&WireID::from(&intf.inputs["a0"])],
+                    a1:  wire_indexes[&WireID::from(&intf.inputs["a1"])],
+                    out: wire_indexes[&WireID::from(&intf.outputs["out"])],
+                }))
+            }
+            Computational::Mux(c)          => {
+                let intf = c.reflect();
+                Some(CW::Mux(wiring::MuxWiring {
+                    sel: ref_for(&intf.inputs["sel"]),
+                    a0:  wire_indexes[&WireID::from(&intf.inputs["a0"])],
+                    a1:  wire_indexes[&WireID::from(&intf.inputs["a1"])],
+                    out: wire_indexes[&WireID::from(&intf.outputs["out"])],
+                }))
+            }
             Computational::Register(c)     => {
                 let intf = c.reflect();
                 Some(CW::Register(wiring::RegisterWiring  {

@@ -1,14 +1,15 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
 use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, Chip};
-use simulator::component::{Combinational};
+use simulator::component::Combinational;
+use simulator::nat::{N1, N16};
 use simulator::AsConst;
 use simulator::Reflect as _;
 use simulator::Chip as _;
 use std::collections::HashMap;
 
 // Re-export since the other components here parallel Nand:
-pub use simulator::component::{Nand, Const, Buffer};
+pub use simulator::component::{Nand, Const, Buffer, Mux16};
 
 /// Components implemented in this project: simple, logical components for 1 and 16 bits.
 pub enum Project01Component {
@@ -27,71 +28,79 @@ pub enum Project01Component {
     Mux16(Mux16),
 }
 
+// primitive:
+impl From<Nand>   for Project01Component { fn from(c: Nand)   -> Self { Project01Component::Nand(c)   } }
 impl From<Buffer> for Project01Component { fn from(c: Buffer) -> Self { Project01Component::Buffer(c) } }
-impl From<Const> for Project01Component { fn from(c: Const) -> Self { Project01Component::Const(c) } }
-impl From<Nand>  for Project01Component { fn from(c: Nand)  -> Self { Project01Component::Nand(c)  } }
+impl From<Const>  for Project01Component { fn from(c: Const)  -> Self { Project01Component::Const(c)  } }
+impl From<Mux>    for Project01Component { fn from(c: Mux)    -> Self { Project01Component::Mux(c)    } }
+impl From<Mux16>  for Project01Component { fn from(c: Mux16)  -> Self { Project01Component::Mux16(c)  } }
+// non-primitive:
 impl From<Not>   for Project01Component { fn from(c: Not)   -> Self { Project01Component::Not(c)   } }
 impl From<And>   for Project01Component { fn from(c: And)   -> Self { Project01Component::And(c)   } }
 impl From<Or>    for Project01Component { fn from(c: Or)    -> Self { Project01Component::Or(c)    } }
 impl From<Xor>   for Project01Component { fn from(c: Xor)   -> Self { Project01Component::Xor(c)   } }
-impl From<Mux>   for Project01Component { fn from(c: Mux)   -> Self { Project01Component::Mux(c)   } }
 impl From<Dmux>  for Project01Component { fn from(c: Dmux)  -> Self { Project01Component::Dmux(c)  } }
 impl From<Not16> for Project01Component { fn from(c: Not16) -> Self { Project01Component::Not16(c) } }
 impl From<And16> for Project01Component { fn from(c: And16) -> Self { Project01Component::And16(c) } }
 // impl From<Or16>  for Project01Component { fn from(c: Or16)  -> Self { Project01Component::Or16(c)  } }
-impl From<Mux16> for Project01Component { fn from(c: Mux16) -> Self { Project01Component::Mux16(c) } }
 
 impl Component for Project01Component {
     type Target = Project01Component;
 
     fn expand(&self) -> Option<IC<Project01Component>> {
         match self {
+            // primitive:
+            Project01Component::Nand(c)  => c.expand().map(|ic| unreachable!()),
             Project01Component::Buffer(c) => c.expand().map(|ic| unreachable!()),
             Project01Component::Const(c) => c.expand().map(|ic| unreachable!()),
-            Project01Component::Nand(c)  => c.expand().map(|ic| unreachable!()),
+            Project01Component::Mux(c)   => c.expand().map(|ic| unreachable!()),
+            Project01Component::Mux16(c) => c.expand().map(|ic| unreachable!()),
+            // non-primitive:
             Project01Component::Not(c)   => c.expand(),
             Project01Component::And(c)   => c.expand(),
             Project01Component::Or(c)    => c.expand(),
             Project01Component::Xor(c)   => c.expand(),
-            Project01Component::Mux(c)   => c.expand(),
             Project01Component::Dmux(c)  => c.expand(),
             Project01Component::Not16(c) => c.expand(),
             Project01Component::And16(c) => c.expand(),
-            Project01Component::Mux16(c) => c.expand(),
         }
     }
 }
 impl Reflect for Project01Component {
     fn reflect(&self) -> simulator::Interface {
         match self {
+            // primitive:
+            Project01Component::Nand(c)  => c.reflect(),
             Project01Component::Buffer(c) => c.reflect(),
             Project01Component::Const(c) => c.reflect(),
-            Project01Component::Nand(c)  => c.reflect(),
+            Project01Component::Mux(c)   => c.reflect(),
+            Project01Component::Mux16(c) => c.reflect(),
+            // non-primitive:
             Project01Component::Not(c)   => c.reflect(),
             Project01Component::And(c)   => c.reflect(),
             Project01Component::Or(c)    => c.reflect(),
             Project01Component::Xor(c)   => c.reflect(),
-            Project01Component::Mux(c)   => c.reflect(),
             Project01Component::Dmux(c)  => c.reflect(),
             Project01Component::Not16(c) => c.reflect(),
             Project01Component::And16(c) => c.reflect(),
-            Project01Component::Mux16(c) => c.reflect(),
         }
     }
     fn name(&self) -> String {
         match self {
+            // primitive:
+            Project01Component::Nand(c)  => c.name(),
             Project01Component::Buffer(c) => c.name(),
             Project01Component::Const(c) => c.name(),
-            Project01Component::Nand(c)  => c.name(),
+            Project01Component::Mux(c)   => c.name(),
+            Project01Component::Mux16(c) => c.name(),
+            // non-primitive:
             Project01Component::Not(c)   => c.name(),
             Project01Component::And(c)   => c.name(),
             Project01Component::Or(c)    => c.name(),
             Project01Component::Xor(c)   => c.name(),
-            Project01Component::Mux(c)   => c.name(),
             Project01Component::Dmux(c)  => c.name(),
             Project01Component::Not16(c) => c.name(),
             Project01Component::And16(c) => c.name(),
-            Project01Component::Mux16(c) => c.name(),
         }
     }
 }
@@ -102,15 +111,17 @@ impl AsConst for Project01Component {
     }
 }
 
-/// Recursively expand() until only Nands are left.
-pub fn flatten<C: Reflect + Into<Project01Component>>(chip: C) -> IC<Combinational> {
-    fn go(comp: Project01Component) -> Vec<Combinational> {
+/// Recursively expand() until only primitives are left.
+pub fn flatten<C: Reflect + Into<Project01Component>>(chip: C) -> IC<Combinational<N16>> {
+    fn go(comp: Project01Component) -> Vec<Combinational<N16>> {
         match comp.expand() {
             None => match comp {
                 Project01Component::Nand(c) => vec![c.into()],
                 Project01Component::Const(c) => vec![c.into()],
                 Project01Component::Buffer(c) => vec![c.into()],
-                _ => panic!("Did not reduce to Nand: {:?}", comp.name()),
+                Project01Component::Mux(c) => vec![Combinational::Mux1(c)],
+                Project01Component::Mux16(c) => vec![c.into()],
+                _ => panic!("Did not reduce to primitive: {:?}", comp.name()),
             },
             Some(ic) => ic.components.into_iter().flat_map(go).collect(),
         }
@@ -216,31 +227,35 @@ impl Component for Xor {
     }
 }
 
+/// Mux is primitive and general; lets give it a name for when we only need one bit.
+pub type Mux = simulator::component::Mux<N1>;
+
 /// Passes a0 through when sel is 0, a1 when sel is 1.
+/// Mux is now provided as a primitive, but it might be interesting to try implementing separately.
 #[derive(Reflect, Chip)]
-pub struct Mux {
+pub struct MyMux {
     pub a0: Input,
     pub a1: Input,
     pub sel: Input,
     pub out: Output,
 }
-impl Component for Mux {
-    type Target = Project01Component;
+// impl Component for MyMux {
+//     type Target = Project01Component;
 
-    /*
-      let not_sel = Not { a: sel }
-      let nand0   = Nand { a: not_sel.out,  b: a0 }
-      let nand1   = Nand { a: sel,          b: a1 }
-      outputs.out = Nand { a: nand0.out, b: nand1.out }
-     */
-    fn expand(&self) -> Option<IC<Project01Component>> {
-        let not_sel = Not  { a: self.sel.clone(),             out: Output::new() };
-        let nand0   = Nand { a: not_sel.out.clone().into(),   b: self.a0.clone(),       out: Output::new() };
-        let nand1   = Nand { a: self.sel.clone(),             b: self.a1.clone(),       out: Output::new() };
-        let out     = Nand { a: nand0.out.clone().into(),     b: nand1.out.clone().into(), out: self.out.clone() };
-        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![not_sel.into(), nand0.into(), nand1.into(), out.into()] })
-    }
-}
+//     /*
+//       let not_sel = Not { a: sel }
+//       let nand0   = Nand { a: not_sel.out,  b: a0 }
+//       let nand1   = Nand { a: sel,          b: a1 }
+//       outputs.out = Nand { a: nand0.out, b: nand1.out }
+//      */
+//     fn expand(&self) -> Option<IC<Project01Component>> {
+//         let not_sel = Not  { a: self.sel.clone(),             out: Output::new() };
+//         let nand0   = Nand { a: not_sel.out.clone().into(),   b: self.a0.clone(),       out: Output::new() };
+//         let nand1   = Nand { a: self.sel.clone(),             b: self.a1.clone(),       out: Output::new() };
+//         let out     = Nand { a: nand0.out.clone().into(),     b: nand1.out.clone().into(), out: self.out.clone() };
+//         Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![not_sel.into(), nand0.into(), nand1.into(), out.into()] })
+//     }
+// }
 
 /// Routes input to a when sel is 0, or b when sel is 1; the unused output is zero.
 #[derive(Reflect, Chip)]
@@ -333,38 +348,38 @@ impl Component for And16 {
 //     }
 // }
 
-/// Selects between two 16-bit inputs bit-by-bit, using a single sel bit.
-#[derive(Reflect, Chip)]
-pub struct Mux16 {
-    pub a0: Input16,
-    pub a1: Input16,
-    pub sel: Input,
-    pub out: Output16,
-}
-impl Component for Mux16 {
-    type Target = Project01Component;
+// /// Selects between two 16-bit inputs bit-by-bit, using a single sel bit.
+// #[derive(Reflect, Chip)]
+// pub struct Mux16 {
+//     pub a0: Input16,
+//     pub a1: Input16,
+//     pub sel: Input,
+//     pub out: Output16,
+// }
+// impl Component for Mux16 {
+//     type Target = Project01Component;
 
-    /*
-      let not_sel = Not { a: sel }
-      for i in 0..16:
-        let nand0      = Nand { a: not_sel.out, b: a0[i]    }
-        let nand1      = Nand { a: sel,         b: a1[i]    }
-        outputs.out[i] = Nand { a: nand0.out,   b: nand1.out }
-     */
-    fn expand(&self) -> Option<IC<Project01Component>> {
-        let not_sel = Not { a: self.sel.clone(), out: Output::new() };
-        let not_sel_out: Input = not_sel.out.clone().into();
+//     /*
+//       let not_sel = Not { a: sel }
+//       for i in 0..16:
+//         let nand0      = Nand { a: not_sel.out, b: a0[i]    }
+//         let nand1      = Nand { a: sel,         b: a1[i]    }
+//         outputs.out[i] = Nand { a: nand0.out,   b: nand1.out }
+//      */
+//     fn expand(&self) -> Option<IC<Project01Component>> {
+//         let not_sel = Not { a: self.sel.clone(), out: Output::new() };
+//         let not_sel_out: Input = not_sel.out.clone().into();
 
-        let mut components = vec![not_sel.into()];
-        components.extend((0..16).flat_map(|i| {
-            let nand0 = Nand { a: not_sel_out.clone(),       b: self.a0.bit(i),        out: Output::new() };
-            let nand1 = Nand { a: self.sel.clone(),           b: self.a1.bit(i),        out: Output::new() };
-            let out   = Nand { a: nand0.out.clone().into(),  b: nand1.out.clone().into(), out: self.out.bit(i) };
-            vec![nand0.into(), nand1.into(), out.into()]
-        }).collect::<Vec<_>>());
-        Some(IC { name: self.name().to_string(), intf: self.reflect(), components })
-    }
-}
+//         let mut components = vec![not_sel.into()];
+//         components.extend((0..16).flat_map(|i| {
+//             let nand0 = Nand { a: not_sel_out.clone(),       b: self.a0.bit(i),        out: Output::new() };
+//             let nand1 = Nand { a: self.sel.clone(),           b: self.a1.bit(i),        out: Output::new() };
+//             let out   = Nand { a: nand0.out.clone().into(),  b: nand1.out.clone().into(), out: self.out.bit(i) };
+//             vec![nand0.into(), nand1.into(), out.into()]
+//         }).collect::<Vec<_>>());
+//         Some(IC { name: self.name().to_string(), intf: self.reflect(), components })
+//     }
+// }
 
 
 // These are needed for RAMs, maybe? Nevermind that stuff.

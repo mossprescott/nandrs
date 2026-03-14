@@ -86,6 +86,7 @@ fn xor_optimal() {
     assert_eq!(flatten(Xor::chip()).components.len(), 4);
 }
 
+// Sanity check
 #[test]
 fn mux_truth_table() {
     let chip = flatten(Mux::chip());
@@ -101,7 +102,8 @@ fn mux_truth_table() {
 
 #[test]
 fn mux_optimal() {
-    assert_eq!(flatten(Mux::chip()).components.len(), 4);
+    // Mux is now a primitive; flatten just returns it as-is.
+    assert_eq!(flatten(Mux::chip()).components.len(), 1);
 }
 
 #[test]
@@ -164,6 +166,7 @@ fn and16_optimal() {
 //     assert_eq!(flatten(Or16::chip()).components.len(), 48);
 // }
 
+/// Sanity check
 #[test]
 fn mux16_truth_table() {
     let chip = flatten(Mux16::chip());
@@ -175,7 +178,8 @@ fn mux16_truth_table() {
 
 #[test]
 fn mux16_optimal() {
-    assert_eq!(flatten(Mux16::chip()).components.len(), 49);
+    // Mux16 is now a primitive; flatten just returns it as-is.
+    assert_eq!(flatten(Mux16::chip()).components.len(), 1);
 }
 
 #[test]

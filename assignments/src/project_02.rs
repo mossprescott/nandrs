@@ -3,8 +3,9 @@
 use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, AsConst, Chip};
 use simulator::Reflect as _;
 use simulator::Chip as _;
-use simulator::component::{Combinational, Const, Nand, Buffer};
-use crate::project_01::{Project01Component, Mux16, Not16, And16, Not, Xor, And, Or};
+use simulator::component::Combinational;
+use simulator::nat::N16;
+use crate::project_01::{Project01Component, Nand, Const, Buffer, Mux16, Not16, And16, Not, Xor, And, Or};
 
 pub enum Project02Component {
     Project01(Project01Component),
@@ -86,13 +87,13 @@ impl AsConst for Project02Component {
     }
 }
 
-/// Recursively expand until only Nands are left.
-pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Combinational> {
-    fn go(comp: Project02Component) -> Vec<Combinational> {
+/// Recursively expand until only primitives are left.
+pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Combinational<N16>> {
+    fn go(comp: Project02Component) -> Vec<Combinational<N16>> {
         match comp.expand() {
             None => match comp {
                 Project02Component::Project01(p) => crate::project_01::flatten(p).components,
-                _ => panic!("Did not reduce to Nand: {:?}", comp.name()),
+                _ => panic!("Did not reduce to primitive: {:?}", comp.name()),
             },
             Some(ic) => ic.components.into_iter().flat_map(go).collect(),
         }

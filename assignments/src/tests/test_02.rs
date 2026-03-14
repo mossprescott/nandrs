@@ -150,7 +150,9 @@ fn alu_truth_table() {
 fn alu_optimal() {
     let components = flatten(ALU::chip()).components;
     let nands = components.iter().filter(|c| matches!(c, Combinational::Nand(_))).count();
-    assert_eq!(nands, 526);
+    let muxes = components.iter().filter(|c| matches!(c, Combinational::Mux(_))).count();
+    assert_eq!(nands, 428);
+    assert_eq!(muxes, 2);
 }
 
 
@@ -172,16 +174,16 @@ fn alu_graph() {
          and16_4.b[0..15] <- notif16_3.out[0..15]\n\
          add16_5.a[0..15] <- notif16_1.out[0..15]\n\
          add16_5.b[0..15] <- notif16_3.out[0..15]\n\
-         mux16_6.a0[0..15] <- and16_4.out[0..15]\n\
-         mux16_6.a1[0..15] <- add16_5.out[0..15]\n\
-         mux16_6.sel <- f\n\
-         not16_7.a[0..15] <- mux16_6.out[0..15]\n\
-         mux16_8.a0[0..15] <- mux16_6.out[0..15]\n\
-         mux16_8.a1[0..15] <- not16_7.out[0..15]\n\
-         mux16_8.sel <- no\n\
-         zero16_9.a[0..15] <- mux16_8.out[0..15]\n\
-         neg16_10.a[0..15] <- mux16_8.out[0..15]\n\
+         mux_6.a0[0..15] <- and16_4.out[0..15]\n\
+         mux_6.a1[0..15] <- add16_5.out[0..15]\n\
+         mux_6.sel <- f\n\
+         not16_7.a[0..15] <- mux_6.out[0..15]\n\
+         mux_8.a0[0..15] <- mux_6.out[0..15]\n\
+         mux_8.a1[0..15] <- not16_7.out[0..15]\n\
+         mux_8.sel <- no\n\
+         zero16_9.a[0..15] <- mux_8.out[0..15]\n\
+         neg16_10.a[0..15] <- mux_8.out[0..15]\n\
          ng <- neg16_10.out\n\
-         out[0..15] <- mux16_8.out[0..15]\n\
+         out[0..15] <- mux_8.out[0..15]\n\
          zr <- zero16_9.out");
 }

@@ -22,6 +22,7 @@ pub(super) type Indexes = HashMap<WireID, WireIndex>;
 /// Records connections involved in one step of evaluation. Could be called "Op", maybe?
 pub(super) enum ComponentWiring {
     Nand(NandWiring),
+    Mux(MuxWiring),
     Register(RegisterWiring),
     ROM(ROMWiring),
     RAM(RAMWiring),
@@ -44,6 +45,8 @@ pub(super) struct WireRef { pub(super) id: WireIndex, pub(super) offset: u8, pub
 /// A single nand, referring to completely arbitrary bits of the words where it input and outputs
 /// are stored.
 pub(super) struct NandWiring { pub(super) a: BitRef, pub(super) b: BitRef, pub(super) out: BitRef }
+
+pub(super) struct MuxWiring { pub(super) sel: BitRef, pub(super) a0: WireIndex, pub(super) a1: WireIndex, pub(super) out: WireIndex }
 
 pub(super) struct RegisterWiring { pub(super) write: BitRef, pub(super) data_in: WireIndex, pub(super) data_out: WireIndex }
 

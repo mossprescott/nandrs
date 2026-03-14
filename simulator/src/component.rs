@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{Component, IC, Input, InputBus, Output, OutputBus, Reflect, AsConst, Chip, Interface};
-use crate::nat::{Nat, N16};
+use crate::nat::{Nat, N1, N16};
 
 // - Nand (Combinational)
 
@@ -119,31 +119,82 @@ impl Component for Buffer {
         None
     }
 }
-/// Type of components that participate in "combinational" circuits: only Nand plus the
-/// pseudo-comoponents Const and Buffer.
-pub enum Combinational {
+/// The Mux primitive: out = if sel { a1 } else { a0 }, applied bitwise across Width bits.
+#[derive(Clone)]
+pub struct Mux<Width: Nat> {
+    pub a0: InputBus<Width>,
+    pub a1: InputBus<Width>,
+    pub sel: Input,
+    pub out: OutputBus<Width>,
+}
+
+impl<Width: Nat + Clone> Reflect for Mux<Width> {
+    fn reflect(&self) -> Interface {
+        Interface {
+            inputs: HashMap::from([
+                ("a0".to_string(),  self.a0.clone().into()),
+                ("a1".to_string(),  self.a1.clone().into()),
+                ("sel".to_string(), self.sel.clone().into()),
+            ]),
+            outputs: HashMap::from([
+                ("out".to_string(), self.out.clone().into()),
+            ]),
+        }
+    }
+    fn name(&self) -> String { "Mux".into() }
+}
+
+impl<Width: Nat> Chip for Mux<Width> {
+    fn chip() -> Self {
+        Mux { a0: InputBus::new(), a1: InputBus::new(), sel: Input::new(), out: OutputBus::<Width>::new() }
+    }
+}
+
+/// Nothing to expand; Mux is primitive.
+impl<Width: Nat> Component for Mux<Width> {
+    type Target = Mux<Width>;
+
+    fn expand(&self) -> Option<IC<Mux<Width>>> {
+        None
+    }
+}
+
+pub type Mux16 = Mux<N16>;
+
+/// Type of components that participate in "combinational" circuits:
+/// - most importantly Nand
+/// - pseudo-components Const and Buffer
+/// - finally Mux, included because it makes simulation significantly more efficient
+pub enum Combinational<Width: Nat> {
     Nand(Nand),
     Const(Const),
     Buffer(Buffer),
+    Mux1(Mux<N1>),  // Note: barely used. Maybe just remove it.
+    Mux(Mux<Width>),
 }
 
-impl From<Nand>  for Combinational { fn from(c: Nand)  -> Self { Combinational::Nand(c)  } }
-impl From<Const> for Combinational { fn from(c: Const) -> Self { Combinational::Const(c) } }
-impl From<Buffer> for Combinational { fn from(c: Buffer) -> Self { Combinational::Buffer(c) } }
+impl<Width: Nat> From<Nand>  for Combinational<Width> { fn from(c: Nand)  -> Self { Combinational::Nand(c)  } }
+impl<Width: Nat> From<Const> for Combinational<Width> { fn from(c: Const) -> Self { Combinational::Const(c) } }
+impl<Width: Nat> From<Buffer> for Combinational<Width> { fn from(c: Buffer) -> Self { Combinational::Buffer(c) } }
+impl<Width: Nat> From<Mux<Width>> for Combinational<Width> { fn from(c: Mux<Width>) -> Self { Combinational::Mux(c) } }
 
-impl Reflect for Combinational {
+impl<Width: Nat + Clone> Reflect for Combinational<Width> {
     fn reflect(&self) -> Interface {
         match self {
-            Self::Nand(c)  => c.reflect(),
-            Self::Const(c) => c.reflect(),
+            Self::Nand(c)   => c.reflect(),
+            Self::Const(c)  => c.reflect(),
             Self::Buffer(c) => c.reflect(),
+            Self::Mux1(c)   => c.reflect(),
+            Self::Mux(c)    => c.reflect(),
         }
     }
     fn name(&self) -> String {
         match self {
-            Self::Nand(c)  => c.name(),
-            Self::Const(c) => c.name(),
+            Self::Nand(c)   => c.name(),
+            Self::Const(c)  => c.name(),
             Self::Buffer(c) => c.name(),
+            Self::Mux1(c)   => c.name(),
+            Self::Mux(c)    => c.name(),
         }
     }
 }
@@ -196,6 +247,8 @@ pub enum Sequential<Width: Nat> {
     Nand(Nand),
     Const(Const),
     Buffer(Buffer),
+    Mux1(Mux<N1>),
+    Mux(Mux<Width>),
     Register(Register<Width>),
 }
 
@@ -205,6 +258,8 @@ impl<Width: Nat + Clone> Reflect for Sequential<Width> {
             Self::Nand(c)     => c.reflect(),
             Self::Const(c)    => c.reflect(),
             Self::Buffer(c)   => c.reflect(),
+            Self::Mux1(c)     => c.reflect(),
+            Self::Mux(c)      => c.reflect(),
             Self::Register(c) => c.reflect(),
         }
     }
@@ -213,6 +268,8 @@ impl<Width: Nat + Clone> Reflect for Sequential<Width> {
             Self::Nand(c)     => c.name(),
             Self::Const(c)    => c.name(),
             Self::Buffer(c)   => c.name(),
+            Self::Mux1(c)     => c.name(),
+            Self::Mux(c)      => c.name(),
             Self::Register(c) => c.name(),
         }
     }
@@ -373,6 +430,8 @@ pub enum Computational<A: Nat, D: Nat> {
     Nand(Nand),
     Const(Const),
     Buffer(Buffer),
+    Mux1(Mux<N1>),
+    Mux(Mux<D>),
     Register(Register<D>),
     RAM(RAM<A, D>),
     ROM(ROM<A, D>),
@@ -386,6 +445,8 @@ impl<A: Nat + Clone, D: Nat + Clone> Reflect for Computational<A, D> {
             Self::Nand(c)         => c.reflect(),
             Self::Const(c)        => c.reflect(),
             Self::Buffer(c)       => c.reflect(),
+            Self::Mux1(c)         => c.reflect(),
+            Self::Mux(c)          => c.reflect(),
             Self::Register(c)     => c.reflect(),
             Self::RAM(c)          => c.reflect(),
             Self::ROM(c)          => c.reflect(),
@@ -397,6 +458,8 @@ impl<A: Nat + Clone, D: Nat + Clone> Reflect for Computational<A, D> {
             Self::Nand(c)         => c.name(),
             Self::Const(c)        => c.name(),
             Self::Buffer(c)       => c.name(),
+            Self::Mux1(c)         => c.name(),
+            Self::Mux(c)          => c.name(),
             Self::Register(c)     => c.name(),
             Self::RAM(c)          => c.name(),
             Self::ROM(c)          => c.name(),
@@ -424,6 +487,8 @@ impl<A: Nat, D: Nat> From<Sequential<D>> for Computational<A, D> {
             Sequential::Nand(n)     => Computational::Nand(n),
             Sequential::Const(n)    => Computational::Const(n),
             Sequential::Buffer(n)   => Computational::Buffer(n),
+            Sequential::Mux1(m)     => Computational::Mux1(m),
+            Sequential::Mux(m)      => Computational::Mux(m),
             Sequential::Register(r) => Computational::Register(r),
         }
     }
