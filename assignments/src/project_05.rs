@@ -5,7 +5,7 @@ use simulator::Reflect as _;
 use simulator::Chip as _;
 use simulator::component::{Buffer, Nand, Register16, RAM16, ROM16, MemorySystem16, Sequential, Computational, Computational16};
 use simulator::simulate::{ChipState, BusResident, ROMHandle, RAMHandle, MemoryMap, RAMMap};
-use crate::project_01::{Project01Component, Not, And, Or, Mux16};
+use crate::project_01::{Project01Component, Const, Not, And, Or, Mux16};
 use crate::project_02::{Project02Component, ALU};
 use crate::project_03::{Project03Component, PC};
 
@@ -378,15 +378,15 @@ impl Component for CPU {
             components.push(g);
         }
 
-        // === PC: inc always 1 (NAND of two undriven=0 inputs) ===
-        let const_one = Nand { a: Input::new(), b: Input::new(), out: Output::new() };
-        let inc_wire  = const_one.out.clone();
+        // === PC: inc always 1 ===
+        let const_one = Const { value: 1, out: Output::new() };
+        let const_one_out = const_one.out.bit(0).into();
         components.push(p01(const_one));
 
         let pc = PC {
             addr:  a_out.clone().into(),
             load:  do_jump_out.into(),
-            inc:   inc_wire.into(),
+            inc:   const_one_out,
             reset: self.reset.clone().into(),
             out:   self.pc.clone(),
         };

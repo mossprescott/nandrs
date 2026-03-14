@@ -12,7 +12,9 @@ pub struct ChipWiring {
     pub(super) component_wiring: Vec<wiring::ComponentWiring>,
     pub(super) input_wiring:  HashMap<String, wiring::WireRef>,
     pub(super) output_wiring: HashMap<String, wiring::WireRef>,
+    pub(super) const_wiring: Vec<wiring::ConstWiring>,
     pub(super) n_wires: usize,
+
     /// One entry per RAM component; the index is the device slot referenced by the wiring.
     pub ram_specs: Vec<RAMSpec>,
     /// One entry per ROM component; the index is the device slot referenced by the wiring.
@@ -112,6 +114,11 @@ impl fmt::Display for ChipWiring {
             writeln!(f, "  out {name}: {}", fmt_wire(**wr))?;
         }
 
+        let mut consts: Vec<_> = self.const_wiring.iter().collect();
+        for cw in &self.const_wiring {
+            writeln!(f, "  const: w{} = {}", cw.out.0, cw.value)?;
+        }
+
         for (i, comp) in self.component_wiring.iter().enumerate() {
             match comp {
                 wiring::ComponentWiring::Nand(n) =>
@@ -129,8 +136,6 @@ impl fmt::Display for ChipWiring {
                 wiring::ComponentWiring::MemorySystem(m) =>
                     writeln!(f, "  [{i}] mem[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
                         m.device_slot, m.addr.0, fmt_bit(m.write), m.data_in.0, m.out.0)?,
-                // wiring::ComponentWiring::Const =>
-                //     writeln!(f, "  [{i}] const")?,
             }
         }
         Ok(())
@@ -206,8 +211,9 @@ where
                     assign(WireID::from(&intf.inputs["b"]));
                     assign(WireID::from(&intf.outputs["out"]));
                 }
-                Computational::Const(_) => {
-                    // TODO: non-zero const needs output wire here, most likely
+                Computational::Const(c) => {
+                    let intf = c.reflect();
+                    assign(WireID::from(&intf.outputs["out"]));
                 }
                 Computational::Buffer(_) => {
                     // Ignore; already recorded in `renamed`
@@ -260,6 +266,20 @@ where
             }
         }
     };
+
+    let const_wiring: Vec<wiring::ConstWiring> = components.iter().flat_map(|comp| {
+        match comp {
+            Computational::Const(c) => {
+                let intf = c.reflect();
+                Some(wiring::ConstWiring {
+                    value: c.value,
+                    out: wire_indexes[&WireID::from(&intf.outputs["out"])]
+                })
+            },
+            _ => None,
+        }
+    }).collect();
+
     let component_wiring: Vec<wiring::ComponentWiring> = components.iter().flat_map(|comp| {
         use wiring::ComponentWiring as CW;
         match comp {
@@ -347,6 +367,7 @@ where
         component_wiring,
         input_wiring:  intf.inputs.iter().map(to_wr).collect(),
         output_wiring: intf.outputs.iter().map(to_wr).collect(),
+        const_wiring,
         n_wires,
         ram_specs,
         rom_specs,

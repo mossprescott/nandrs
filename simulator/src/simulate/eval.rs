@@ -54,13 +54,18 @@ pub fn initialize(wiring: ChipWiring) -> ChipState {
     }
     bus_residents.extend(ms_region_handles.into_iter().map(BusResident::RAM));
 
+    let mut reg_state = vec![0u64; n_wires];
+    for cw in &wiring.const_wiring {
+        reg_state[cw.out.0 as usize] = cw.value;
+    }
+
     let mut state = ChipState {
         wiring,
         ram_devices,
         rom_devices,
         ms_devices,
         bus_residents,
-        reg_state:  vec![0u64; n_wires],
+        reg_state,
         input_vals: HashMap::new(),
         dirty: false,
         wire_state: vec![0u64; n_wires],

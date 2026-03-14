@@ -53,3 +53,8 @@ pub(super) struct RAMWiring { pub(super) device_slot: usize, pub(super) out: Wir
 
 pub(super) struct MemorySystemWiring { pub(super) device_slot: usize, pub(super) out: WireIndex, pub(super) addr: WireIndex, pub(super) write: BitRef, pub(super) data_in: WireIndex }
 
+
+pub(super) struct ConstWiring {
+    pub(super) value: u64,
+    pub(super) out: WireIndex,
+}
