@@ -3,7 +3,7 @@
 use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, AsConst, Chip};
 use simulator::Reflect as _;
 use simulator::Chip as _;
-use simulator::component::{Combinational, Const, Nand};
+use simulator::component::{Combinational, Const, Nand, Buffer};
 use crate::project_01::{Project01Component, Mux16, Not16, And16, Not, Xor, And, Or};
 
 pub enum Project02Component {
@@ -293,17 +293,17 @@ impl Component for Neg16 {
     type Target = Project02Component;
 
     /*
-      Equivalent to:
       out = a[15]
      */
     fn expand(&self) -> Option<IC<Project02Component>> {
-        // TEMP: pointless gates to express the wiring we need
-        let not0 = Not { a: self.a.bit(15), out: Output::new() };
-        let not1 = Not { a: not0.out.clone().into(), out: self.out.clone() };
-        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![
-            Project01Component::from(not0).into(),
-            Project01Component::from(not1).into(),
-        ]})
+        let buffer = Buffer { a: self.a.bit(15), out: self.out.clone() };
+        Some(IC {
+            name: self.name().to_string(),
+            intf: self.reflect(),
+            components: vec![
+                Project01Component::from(buffer).into(),
+            ]
+        })
     }
 }
 

@@ -138,7 +138,7 @@ fn cpu_optimal() {
     // TODO: actually what?
     let components = flatten(CPU::chip()).components;
     let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
-    assert_eq!(nands, 930);
+    assert_eq!(nands, 928);
 }
 
 fn add_program() -> Vec<u64> {
@@ -316,5 +316,5 @@ fn computer_optimal() {
     let nands  = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
     assert_eq!(memsys,  1);
     assert_eq!(roms,    1);
-    assert_eq!(nands, 930);
+    assert_eq!(nands, 928);
 }

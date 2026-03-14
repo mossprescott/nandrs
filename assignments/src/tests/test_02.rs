@@ -93,12 +93,12 @@ fn neg16_truth_table() {
     assert_eq!(eval(&chip, [("a", 0xffff)])["out"], 1); // -1
 }
 
-// TODO: currently wasting a couple of gates
-// #[test]
-// fn neg16_optimal() {
-//     // Not(Not(a[15])) = 2 Nands
-//     assert_eq!(flatten(Neg16::chip()).components.len(), 0);
-// }
+#[test]
+fn neg16_optimal() {
+    let components = flatten(Neg16::chip()).components;
+    let nands = components.iter().filter(|c| matches!(c, Combinational::Nand(_))).count();
+    assert_eq!(nands, 0);
+}
 
 #[test]
 fn alu_truth_table() {
@@ -150,7 +150,7 @@ fn alu_truth_table() {
 fn alu_optimal() {
     let components = flatten(ALU::chip()).components;
     let nands = components.iter().filter(|c| matches!(c, Combinational::Nand(_))).count();
-    assert_eq!(nands, 528);
+    assert_eq!(nands, 526);
 }
 
 
