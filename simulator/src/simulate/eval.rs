@@ -11,14 +11,27 @@ type MSDevice   = crate::device::MemorySystem<DeviceRAM>;
 
 /// Runtime state of a simulated chip, and access to its inputs and outputs.
 pub struct ChipState {
+    /// The graph of components, input, and outputs, and where state is to be stored.
     wiring:       ChipWiring,
+
     ram_devices:  Vec<DeviceRAM>,
     rom_devices:  Vec<Rc<RefCell<crate::device::ROM>>>,
     ms_devices:   Vec<Rc<RefCell<MSDevice>>>,
     bus_residents: Vec<BusResident>,
+
+    /// State of register contents as of the last clock cycle, as well as any wires holding constant
+    /// values.
     reg_state:    Vec<u64>,
+
+    /// Input value supplied from outside, for initializing the state of the wires. Note: typically
+    /// the full computer has few, if any, of these inputs, so not really a factor in performance.
     input_vals:   HashMap<wiring::WireRef, u64>,
+
+    /// When true, inputs have changed since the last time we progagated the effects to wire_state.
     dirty:        bool,
+
+    /// State of all wires, including the outputs, as of the last cycle, so they can be inspected
+    /// from outside.
     wire_state:   Vec<u64>,
 }
 
