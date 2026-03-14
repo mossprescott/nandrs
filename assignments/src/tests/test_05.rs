@@ -139,8 +139,10 @@ fn cpu_optimal() {
     let components = flatten(CPU::chip()).components;
     let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
     let muxes = components.iter().filter(|c| matches!(c, Computational::Mux(_))).count();
-    assert_eq!(nands, 536);
-    assert_eq!(muxes, 8);
+    let registers = components.iter().filter(|c| matches!(c, Computational::Register(_))).count();
+    assert_eq!(nands,   536);
+    assert_eq!(muxes,     8);
+    assert_eq!(registers, 3);
 }
 
 fn add_program() -> Vec<u64> {
@@ -322,9 +324,9 @@ fn computer_optimal() {
     let memsys = components.iter().filter(|c| matches!(c, Computational::MemorySystem(_))).count();
     let roms   = components.iter().filter(|c| matches!(c, Computational::ROM(_))).count();
     let nands  = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
+    let muxes  = components.iter().filter(|c| matches!(c, Computational::Mux(_))).count();
     assert_eq!(memsys,  1);
     assert_eq!(roms,    1);
-    let muxes  = components.iter().filter(|c| matches!(c, Computational::Mux(_))).count();
     assert_eq!(nands, 536);
-    assert_eq!(muxes, 8);
+    assert_eq!(muxes,   8);
 }
