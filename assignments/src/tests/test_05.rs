@@ -57,7 +57,7 @@ fn memory_system_behavior() {
 //     assert_eq!(rams,    2);
 // }
 
-fn simulate_loud(chip: IC<Computational16>, mmap: MemoryMap) -> ChipState {
+fn simulate_loud(chip: &IC<Computational16>, mmap: MemoryMap) -> ChipState {
     use simulator::simulate::{initialize, synthesize};
 
     let wiring = synthesize(&chip, mmap);
@@ -81,7 +81,7 @@ fn decode_truth_table() {
     let chip = flatten(chip);
 
     let no_ram = MemoryMap::new(vec![]);
-    let mut state = simulate_loud(chip, no_ram);
+    let mut state = simulate_loud(&chip, no_ram);
 
     state.set("instr", instr("@1234").into());
     assert_eq!(state.get("is_c"), 0);
@@ -109,7 +109,7 @@ fn cpu_behavior() {
     let chip = flatten(chip);
 
     let no_ram = MemoryMap::new(vec![]);
-    let mut state = simulate_loud(chip, no_ram);
+    let mut state = simulate_loud(&chip, no_ram);
 
     // Load constant 1234 into A
     state.set("instr", instr("@1234").into());
@@ -156,7 +156,7 @@ fn computer_add_behavior() {
 
     let chip = flatten(chip);
 
-    let mut state = simulate(&chip, memory_system());
+    let mut state = simulate_loud(&chip, memory_system());
 
     let rom = find_rom(&state);
     let ram = find_ram(&state);
