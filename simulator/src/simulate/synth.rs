@@ -80,10 +80,12 @@ fn fmt_wire(wr: wiring::WireRef) -> impl fmt::Display {
 impl fmt::Display for ChipWiring {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut nands = 0u32;
+        let mut muxes = 0u32;
         let mut registers = 0u32;
         for comp in &self.component_wiring {
             match comp {
                 wiring::ComponentWiring::Nand(_)     => nands += 1,
+                wiring::ComponentWiring::Mux(_)      => muxes += 1,
                 wiring::ComponentWiring::Register(_) => registers += 1,
                 _ => {}
             }
@@ -91,6 +93,7 @@ impl fmt::Display for ChipWiring {
         writeln!(f, "ChipWiring:")?;
         writeln!(f, "  wires:     {}", self.n_wires)?;
         writeln!(f, "  nands:     {}", nands)?;
+        if muxes > 0 { writeln!(f, "  muxes:     {}", muxes)?; }
         if registers > 0 { writeln!(f, "  registers: {}", registers)?; }
         for (i, s) in self.ram_specs.iter().enumerate() {
             writeln!(f, "  ram[{}]:    {} words", i, s.size)?;
