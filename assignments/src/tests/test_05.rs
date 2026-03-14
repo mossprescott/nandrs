@@ -218,7 +218,10 @@ fn computer_max_behavior() {
     ram.poke(2, 5);
 
     // TODO: make the looping prologue automatic and factor this out
-    while state.get("pc") <= (pgm.len()-2).try_into().unwrap() { state.ticktock(); }
+    for _ in 0..pgm.len() {
+        state.ticktock();
+        if state.get("pc") > (pgm.len()-2).try_into().unwrap() { break; }
+    }
 
     assert_eq!(ram.peek(3), 5);
 
@@ -230,7 +233,10 @@ fn computer_max_behavior() {
     ram.poke(1, 23456);
     ram.poke(2, 12345);
 
-    while state.get("pc") <= (pgm.len()-2).try_into().unwrap() { state.ticktock(); }
+    for _ in 0..pgm.len() {
+        state.ticktock();
+        if state.get("pc") > (pgm.len()-2).try_into().unwrap() { break; }
+    }
 
     assert_eq!(ram.peek(3), 23456);
 }
