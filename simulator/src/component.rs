@@ -169,7 +169,6 @@ pub enum Combinational<Width: Nat> {
     Nand(Nand),
     Const(Const),
     Buffer(Buffer),
-    Mux1(Mux<N1>),  // Note: barely used. Maybe just remove it.
     Mux(Mux<Width>),
 }
 
@@ -184,7 +183,6 @@ impl<Width: Nat + Clone> Reflect for Combinational<Width> {
             Self::Nand(c)   => c.reflect(),
             Self::Const(c)  => c.reflect(),
             Self::Buffer(c) => c.reflect(),
-            Self::Mux1(c)   => c.reflect(),
             Self::Mux(c)    => c.reflect(),
         }
     }
@@ -193,7 +191,6 @@ impl<Width: Nat + Clone> Reflect for Combinational<Width> {
             Self::Nand(c)   => c.name(),
             Self::Const(c)  => c.name(),
             Self::Buffer(c) => c.name(),
-            Self::Mux1(c)   => c.name(),
             Self::Mux(c)    => c.name(),
         }
     }
@@ -247,7 +244,6 @@ pub enum Sequential<Width: Nat> {
     Nand(Nand),
     Const(Const),
     Buffer(Buffer),
-    Mux1(Mux<N1>),
     Mux(Mux<Width>),
     Register(Register<Width>),
 }
@@ -258,7 +254,6 @@ impl<Width: Nat + Clone> Reflect for Sequential<Width> {
             Self::Nand(c)     => c.reflect(),
             Self::Const(c)    => c.reflect(),
             Self::Buffer(c)   => c.reflect(),
-            Self::Mux1(c)     => c.reflect(),
             Self::Mux(c)      => c.reflect(),
             Self::Register(c) => c.reflect(),
         }
@@ -268,7 +263,6 @@ impl<Width: Nat + Clone> Reflect for Sequential<Width> {
             Self::Nand(c)     => c.name(),
             Self::Const(c)    => c.name(),
             Self::Buffer(c)   => c.name(),
-            Self::Mux1(c)     => c.name(),
             Self::Mux(c)      => c.name(),
             Self::Register(c) => c.name(),
         }
@@ -430,7 +424,6 @@ pub enum Computational<A: Nat, D: Nat> {
     Nand(Nand),
     Const(Const),
     Buffer(Buffer),
-    Mux1(Mux<N1>),
     Mux(Mux<D>),
     Register(Register<D>),
     RAM(RAM<A, D>),
@@ -445,7 +438,6 @@ impl<A: Nat + Clone, D: Nat + Clone> Reflect for Computational<A, D> {
             Self::Nand(c)         => c.reflect(),
             Self::Const(c)        => c.reflect(),
             Self::Buffer(c)       => c.reflect(),
-            Self::Mux1(c)         => c.reflect(),
             Self::Mux(c)          => c.reflect(),
             Self::Register(c)     => c.reflect(),
             Self::RAM(c)          => c.reflect(),
@@ -458,7 +450,6 @@ impl<A: Nat + Clone, D: Nat + Clone> Reflect for Computational<A, D> {
             Self::Nand(c)         => c.name(),
             Self::Const(c)        => c.name(),
             Self::Buffer(c)       => c.name(),
-            Self::Mux1(c)         => c.name(),
             Self::Mux(c)          => c.name(),
             Self::Register(c)     => c.name(),
             Self::RAM(c)          => c.name(),
@@ -487,7 +478,6 @@ impl<A: Nat, D: Nat> From<Sequential<D>> for Computational<A, D> {
             Sequential::Nand(n)     => Computational::Nand(n),
             Sequential::Const(n)    => Computational::Const(n),
             Sequential::Buffer(n)   => Computational::Buffer(n),
-            Sequential::Mux1(m)     => Computational::Mux1(m),
             Sequential::Mux(m)      => Computational::Mux(m),
             Sequential::Register(r) => Computational::Register(r),
         }

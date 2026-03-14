@@ -224,13 +224,6 @@ where
                 Computational::Buffer(_) => {
                     // Ignore; already recorded in `renamed`
                 }
-                Computational::Mux1(c) => {
-                    let intf = c.reflect();
-                    assign(WireID::from(&intf.inputs["a0"]));
-                    assign(WireID::from(&intf.inputs["a1"]));
-                    assign(WireID::from(&intf.inputs["sel"]));
-                    assign(WireID::from(&intf.outputs["out"]));
-                }
                 Computational::Mux(c) => {
                     let intf = c.reflect();
                     assign(WireID::from(&intf.inputs["a0"]));
@@ -313,15 +306,6 @@ where
             }
             Computational::Const(_)        => None,
             Computational::Buffer(_)       => None,
-            Computational::Mux1(c)         => {
-                let intf = c.reflect();
-                Some(CW::Mux(wiring::MuxWiring {
-                    sel: ref_for(&intf.inputs["sel"]),
-                    a0:  wire_indexes[&WireID::from(&intf.inputs["a0"])],
-                    a1:  wire_indexes[&WireID::from(&intf.inputs["a1"])],
-                    out: wire_indexes[&WireID::from(&intf.outputs["out"])],
-                }))
-            }
             Computational::Mux(c)          => {
                 let intf = c.reflect();
                 Some(CW::Mux(wiring::MuxWiring {

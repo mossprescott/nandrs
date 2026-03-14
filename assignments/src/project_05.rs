@@ -97,7 +97,6 @@ pub fn flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Computation
                             Sequential::Nand(n)     => Computational::Nand(n),
                             Sequential::Const(c)    => Computational::Const(c),
                             Sequential::Buffer(c)   => Computational::Buffer(c),
-                            Sequential::Mux1(m)     => Computational::Mux1(m),
                             Sequential::Mux(m)      => Computational::Mux(m),
                             Sequential::Register(r) => Computational::Register(r),
                         })

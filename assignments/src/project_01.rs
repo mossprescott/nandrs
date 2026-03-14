@@ -13,26 +13,26 @@ pub use simulator::component::{Nand, Const, Buffer, Mux16};
 
 /// Components implemented in this project: simple, logical components for 1 and 16 bits.
 pub enum Project01Component {
+    // primitive:
+    Nand(Nand),
     Buffer(Buffer),
     Const(Const),
-    Nand(Nand),
+    Mux16(Mux16),
+    // non-primitive:
     Not(Not),
     And(And),
     Or(Or),
     Xor(Xor),
-    Mux(Mux),
     Dmux(Dmux),
     Not16(Not16),
     And16(And16),
     // Or16(Or16),
-    Mux16(Mux16),
 }
 
 // primitive:
 impl From<Nand>   for Project01Component { fn from(c: Nand)   -> Self { Project01Component::Nand(c)   } }
 impl From<Buffer> for Project01Component { fn from(c: Buffer) -> Self { Project01Component::Buffer(c) } }
 impl From<Const>  for Project01Component { fn from(c: Const)  -> Self { Project01Component::Const(c)  } }
-impl From<Mux>    for Project01Component { fn from(c: Mux)    -> Self { Project01Component::Mux(c)    } }
 impl From<Mux16>  for Project01Component { fn from(c: Mux16)  -> Self { Project01Component::Mux16(c)  } }
 // non-primitive:
 impl From<Not>   for Project01Component { fn from(c: Not)   -> Self { Project01Component::Not(c)   } }
@@ -53,7 +53,6 @@ impl Component for Project01Component {
             Project01Component::Nand(c)  => c.expand().map(|ic| unreachable!()),
             Project01Component::Buffer(c) => c.expand().map(|ic| unreachable!()),
             Project01Component::Const(c) => c.expand().map(|ic| unreachable!()),
-            Project01Component::Mux(c)   => c.expand().map(|ic| unreachable!()),
             Project01Component::Mux16(c) => c.expand().map(|ic| unreachable!()),
             // non-primitive:
             Project01Component::Not(c)   => c.expand(),
@@ -73,7 +72,6 @@ impl Reflect for Project01Component {
             Project01Component::Nand(c)  => c.reflect(),
             Project01Component::Buffer(c) => c.reflect(),
             Project01Component::Const(c) => c.reflect(),
-            Project01Component::Mux(c)   => c.reflect(),
             Project01Component::Mux16(c) => c.reflect(),
             // non-primitive:
             Project01Component::Not(c)   => c.reflect(),
@@ -91,7 +89,6 @@ impl Reflect for Project01Component {
             Project01Component::Nand(c)  => c.name(),
             Project01Component::Buffer(c) => c.name(),
             Project01Component::Const(c) => c.name(),
-            Project01Component::Mux(c)   => c.name(),
             Project01Component::Mux16(c) => c.name(),
             // non-primitive:
             Project01Component::Not(c)   => c.name(),
@@ -119,7 +116,6 @@ pub fn flatten<C: Reflect + Into<Project01Component>>(chip: C) -> IC<Combination
                 Project01Component::Nand(c) => vec![c.into()],
                 Project01Component::Const(c) => vec![c.into()],
                 Project01Component::Buffer(c) => vec![c.into()],
-                Project01Component::Mux(c) => vec![Combinational::Mux1(c)],
                 Project01Component::Mux16(c) => vec![c.into()],
                 _ => panic!("Did not reduce to primitive: {:?}", comp.name()),
             },
@@ -230,8 +226,10 @@ impl Component for Xor {
 /// Mux is primitive and general; lets give it a name for when we only need one bit.
 pub type Mux = simulator::component::Mux<N1>;
 
+/// Mux is now provided as a primitive (for arbitrary bits wide), but it's interesting to
+/// implementing separately anyway; this version isn't used by any other components
+///
 /// Passes a0 through when sel is 0, a1 when sel is 1.
-/// Mux is now provided as a primitive, but it might be interesting to try implementing separately.
 #[derive(Reflect, Chip)]
 pub struct MyMux {
     pub a0: Input,
@@ -239,23 +237,23 @@ pub struct MyMux {
     pub sel: Input,
     pub out: Output,
 }
-// impl Component for MyMux {
-//     type Target = Project01Component;
+impl Component for MyMux {
+    type Target = Project01Component;
 
-//     /*
-//       let not_sel = Not { a: sel }
-//       let nand0   = Nand { a: not_sel.out,  b: a0 }
-//       let nand1   = Nand { a: sel,          b: a1 }
-//       outputs.out = Nand { a: nand0.out, b: nand1.out }
-//      */
-//     fn expand(&self) -> Option<IC<Project01Component>> {
-//         let not_sel = Not  { a: self.sel.clone(),             out: Output::new() };
-//         let nand0   = Nand { a: not_sel.out.clone().into(),   b: self.a0.clone(),       out: Output::new() };
-//         let nand1   = Nand { a: self.sel.clone(),             b: self.a1.clone(),       out: Output::new() };
-//         let out     = Nand { a: nand0.out.clone().into(),     b: nand1.out.clone().into(), out: self.out.clone() };
-//         Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![not_sel.into(), nand0.into(), nand1.into(), out.into()] })
-//     }
-// }
+    /*
+      let not_sel = Not { a: sel }
+      let nand0   = Nand { a: not_sel.out,  b: a0 }
+      let nand1   = Nand { a: sel,          b: a1 }
+      outputs.out = Nand { a: nand0.out, b: nand1.out }
+     */
+    fn expand(&self) -> Option<IC<Project01Component>> {
+        let not_sel = Not  { a: self.sel.clone(),             out: Output::new() };
+        let nand0   = Nand { a: not_sel.out.clone().into(),   b: self.a0.clone(),       out: Output::new() };
+        let nand1   = Nand { a: self.sel.clone(),             b: self.a1.clone(),       out: Output::new() };
+        let out     = Nand { a: nand0.out.clone().into(),     b: nand1.out.clone().into(), out: self.out.clone() };
+        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![not_sel.into(), nand0.into(), nand1.into(), out.into()] })
+    }
+}
 
 /// Routes input to a when sel is 0, or b when sel is 1; the unused output is zero.
 #[derive(Reflect, Chip)]

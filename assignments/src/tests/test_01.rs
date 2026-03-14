@@ -1,7 +1,7 @@
-use simulator::{Input, Output, Reflect, print_graph};
+use simulator::{Input, Output, Reflect, print_graph, Component, IC};
 use simulator::Chip as _;
 use simulator::eval::eval;
-use crate::project_01::{flatten, Const, Nand, Not, And, Or, Xor, Mux, Dmux, Not16, And16, Mux16};
+use crate::project_01::{flatten, Const, Nand, Not, And, Or, Xor, MyMux, Dmux, Not16, And16, Mux16};
 
 #[test]
 fn nand_reflect() {
@@ -86,10 +86,11 @@ fn xor_optimal() {
     assert_eq!(flatten(Xor::chip()).components.len(), 4);
 }
 
-// Sanity check
 #[test]
-fn mux_truth_table() {
-    let chip = flatten(Mux::chip());
+fn my_mux_truth_table() {
+    let mux = MyMux::chip();
+    let ic = mux.expand().unwrap();
+    let chip = IC { name: ic.name, intf: ic.intf, components: ic.components.into_iter().flat_map(|c| flatten(c).components).collect() };
     assert_eq!(eval(&chip, [("a0", 0), ("a1", 0), ("sel", 0)])["out"], 0);
     assert_eq!(eval(&chip, [("a0", 0), ("a1", 1), ("sel", 0)])["out"], 0);
     assert_eq!(eval(&chip, [("a0", 1), ("a1", 0), ("sel", 0)])["out"], 1);
@@ -101,9 +102,11 @@ fn mux_truth_table() {
 }
 
 #[test]
-fn mux_optimal() {
-    // Mux is now a primitive; flatten just returns it as-is.
-    assert_eq!(flatten(Mux::chip()).components.len(), 1);
+fn my_mux_optimal() {
+    let mux = MyMux::chip();
+    let ic = mux.expand().unwrap();
+    let chip: Vec<_> = ic.components.into_iter().flat_map(|c| flatten(c).components).collect();
+    assert_eq!(chip.len(), 4);
 }
 
 #[test]
