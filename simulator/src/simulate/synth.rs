@@ -77,6 +77,34 @@ fn fmt_wire(wr: wiring::WireRef) -> impl fmt::Display {
     D(wr)
 }
 
+fn fmt_component(comp: &wiring::ComponentWiring) -> impl fmt::Display + '_ {
+    struct D<'a>(&'a wiring::ComponentWiring);
+    impl fmt::Display for D<'_> {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self.0 {
+                wiring::ComponentWiring::Nand(n) =>
+                    write!(f, "nand a={} b={} out={}", fmt_bit(n.a), fmt_bit(n.b), fmt_bit(n.out)),
+                wiring::ComponentWiring::Mux(m) =>
+                    write!(f, "mux sel={} a0=w{}[..] a1=w{}[..] out=w{}[..]",
+                        fmt_bit(m.sel), m.a0.0, m.a1.0, m.out.0),
+                wiring::ComponentWiring::Register(r) =>
+                    write!(f, "reg write={} in=w{}[..] out=w{}[..]",
+                        fmt_bit(r.write), r.data_in.0, r.data_out.0),
+                wiring::ComponentWiring::ROM(r) =>
+                    write!(f, "rom[{}] addr=w{}[..] out=w{}[..]",
+                        r.device_slot, r.addr.0, r.out.0),
+                wiring::ComponentWiring::RAM(r) =>
+                    write!(f, "ram[{}] addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
+                        r.device_slot, r.addr.0, fmt_bit(r.write), r.data_in.0, r.out.0),
+                wiring::ComponentWiring::MemorySystem(m) =>
+                    write!(f, "mem[{}] addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
+                        m.device_slot, m.addr.0, fmt_bit(m.write), m.data_in.0, m.out.0),
+            }
+        }
+    }
+    D(comp)
+}
+
 impl fmt::Display for ChipWiring {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut nands = 0u32;
@@ -127,9 +155,26 @@ impl fmt::Display for ChipWiring {
                 wiring::ComponentWiring::Nand(n) =>
                     writeln!(f, "  [{i}] nand  a={} b={} out={}",
                         fmt_bit(n.a), fmt_bit(n.b), fmt_bit(n.out))?,
-                wiring::ComponentWiring::Mux(m) =>
-                    writeln!(f, "  [{i}] mux   sel={} a0=w{}[..] a1=w{}[..] out=w{}[..]",
-                        fmt_bit(m.sel), m.a0.0, m.a1.0, m.out.0)?,
+                wiring::ComponentWiring::Mux(m) => {
+                    writeln!(f, "  [{i}] mux   sel={} out=w{}[..]",
+                        fmt_bit(m.sel), m.out.0)?;
+                    writeln!(f, "         a0=w{}[..]", m.a0.0)?;
+                    if m.branch0.is_empty() {
+                        writeln!(f, "           <none>")?;
+                    } else {
+                        for op in &m.branch0 {
+                            writeln!(f, "           {}", fmt_component(op))?;
+                        }
+                    }
+                    writeln!(f, "         a1=w{}[..]", m.a1.0)?;
+                    if m.branch1.is_empty() {
+                        writeln!(f, "           <none>")?;
+                    } else {
+                        for op in &m.branch1 {
+                            writeln!(f, "           {}", fmt_component(op))?;
+                        }
+                    }
+                }
                 wiring::ComponentWiring::Register(r) =>
                     writeln!(f, "  [{i}] reg   write={} in=w{}[..] out=w{}[..]",
                         fmt_bit(r.write), r.data_in.0, r.data_out.0)?,
@@ -313,6 +358,8 @@ where
                     a0:  wire_indexes[&WireID::from(&intf.inputs["a0"])],
                     a1:  wire_indexes[&WireID::from(&intf.inputs["a1"])],
                     out: wire_indexes[&WireID::from(&intf.outputs["out"])],
+                    branch0: Vec::new(),
+                    branch1: Vec::new(),
                 }))
             }
             Computational::Register(c)     => {
