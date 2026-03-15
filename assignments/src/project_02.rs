@@ -393,6 +393,10 @@ pub struct ALU {
     pub zr:  Output,
     /// Flag: is the result < 0? (high bit set)
     pub ng:  Output,
+
+    /// Disable: when 1, all outputs are forced to 0. This makes it easier for the simulator to
+    /// identify this logic as inactive and avoid spending time evaluating it.
+    pub disable: Input,
 }
 
 impl Component for ALU {
@@ -410,10 +414,17 @@ impl Component for ALU {
 
         let result = Mux16 { a0: and.out.clone().into(), a1: add.out.clone().into(), sel: self.f.clone(), out: Output16::new() };
         let rn = Not16 { a: result.out.clone().into(), out: Output16::new() };
-        let out = Mux16 { a0: result.out.clone().into(), a1: rn.out.clone().into(), sel: self.no.clone(), out: self.out.clone() };
+        let raw_out = Mux16 { a0: result.out.clone().into(), a1: rn.out.clone().into(), sel: self.no.clone(), out: Output16::new() };
 
-        let rz = Zero16 { a: out.out.clone().into(), out: self.zr.clone() };
-        let rneg = Neg16 { a: out.out.clone().into(), out: self.ng.clone() };
+        let rz = Zero16 { a: raw_out.out.clone().into(), out: Output::new() };
+        let rneg = Neg16 { a: raw_out.out.clone().into(), out: Output::new() };
+
+        // Gate all outputs with disable (when disable=1, force outputs to 0)
+        let zero16 = Const { value: 0, out: Output16::new() };
+        let not_disable = Not { a: self.disable.clone(), out: Output::new() };
+        let out_gate = Mux16 { sel: self.disable.clone(), a0: raw_out.out.clone().into(), a1: zero16.out.clone().into(), out: self.out.clone() };
+        let zr_gate = And { a: not_disable.out.clone().into(), b: rz.out.clone().into(), out: self.zr.clone() };
+        let ng_gate = And { a: not_disable.out.clone().into(), b: rneg.out.clone().into(), out: self.ng.clone() };
 
         Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![
             x1.into(),
@@ -424,9 +435,14 @@ impl Component for ALU {
             add.into(),
             Project01Component::from(result).into(),
             Project01Component::from(rn).into(),
-            Project01Component::from(out).into(),
+            Project01Component::from(raw_out).into(),
             rz.into(),
             rneg.into(),
+            Project01Component::from(zero16).into(),
+            Project01Component::from(not_disable).into(),
+            Project01Component::from(out_gate).into(),
+            Project01Component::from(zr_gate).into(),
+            Project01Component::from(ng_gate).into(),
         ]})
    }
 }

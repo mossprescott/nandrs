@@ -151,8 +151,8 @@ fn alu_optimal() {
     let components = flatten(ALU::chip()).components;
     let nands = components.iter().filter(|c| matches!(c, Combinational::Nand(_))).count();
     let muxes = components.iter().filter(|c| matches!(c, Combinational::Mux(_))).count();
-    assert_eq!(nands, 428);
-    assert_eq!(muxes, 2);
+    assert_eq!(nands, 433);
+    assert_eq!(muxes, 3);
 }
 
 
@@ -183,7 +183,15 @@ fn alu_graph() {
          mux_8.sel <- no\n\
          zero16_9.a[0..15] <- mux_8.out[0..15]\n\
          neg16_10.a[0..15] <- mux_8.out[0..15]\n\
-         ng <- neg16_10.out\n\
-         out[0..15] <- mux_8.out[0..15]\n\
-         zr <- zero16_9.out");
+         not_11.a <- disable\n\
+         mux_12.a0[0..15] <- mux_8.out[0..15]\n\
+         mux_12.a1[0..15] <- 0\n\
+         mux_12.sel <- disable\n\
+         and_13.a <- not_11.out\n\
+         and_13.b <- zero16_9.out\n\
+         and_14.a <- not_11.out\n\
+         and_14.b <- neg16_10.out\n\
+         ng <- and_14.out\n\
+         out[0..15] <- mux_12.out[0..15]\n\
+         zr <- and_13.out");
 }

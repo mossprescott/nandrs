@@ -313,7 +313,7 @@ impl Component for CPU {
         let y_src = y_mux.out.clone();
         components.push(p01(y_mux));
 
-        // === ALU: x=D, y=y_src, out → mem_out ===
+        // === ALU: x=D, y=y_src, enabled only on C-instructions ===
         let reg_d_out: Output16 = Output16::new();  // D register output wire (seeded from reg_state)
         let alu = ALU {
             x:   reg_d_out.clone().into(),
@@ -321,6 +321,7 @@ impl Component for CPU {
             zx:  zx.into(), nx: nx.into(),
             zy:  zy.into(), ny: ny.into(),
             f:   f.into(),  no: no.into(),
+            disable: is_a.clone().into(),
             out: self.mem_data_out.clone(),
             zr:  Output::new(),
             ng:  Output::new(),
@@ -329,8 +330,8 @@ impl Component for CPU {
         let alu_ng = alu.ng.clone();
         components.push(p02(alu));
 
-        // === A register data mux: AFTER ALU so pass 2 reads correct ALU output ===
-        // sel=is_a → a1=instr (A-instr), a0=alu_out (C-instr with dest=A)
+        // === A register data mux: AFTER ALU ===
+        // sel=is_a → a1=instr (A-instr), a0=ALU output (C-instr with dest=A)
         let a_data_mux = Mux16 {
             sel: is_a.into(),
             a0:  self.mem_data_out.clone().into(),
