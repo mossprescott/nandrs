@@ -174,12 +174,12 @@ impl fmt::Display for ChipWiring {
         }
 
         let mut inputs: Vec<_> = self.input_wiring.iter().collect();
-        inputs.sort_by_key(|(name, _)| name.clone());
+        inputs.sort_by_key(|(name, _)| *name);
         for (name, wr) in &inputs {
             writeln!(f, "  in  {name}: {}", fmt_wire(**wr))?;
         }
         let mut outputs: Vec<_> = self.output_wiring.iter().collect();
-        outputs.sort_by_key(|(name, _)| name.clone());
+        outputs.sort_by_key(|(name, _)| *name);
         for (name, wr) in &outputs {
             writeln!(f, "  out {name}: {}", fmt_wire(**wr))?;
         }
@@ -692,16 +692,6 @@ fn populate_mux_branches(
         }
     }
 
-    // Helper: get the output wire of a component (only nands and muxes produce wires).
-    fn output_wire(comp: &CW) -> Option<wiring::WireIndex> {
-        match comp {
-            CW::Nand(n) => Some(n.out.id),
-            CW::And(n)  => Some(n.out.id),
-            CW::Mux(m)  => Some(m.out),
-            _ => None,
-        }
-    }
-
     /// Collect components that exclusively feed a branch wire using fixed-point iteration.
     /// Handles internal fan-out: if a wire fans out to two nands that are both in the
     /// candidate set, their shared producer becomes eligible too.
@@ -811,7 +801,7 @@ fn populate_mux_branches(
         assignments: &mut Vec<(usize, Vec<usize>, Vec<usize>)>,
     ) {
         let m = match &components[mux_idx] { CW::Mux(m) => m, _ => return };
-        let (a0, a1, sel_wire) = (m.a0, m.a1, m.sel.id);
+        let (a0, a1) = (m.a0, m.a1);
         // For branch0: the mux consuming a wire on a0 is ok; on a1 or sel is NOT ok.
         // sel producers must remain top-level — they're needed before the branch decision.
         let ok_for_b0: HashSet<wiring::WireIndex> = [a0].into();
