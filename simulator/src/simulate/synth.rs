@@ -437,61 +437,84 @@ where
         }
         drop(count);
 
-        // For each mux, check if a0/a1 wires are exclusively consumed by it.
-        // Collect (mux_index, wire, branch) pairs.
-        let mut claims: Vec<(usize, wiring::WireIndex, u8)> = Vec::new();
+        // Build producer map: output wire → list of component indices that write to it.
+        // (Multiple nands can write different bits of the same wire word.)
+        let mut producers: HashMap<wiring::WireIndex, Vec<usize>> = HashMap::new();
+        for (j, comp) in component_wiring.iter().enumerate() {
+            match comp {
+                CW::Nand(n) => producers.entry(n.out.id).or_default().push(j),
+                // Skip muxes for now — moving nested muxes breaks evaluation.
+                _ => {}
+            }
+        }
+
+        // Recursively collect exclusive producers for a wire into a branch.
+        // Returns indices to move, in evaluation order.
+        fn collect_branch(
+            wire: wiring::WireIndex,
+            consumer_count: &HashMap<wiring::WireIndex, usize>,
+            producers: &HashMap<wiring::WireIndex, Vec<usize>>,
+            components: &[CW],
+            claimed: &mut Vec<bool>,
+        ) -> Vec<usize> {
+            // Only pull in producers if this wire has exactly one consumer.
+            if consumer_count.get(&wire) != Some(&1) {
+                return Vec::new();
+            }
+            let Some(prod_indices) = producers.get(&wire) else {
+                return Vec::new();
+            };
+            let mut result = Vec::new();
+            for &j in prod_indices {
+                if claimed[j] { continue; }
+                claimed[j] = true;
+                // Recursively collect producers of this nand's inputs.
+                if let CW::Nand(n) = &components[j] {
+                    result.extend(collect_branch(n.a.id, consumer_count, producers, components, claimed));
+                    result.extend(collect_branch(n.b.id, consumer_count, producers, components, claimed));
+                }
+                result.push(j);
+            }
+            result
+        }
+
+        // For each mux, recursively collect exclusive producers into branches.
+        let mut claimed: Vec<bool> = vec![false; component_wiring.len()];
+        let mut branch_assignments: Vec<(usize, Vec<usize>, Vec<usize>)> = Vec::new();
+
         for (i, comp) in component_wiring.iter().enumerate() {
             if let CW::Mux(m) = comp {
-                if consumer_count.get(&m.a0) == Some(&1) {
-                    claims.push((i, m.a0, 0));
-                }
-                if consumer_count.get(&m.a1) == Some(&1) {
-                    claims.push((i, m.a1, 1));
-                }
-            }
-        }
-
-        // Find producers for each claimed wire and mark them for removal.
-        // marked[j] = Some((mux_index, branch))
-        let mut marked: Vec<Option<(usize, u8)>> = vec![None; component_wiring.len()];
-        for (mux_idx, wire, branch) in &claims {
-            for (j, comp) in component_wiring.iter().enumerate() {
-                let output_wire = match comp {
-                    CW::Nand(n) => n.out.id,
-                    _ => continue,
-                };
-                if output_wire == *wire {
-                    marked[j] = Some((*mux_idx, *branch));
+                let b0 = collect_branch(m.a0, &consumer_count, &producers, &component_wiring, &mut claimed);
+                let b1 = collect_branch(m.a1, &consumer_count, &producers, &component_wiring, &mut claimed);
+                if !b0.is_empty() || !b1.is_empty() {
+                    branch_assignments.push((i, b0, b1));
                 }
             }
         }
 
-        // Collect branches per mux, then remove marked components and assign.
-        let mut branch_contents: HashMap<usize, (Vec<wiring::ComponentWiring>, Vec<wiring::ComponentWiring>)> = HashMap::new();
+        // Build the set of all claimed indices for removal.
+        let removed: Vec<bool> = claimed;
 
-        // Compute index shift: how many marked elements appear before each position.
-        let mut shift_at: Vec<usize> = vec![0; marked.len() + 1];
-        for j in 0..marked.len() {
-            shift_at[j + 1] = shift_at[j] + if marked[j].is_some() { 1 } else { 0 };
+        // Compute index shift: how many removed elements appear before each position.
+        let mut shift_at: Vec<usize> = vec![0; removed.len() + 1];
+        for j in 0..removed.len() {
+            shift_at[j + 1] = shift_at[j] + if removed[j] { 1 } else { 0 };
         }
 
-        // Remove marked elements in reverse order (preserves earlier indices) and collect.
-        for j in (0..marked.len()).rev() {
-            if let Some((mux_idx, branch)) = marked[j] {
-                let comp = component_wiring.remove(j);
-                let entry = branch_contents.entry(mux_idx).or_insert_with(|| (Vec::new(), Vec::new()));
-                if branch == 0 { entry.0.push(comp); } else { entry.1.push(comp); }
+        // Extract claimed components (in reverse to preserve indices).
+        let mut extracted: Vec<Option<CW>> = vec![None; component_wiring.len()];
+        for j in (0..component_wiring.len()).rev() {
+            if removed[j] {
+                extracted[j] = Some(component_wiring.remove(j));
             }
         }
 
-        // Assign branches to their muxes (adjusting for shifted indices).
-        for (orig_mux_idx, (mut b0, mut b1)) in branch_contents {
+        // Assign branches to their muxes.
+        for (orig_mux_idx, b0_indices, b1_indices) in branch_assignments {
             let new_idx = orig_mux_idx - shift_at[orig_mux_idx];
             if let CW::Mux(m) = &mut component_wiring[new_idx] {
-                b0.reverse();
-                b1.reverse();
-                m.branch0 = b0;
-                m.branch1 = b1;
+                m.branch0 = b0_indices.into_iter().map(|j| extracted[j].take().unwrap()).collect();
+                m.branch1 = b1_indices.into_iter().map(|j| extracted[j].take().unwrap()).collect();
             }
         }
     }
