@@ -132,9 +132,6 @@ fn cpu_behavior() {
     assert_eq!(state.get("mem_write"), 1);
     assert_eq!(state.get("mem_data_out"), 1234);
     assert_eq!(state.get("mem_addr"), 256);
-
-    // DEBUG: force it to print
-    assert!(false);
 }
 
 #[test]
