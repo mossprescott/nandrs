@@ -457,25 +457,27 @@ fn populate_mux_branches(
     components: &mut Vec<wiring::ComponentWiring>,
     extra_consumers: &[wiring::WireIndex],
 ) {
+    use std::collections::HashSet;
     use wiring::ComponentWiring as CW;
 
-    // Count how many components in this list consume each wire.
-    let mut consumer_count: HashMap<wiring::WireIndex, usize> = HashMap::new();
-    let mut count = |w: wiring::WireIndex| *consumer_count.entry(w).or_insert(0) += 1;
-    for comp in components.iter() {
+    // For each wire, which component indices consume it?
+    let mut consumers: HashMap<wiring::WireIndex, HashSet<usize>> = HashMap::new();
+    let mut add_consumer = |w: wiring::WireIndex, j: usize| { consumers.entry(w).or_default().insert(j); };
+    for (j, comp) in components.iter().enumerate() {
         match comp {
-            CW::Nand(n)         => { count(n.a.id); count(n.b.id); }
-            CW::Mux(m)          => { count(m.sel.id); count(m.a0); count(m.a1); }
-            CW::Register(r)     => { count(r.write.id); count(r.data_in); }
-            CW::RAM(r)          => { count(r.write.id); count(r.data_in); count(r.addr); }
-            CW::ROM(r)          => { count(r.addr); }
-            CW::MemorySystem(m) => { count(m.write.id); count(m.data_in); count(m.addr); }
+            CW::Nand(n)         => { add_consumer(n.a.id, j); add_consumer(n.b.id, j); }
+            CW::Mux(m)          => { add_consumer(m.sel.id, j); add_consumer(m.a0, j); add_consumer(m.a1, j); }
+            CW::Register(r)     => { add_consumer(r.write.id, j); add_consumer(r.data_in, j); }
+            CW::RAM(r)          => { add_consumer(r.write.id, j); add_consumer(r.data_in, j); add_consumer(r.addr, j); }
+            CW::ROM(r)          => { add_consumer(r.addr, j); }
+            CW::MemorySystem(m) => { add_consumer(m.write.id, j); add_consumer(m.data_in, j); add_consumer(m.addr, j); }
         }
     }
+    // Extra consumers (chip outputs) use a sentinel index that will never be claimed.
+    let sentinel = components.len();
     for &w in extra_consumers {
-        count(w);
+        consumers.entry(w).or_default().insert(sentinel);
     }
-    drop(count);
 
     // Build producer map: output wire → list of component indices.
     let mut producers: HashMap<wiring::WireIndex, Vec<usize>> = HashMap::new();
@@ -487,16 +489,19 @@ fn populate_mux_branches(
         }
     }
 
-    // Recursively collect exclusive producers for a wire.
-    // Returns indices in evaluation order (dependencies before the component that needs them).
+    // Collect exclusive producers of a wire — components whose output wire has
+    // exactly one unique component consumer. Returns indices in evaluation order.
     fn collect(
         wire: wiring::WireIndex,
-        consumer_count: &HashMap<wiring::WireIndex, usize>,
+        consumers: &HashMap<wiring::WireIndex, HashSet<usize>>,
         producers: &HashMap<wiring::WireIndex, Vec<usize>>,
         components: &[CW],
         claimed: &mut Vec<bool>,
     ) -> Vec<usize> {
-        if consumer_count.get(&wire) != Some(&1) {
+        // A wire is "exclusive" if exactly one component consumes it.
+        // (The sentinel for chip outputs counts as a consumer too.)
+        let consumer_count = consumers.get(&wire).map_or(0, |s| s.len());
+        if consumer_count != 1 {
             return Vec::new();
         }
         let Some(prod_indices) = producers.get(&wire) else {
@@ -506,15 +511,13 @@ fn populate_mux_branches(
         for &j in prod_indices {
             if claimed[j] { continue; }
             claimed[j] = true;
-            // Pull in this component's input producers (except mux a0/a1,
-            // which become the nested mux's own branches later).
             match &components[j] {
                 CW::Nand(n) => {
-                    result.extend(collect(n.a.id, consumer_count, producers, components, claimed));
-                    result.extend(collect(n.b.id, consumer_count, producers, components, claimed));
+                    result.extend(collect(n.a.id, consumers, producers, components, claimed));
+                    result.extend(collect(n.b.id, consumers, producers, components, claimed));
                 }
                 CW::Mux(m) => {
-                    result.extend(collect(m.sel.id, consumer_count, producers, components, claimed));
+                    result.extend(collect(m.sel.id, consumers, producers, components, claimed));
                 }
                 _ => {}
             }
@@ -523,20 +526,48 @@ fn populate_mux_branches(
         result
     }
 
-    // For each mux, collect exclusive producers into branches.
-    // Process in reverse order so outermost muxes claim inner ones first;
-    // skip any mux that was already claimed into another mux's branch.
+    // Recursively collect branch assignments for a mux and all nested muxes.
+    // Pushes inner assignments BEFORE outer ones so that during assembly,
+    // inner muxes get their branches populated first.
+    fn collect_mux_branches(
+        mux_idx: usize,
+        consumers: &HashMap<wiring::WireIndex, HashSet<usize>>,
+        producers: &HashMap<wiring::WireIndex, Vec<usize>>,
+        components: &[CW],
+        claimed: &mut Vec<bool>,
+        assignments: &mut Vec<(usize, Vec<usize>, Vec<usize>)>,
+    ) {
+        let m = match &components[mux_idx] { CW::Mux(m) => m, _ => return };
+        let (a0, a1) = (m.a0, m.a1);
+        let b0 = collect(a0, consumers, producers, components, claimed);
+        let b1 = collect(a1, consumers, producers, components, claimed);
+        // Recurse into any muxes we just claimed — BEFORE pushing our own assignment.
+        for &j in b0.iter().chain(b1.iter()) {
+            if matches!(&components[j], CW::Mux(_)) {
+                collect_mux_branches(j, consumers, producers, components, claimed, assignments);
+            }
+        }
+
+        if !b0.is_empty() || !b1.is_empty() {
+            assignments.push((mux_idx, b0, b1));
+        }
+    }
+
+    // For each top-level mux, collect exclusive producers into branches.
+    // Process in reverse order so outermost muxes claim inner ones first.
     let mut claimed: Vec<bool> = vec![false; components.len()];
     let mut assignments: Vec<(usize, Vec<usize>, Vec<usize>)> = Vec::new();
 
+    // Track which muxes are top-level branch owners (not to be extracted).
+    let mut branch_roots: HashSet<usize> = HashSet::new();
+
     for i in (0..components.len()).rev() {
         if claimed[i] { continue; }
-        if let CW::Mux(m) = &components[i] {
-            let b0 = collect(m.a0, &consumer_count, &producers, components, &mut claimed);
-            let b1 = collect(m.a1, &consumer_count, &producers, components, &mut claimed);
-            if !b0.is_empty() || !b1.is_empty() {
-                assignments.push((i, b0, b1));
-            }
+        if matches!(&components[i], CW::Mux(_)) {
+            collect_mux_branches(i, &consumers, &producers, components, &mut claimed, &mut assignments);
+            branch_roots.insert(i);
+            // The mux was marked claimed inside collect_mux_branches so its a0/a1
+            // consumers count as claimed. But it stays in the top-level list.
         }
     }
 
@@ -544,28 +575,42 @@ fn populate_mux_branches(
         return;
     }
 
-    // Compute index shifts for removal.
-    let mut shift_at: Vec<usize> = vec![0; claimed.len() + 1];
-    for j in 0..claimed.len() {
-        shift_at[j + 1] = shift_at[j] + if claimed[j] { 1 } else { 0 };
-    }
-
-    // Extract claimed components (reverse order to preserve indices).
+    // Extract claimed components EXCEPT top-level branch roots.
     let mut extracted: Vec<Option<CW>> = vec![None; components.len()];
     for j in (0..components.len()).rev() {
-        if claimed[j] {
+        if claimed[j] && !branch_roots.contains(&j) {
             extracted[j] = Some(components.remove(j));
         }
     }
 
-    // Assign branches to their muxes, then recursively populate nested mux branches.
-    for (orig_idx, b0_indices, b1_indices) in assignments {
-        let new_idx = orig_idx - shift_at[orig_idx];
-        if let CW::Mux(m) = &mut components[new_idx] {
-            m.branch0 = b0_indices.into_iter().map(|j| extracted[j].take().unwrap()).collect();
-            m.branch1 = b1_indices.into_iter().map(|j| extracted[j].take().unwrap()).collect();
-            populate_mux_branches(&mut m.branch0, &[]);
-            populate_mux_branches(&mut m.branch1, &[]);
+    // Compute new positions for non-extracted components.
+    let extracted_set: HashSet<usize> = (0..claimed.len())
+        .filter(|&j| claimed[j] && !branch_roots.contains(&j))
+        .collect();
+    let mut shift_at: Vec<usize> = vec![0; claimed.len() + 1];
+    for j in 0..claimed.len() {
+        shift_at[j + 1] = shift_at[j] + if extracted_set.contains(&j) { 1 } else { 0 };
+    }
+
+    // Assemble branches. Assignments are ordered inner-first, so when an outer mux
+    // clones an inner mux from `extracted`, the inner mux already has its branches set.
+    for (orig_idx, b0_indices, b1_indices) in &assignments {
+        let b0: Vec<CW> = b0_indices.iter().map(|&j| extracted[j].clone().unwrap()).collect();
+        let b1: Vec<CW> = b1_indices.iter().map(|&j| extracted[j].clone().unwrap()).collect();
+
+        if branch_roots.contains(orig_idx) {
+            // Top-level mux — update it in the components list
+            let new_idx = orig_idx - shift_at[*orig_idx];
+            if let CW::Mux(m) = &mut components[new_idx] {
+                m.branch0 = b0;
+                m.branch1 = b1;
+            }
+        } else {
+            // Nested mux — update it in-place in extracted
+            if let Some(Some(CW::Mux(m))) = extracted.get_mut(*orig_idx) {
+                m.branch0 = b0;
+                m.branch1 = b1;
+            }
         }
     }
 }
