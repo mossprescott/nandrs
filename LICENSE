@@ -19,3 +19,9 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+*The overall "HACK" CPU design and many of the are derived from the 
+"Nand to Tetris" course materials, and may be subject to its license. See
+https://www.nand2tetris.org/software. All the implementation work here, and 
+where the chip design approach departs from the Hack tools, are my own work 
+and covered by the license above.*
