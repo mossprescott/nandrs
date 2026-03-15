@@ -66,6 +66,18 @@ where
                 let entry = wire_state.entry(id).or_insert(0);
                 *entry = (*entry & !mask) | shifted;
             }
+            Combinational::Mux1(mux) => {
+                let intf = mux.reflect();
+                let sel = read_bit(&wire_state, &intf.inputs["sel"]);
+                let src = if sel { &intf.inputs["a1"] } else { &intf.inputs["a0"] };
+                let out = &intf.outputs["out"];
+                let id = wire_id(out);
+                let mask = bus_mask(out);
+                let val = wire_state.get(&wire_id(src)).copied().unwrap_or(0);
+                let shifted = ((val >> src.offset) & width_mask(out.width)) << out.offset;
+                let entry = wire_state.entry(id).or_insert(0);
+                *entry = (*entry & !mask) | shifted;
+            }
         }
     }
 

@@ -9,7 +9,7 @@ use simulator::Chip as _;
 use std::collections::HashMap;
 
 // Re-export since the other components here parallel Nand:
-pub use simulator::component::{Nand, Const, Buffer, Mux16};
+pub use simulator::component::{Nand, Const, Buffer, Mux1, Mux16};
 
 /// Components implemented in this project: simple, logical components for 1 and 16 bits.
 pub enum Project01Component {
@@ -17,6 +17,7 @@ pub enum Project01Component {
     Nand(Nand),
     Buffer(Buffer),
     Const(Const),
+    Mux1(Mux1),
     Mux16(Mux16),
     // non-primitive:
     Not(Not),
@@ -33,6 +34,7 @@ pub enum Project01Component {
 impl From<Nand>   for Project01Component { fn from(c: Nand)   -> Self { Project01Component::Nand(c)   } }
 impl From<Buffer> for Project01Component { fn from(c: Buffer) -> Self { Project01Component::Buffer(c) } }
 impl From<Const>  for Project01Component { fn from(c: Const)  -> Self { Project01Component::Const(c)  } }
+impl From<Mux1>   for Project01Component { fn from(c: Mux1)   -> Self { Project01Component::Mux1(c)   } }
 impl From<Mux16>  for Project01Component { fn from(c: Mux16)  -> Self { Project01Component::Mux16(c)  } }
 // non-primitive:
 impl From<Not>   for Project01Component { fn from(c: Not)   -> Self { Project01Component::Not(c)   } }
@@ -53,6 +55,7 @@ impl Component for Project01Component {
             Project01Component::Nand(c)  => c.expand().map(|ic| unreachable!()),
             Project01Component::Buffer(c) => c.expand().map(|ic| unreachable!()),
             Project01Component::Const(c) => c.expand().map(|ic| unreachable!()),
+            Project01Component::Mux1(c)  => c.expand().map(|ic| unreachable!()),
             Project01Component::Mux16(c) => c.expand().map(|ic| unreachable!()),
             // non-primitive:
             Project01Component::Not(c)   => c.expand(),
@@ -72,6 +75,7 @@ impl Reflect for Project01Component {
             Project01Component::Nand(c)  => c.reflect(),
             Project01Component::Buffer(c) => c.reflect(),
             Project01Component::Const(c) => c.reflect(),
+            Project01Component::Mux1(c)  => c.reflect(),
             Project01Component::Mux16(c) => c.reflect(),
             // non-primitive:
             Project01Component::Not(c)   => c.reflect(),
@@ -89,6 +93,7 @@ impl Reflect for Project01Component {
             Project01Component::Nand(c)  => c.name(),
             Project01Component::Buffer(c) => c.name(),
             Project01Component::Const(c) => c.name(),
+            Project01Component::Mux1(c)  => c.name(),
             Project01Component::Mux16(c) => c.name(),
             // non-primitive:
             Project01Component::Not(c)   => c.name(),
@@ -116,6 +121,7 @@ pub fn flatten<C: Reflect + Into<Project01Component>>(chip: C) -> IC<Combination
                 Project01Component::Nand(c) => vec![c.into()],
                 Project01Component::Const(c) => vec![c.into()],
                 Project01Component::Buffer(c) => vec![c.into()],
+                Project01Component::Mux1(c) => vec![Combinational::Mux1(c)],
                 Project01Component::Mux16(c) => vec![c.into()],
                 _ => panic!("Did not reduce to primitive: {:?}", comp.name()),
             },

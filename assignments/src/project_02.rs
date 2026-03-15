@@ -5,7 +5,7 @@ use simulator::Reflect as _;
 use simulator::Chip as _;
 use simulator::component::Combinational;
 use simulator::nat::N16;
-use crate::project_01::{Project01Component, Nand, Const, Buffer, Mux16, Not16, And16, Not, Xor, And, Or};
+use crate::project_01::{Project01Component, Nand, Const, Buffer, Mux1, Mux16, Not16, And16, Not, Xor, And, Or};
 
 pub enum Project02Component {
     Project01(Project01Component),
@@ -361,17 +361,22 @@ impl Component for ALU {
         let rn = Not16 { a: result.out.clone().into(), out: Output16::new() };
         let raw_out = Mux16 { sel: self.no.clone(), a0: result.out.clone().into(), a1: rn.out.clone().into(), out: Output16::new() };
 
-        // Gate output with disable (when disable=1, force to 0; raw_out becomes single-consumer
-        // so the entire ALU compute chain can be nested into the mux branch)
-        let out_gate = Mux16 { sel: self.disable.clone(), a0: raw_out.out.clone().into(), a1: zero_const.out.clone().into(), out: self.out.clone() };
+        // Compute zr from raw_out (before the disable gate) so it can be nested
+        // into the disable mux branch along with the rest of the ALU chain.
+        let raw_zr = Zero16 { a: raw_out.out.clone().into(), out: Output::new() };
 
-        // Flags read from gated output: when disabled, zr=1 and ng=0, which is harmless
-        // because the CPU gates all jump/write decisions with is_c.
-        let rz = Zero16 { a: self.out.clone().into(), out: self.zr.clone() };
+        // Gate output and zr with disable.  When disabled: out=0, zr=1.
+        let const_one = Const { value: 1, out: Output::new() };
+        let out_gate = Mux16 { sel: self.disable.clone(), a0: raw_out.out.clone().into(), a1: zero_const.out.clone().into(), out: self.out.clone() };
+        let zr_gate = Mux1 { sel: self.disable.clone(), a0: raw_zr.out.clone().into(), a1: const_one.out.bit(0).into(), out: self.zr.clone() };
+
+        // ng reads from the gated output; when disabled out=0 so ng=0 (correct).
+        // Neg16 is 0 nands (just a buffer) so there's nothing to skip.
         let rneg = Neg16 { a: self.out.clone().into(), out: self.ng.clone() };
 
         Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![
             Project01Component::from(zero_const).into(),
+            Project01Component::from(const_one).into(),
             Project01Component::from(x1).into(),
             Project01Component::from(x2_not).into(),
             Project01Component::from(x2).into(),
@@ -387,8 +392,9 @@ impl Component for ALU {
             Project01Component::from(result).into(),
             Project01Component::from(rn).into(),
             Project01Component::from(raw_out).into(),
+            raw_zr.into(),
             Project01Component::from(out_gate).into(),
-            rz.into(),
+            Project01Component::from(zr_gate).into(),
             rneg.into(),
         ]})
    }

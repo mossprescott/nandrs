@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{Component, IC, Input, InputBus, Output, OutputBus, Reflect, AsConst, Chip, Interface};
-use crate::nat::{Nat, N16};
+use crate::nat::{Nat, N1, N16};
 
 // - Nand (Combinational)
 
@@ -159,6 +159,7 @@ impl<Width: Nat> Component for Mux<Width> {
     }
 }
 
+pub type Mux1 = Mux<N1>;
 pub type Mux16 = Mux<N16>;
 
 /// Type of components that participate in "combinational" circuits:
@@ -170,6 +171,8 @@ pub enum Combinational<Width: Nat> {
     Const(Const),
     Buffer(Buffer),
     Mux(Mux<Width>),
+    /// For conditionalizing chains of logic, we need a single-bit Mux as well.
+    Mux1(Mux1),
 }
 
 impl<Width: Nat> From<Nand>  for Combinational<Width> { fn from(c: Nand)  -> Self { Combinational::Nand(c)  } }
@@ -184,6 +187,7 @@ impl<Width: Nat + Clone> Reflect for Combinational<Width> {
             Self::Const(c)  => c.reflect(),
             Self::Buffer(c) => c.reflect(),
             Self::Mux(c)    => c.reflect(),
+            Self::Mux1(c)   => c.reflect(),
         }
     }
     fn name(&self) -> String {
@@ -192,6 +196,7 @@ impl<Width: Nat + Clone> Reflect for Combinational<Width> {
             Self::Const(c)  => c.name(),
             Self::Buffer(c) => c.name(),
             Self::Mux(c)    => c.name(),
+            Self::Mux1(c)   => c.name(),
         }
     }
 }
@@ -245,6 +250,7 @@ pub enum Sequential<Width: Nat> {
     Const(Const),
     Buffer(Buffer),
     Mux(Mux<Width>),
+    Mux1(Mux1),
     Register(Register<Width>),
 }
 
@@ -255,6 +261,7 @@ impl<Width: Nat + Clone> Reflect for Sequential<Width> {
             Self::Const(c)    => c.reflect(),
             Self::Buffer(c)   => c.reflect(),
             Self::Mux(c)      => c.reflect(),
+            Self::Mux1(c)     => c.reflect(),
             Self::Register(c) => c.reflect(),
         }
     }
@@ -264,6 +271,7 @@ impl<Width: Nat + Clone> Reflect for Sequential<Width> {
             Self::Const(c)    => c.name(),
             Self::Buffer(c)   => c.name(),
             Self::Mux(c)      => c.name(),
+            Self::Mux1(c)     => c.name(),
             Self::Register(c) => c.name(),
         }
     }
@@ -425,6 +433,7 @@ pub enum Computational<A: Nat, D: Nat> {
     Const(Const),
     Buffer(Buffer),
     Mux(Mux<D>),
+    Mux1(Mux1),
     Register(Register<D>),
     RAM(RAM<A, D>),
     ROM(ROM<A, D>),
@@ -439,6 +448,7 @@ impl<A: Nat + Clone, D: Nat + Clone> Reflect for Computational<A, D> {
             Self::Const(c)        => c.reflect(),
             Self::Buffer(c)       => c.reflect(),
             Self::Mux(c)          => c.reflect(),
+            Self::Mux1(c)         => c.reflect(),
             Self::Register(c)     => c.reflect(),
             Self::RAM(c)          => c.reflect(),
             Self::ROM(c)          => c.reflect(),
@@ -451,6 +461,7 @@ impl<A: Nat + Clone, D: Nat + Clone> Reflect for Computational<A, D> {
             Self::Const(c)        => c.name(),
             Self::Buffer(c)       => c.name(),
             Self::Mux(c)          => c.name(),
+            Self::Mux1(c)         => c.name(),
             Self::Register(c)     => c.name(),
             Self::RAM(c)          => c.name(),
             Self::ROM(c)          => c.name(),
@@ -479,6 +490,7 @@ impl<A: Nat, D: Nat> From<Sequential<D>> for Computational<A, D> {
             Sequential::Const(n)    => Computational::Const(n),
             Sequential::Buffer(n)   => Computational::Buffer(n),
             Sequential::Mux(m)      => Computational::Mux(m),
+            Sequential::Mux1(m)     => Computational::Mux1(m),
             Sequential::Register(r) => Computational::Register(r),
         }
     }

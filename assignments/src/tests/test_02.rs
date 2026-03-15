@@ -196,12 +196,15 @@ fn alu_graph() {
          mux_14.a0[0..15] <- mux_12.out[0..15]\n\
          mux_14.a1[0..15] <- not16_13.out[0..15]\n\
          mux_14.sel <- no\n\
-         mux_15.a0[0..15] <- mux_14.out[0..15]\n\
-         mux_15.a1[0..15] <- 0\n\
-         mux_15.sel <- disable\n\
-         zero16_16.a[0..15] <- mux_15.out[0..15]\n\
-         neg16_17.a[0..15] <- mux_15.out[0..15]\n\
-         ng <- neg16_17.out\n\
-         out[0..15] <- mux_15.out[0..15]\n\
-         zr <- zero16_16.out");
+         zero16_15.a[0..15] <- mux_14.out[0..15]\n\
+         mux_16.a0[0..15] <- mux_14.out[0..15]\n\
+         mux_16.a1[0..15] <- 0\n\
+         mux_16.sel <- disable\n\
+         mux_17.a0 <- zero16_15.out\n\
+         mux_17.a1 <- 1\n\
+         mux_17.sel <- disable\n\
+         neg16_18.a[0..15] <- mux_16.out[0..15]\n\
+         ng <- neg16_18.out\n\
+         out[0..15] <- mux_16.out[0..15]\n\
+         zr <- mux_17.out");
 }

@@ -273,6 +273,13 @@ where
                     assign(WireID::from(&intf.inputs["sel"]));
                     assign(WireID::from(&intf.outputs["out"]));
                 }
+                Computational::Mux1(c) => {
+                    let intf = c.reflect();
+                    assign(WireID::from(&intf.inputs["a0"]));
+                    assign(WireID::from(&intf.inputs["a1"]));
+                    assign(WireID::from(&intf.inputs["sel"]));
+                    assign(WireID::from(&intf.outputs["out"]));
+                }
                 Computational::Register(c) => {
                     let intf = c.reflect();
                     assign(WireID::from(&intf.inputs["write"]));
@@ -349,6 +356,17 @@ where
             Computational::Const(_)        => None,
             Computational::Buffer(_)       => None,
             Computational::Mux(c)          => {
+                let intf = c.reflect();
+                Some(CW::Mux(wiring::MuxWiring {
+                    sel: ref_for(&intf.inputs["sel"]),
+                    a0:  wire_indexes[&WireID::from(&intf.inputs["a0"])],
+                    a1:  wire_indexes[&WireID::from(&intf.inputs["a1"])],
+                    out: wire_indexes[&WireID::from(&intf.outputs["out"])],
+                    branch0: Vec::new(),
+                    branch1: Vec::new(),
+                }))
+            }
+            Computational::Mux1(c)         => {
                 let intf = c.reflect();
                 Some(CW::Mux(wiring::MuxWiring {
                     sel: ref_for(&intf.inputs["sel"]),
@@ -544,14 +562,7 @@ fn populate_mux_branches(
             let mut grew = false;
             // Collect all input wires of current candidates.
             let input_wires_to_check: Vec<wiring::WireIndex> = candidates.iter()
-                .flat_map(|&j| {
-                    // For muxes, only follow the sel input (a0/a1 are handled by
-                    // collect_mux_branches for the nested mux).
-                    match &components[j] {
-                        CW::Mux(m) => vec![m.sel.id],
-                        other => input_wires(other),
-                    }
-                })
+                .flat_map(|&j| input_wires(&components[j]))
                 .collect();
 
             for w in input_wires_to_check {
@@ -593,10 +604,7 @@ fn populate_mux_branches(
         ) {
             if !emitted.insert(j) { return; }
             // Visit dependencies first.
-            let inputs = match &components[j] {
-                CW::Mux(m) => vec![m.sel.id],
-                other => input_wires(other),
-            };
+            let inputs = input_wires(&components[j]);
             for w in inputs {
                 if let Some(prods) = producers.get(&w) {
                     for &p in prods {
