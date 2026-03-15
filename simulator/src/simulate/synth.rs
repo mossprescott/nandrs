@@ -77,50 +77,83 @@ fn fmt_wire(wr: wiring::WireRef) -> impl fmt::Display {
     D(wr)
 }
 
-fn fmt_component(comp: &wiring::ComponentWiring) -> impl fmt::Display + '_ {
-    struct D<'a>(&'a wiring::ComponentWiring);
-    impl fmt::Display for D<'_> {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            match self.0 {
-                wiring::ComponentWiring::Nand(n) =>
-                    write!(f, "nand a={} b={} out={}", fmt_bit(n.a), fmt_bit(n.b), fmt_bit(n.out)),
-                wiring::ComponentWiring::Mux(m) =>
-                    write!(f, "mux sel={} a0=w{}[..] a1=w{}[..] out=w{}[..]",
-                        fmt_bit(m.sel), m.a0.0, m.a1.0, m.out.0),
-                wiring::ComponentWiring::Register(r) =>
-                    write!(f, "reg write={} in=w{}[..] out=w{}[..]",
-                        fmt_bit(r.write), r.data_in.0, r.data_out.0),
-                wiring::ComponentWiring::ROM(r) =>
-                    write!(f, "rom[{}] addr=w{}[..] out=w{}[..]",
-                        r.device_slot, r.addr.0, r.out.0),
-                wiring::ComponentWiring::RAM(r) =>
-                    write!(f, "ram[{}] addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
-                        r.device_slot, r.addr.0, fmt_bit(r.write), r.data_in.0, r.out.0),
-                wiring::ComponentWiring::MemorySystem(m) =>
-                    write!(f, "mem[{}] addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
-                        m.device_slot, m.addr.0, fmt_bit(m.write), m.data_in.0, m.out.0),
+fn fmt_component_tree(f: &mut fmt::Formatter<'_>, comp: &wiring::ComponentWiring, indent: &str) -> fmt::Result {
+    match comp {
+        wiring::ComponentWiring::Nand(n) =>
+            writeln!(f, "nand  a={} b={} out={}",
+                fmt_bit(n.a), fmt_bit(n.b), fmt_bit(n.out)),
+        wiring::ComponentWiring::Mux(m) => {
+            writeln!(f, "mux   sel={} out=w{}[..]",
+                fmt_bit(m.sel), m.out.0)?;
+            let (t0, _) = count_nands(&m.branch0);
+            let (t1, _) = count_nands(&m.branch1);
+            writeln!(f, "{indent}     a0=w{}[..] ({} nands)", m.a0.0, t0)?;
+            let inner = format!("{indent}       ");
+            for op in &m.branch0 {
+                write!(f, "{inner}")?;
+                fmt_component_tree(f, op, &inner)?;
             }
+            writeln!(f, "{indent}     a1=w{}[..] ({} nands)", m.a1.0, t1)?;
+            for op in &m.branch1 {
+                write!(f, "{inner}")?;
+                fmt_component_tree(f, op, &inner)?;
+            }
+            Ok(())
+        }
+        wiring::ComponentWiring::Register(r) =>
+            writeln!(f, "reg   write={} in=w{}[..] out=w{}[..]",
+                fmt_bit(r.write), r.data_in.0, r.data_out.0),
+        wiring::ComponentWiring::ROM(r) =>
+            writeln!(f, "rom[{}]  addr=w{}[..] out=w{}[..]",
+                r.device_slot, r.addr.0, r.out.0),
+        wiring::ComponentWiring::RAM(r) =>
+            writeln!(f, "ram[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
+                r.device_slot, r.addr.0, fmt_bit(r.write), r.data_in.0, r.out.0),
+        wiring::ComponentWiring::MemorySystem(m) =>
+            writeln!(f, "mem[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
+                m.device_slot, m.addr.0, fmt_bit(m.write), m.data_in.0, m.out.0),
+    }
+}
+
+/// Count nands in a list of components, recursing into mux branches.
+/// Returns (total_nands, min_nands) where min_nands assumes the cheaper branch is taken at each mux.
+fn count_nands(components: &[wiring::ComponentWiring]) -> (u32, u32) {
+    let mut total = 0u32;
+    let mut min = 0u32;
+    for comp in components {
+        match comp {
+            wiring::ComponentWiring::Nand(_) => { total += 1; min += 1; }
+            wiring::ComponentWiring::Mux(m) => {
+                let (t0, m0) = count_nands(&m.branch0);
+                let (t1, m1) = count_nands(&m.branch1);
+                total += t0 + t1;
+                min += m0.min(m1);
+            }
+            _ => {}
         }
     }
-    D(comp)
+    (total, min)
 }
 
 impl fmt::Display for ChipWiring {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut nands = 0u32;
         let mut muxes = 0u32;
         let mut registers = 0u32;
         for comp in &self.component_wiring {
             match comp {
-                wiring::ComponentWiring::Nand(_)     => nands += 1,
                 wiring::ComponentWiring::Mux(_)      => muxes += 1,
                 wiring::ComponentWiring::Register(_) => registers += 1,
                 _ => {}
             }
         }
+        let (total_nands, min_nands) = count_nands(&self.component_wiring);
         writeln!(f, "ChipWiring:")?;
-        writeln!(f, "  wires:     {}", self.n_wires)?;
-        writeln!(f, "  nands:     {}", nands)?;
+        write!(f, "  nands:     {} total", total_nands)?;
+        if min_nands < total_nands {
+            writeln!(f, ", {} min/cycle", min_nands)?;
+        } else {
+            writeln!(f)?;
+        }
         if muxes > 0 { writeln!(f, "  muxes:     {}", muxes)?; }
         if registers > 0 { writeln!(f, "  registers: {}", registers)?; }
         for (i, s) in self.ram_specs.iter().enumerate() {
@@ -145,49 +178,13 @@ impl fmt::Display for ChipWiring {
             writeln!(f, "  out {name}: {}", fmt_wire(**wr))?;
         }
 
-        let mut consts: Vec<_> = self.const_wiring.iter().collect();
         for cw in &self.const_wiring {
             writeln!(f, "  const: w{} = {}", cw.out.0, cw.value)?;
         }
 
         for (i, comp) in self.component_wiring.iter().enumerate() {
-            match comp {
-                wiring::ComponentWiring::Nand(n) =>
-                    writeln!(f, "  [{i}] nand  a={} b={} out={}",
-                        fmt_bit(n.a), fmt_bit(n.b), fmt_bit(n.out))?,
-                wiring::ComponentWiring::Mux(m) => {
-                    writeln!(f, "  [{i}] mux   sel={} out=w{}[..]",
-                        fmt_bit(m.sel), m.out.0)?;
-                    writeln!(f, "         a0=w{}[..]", m.a0.0)?;
-                    if m.branch0.is_empty() {
-                        writeln!(f, "           <none>")?;
-                    } else {
-                        for op in &m.branch0 {
-                            writeln!(f, "           {}", fmt_component(op))?;
-                        }
-                    }
-                    writeln!(f, "         a1=w{}[..]", m.a1.0)?;
-                    if m.branch1.is_empty() {
-                        writeln!(f, "           <none>")?;
-                    } else {
-                        for op in &m.branch1 {
-                            writeln!(f, "           {}", fmt_component(op))?;
-                        }
-                    }
-                }
-                wiring::ComponentWiring::Register(r) =>
-                    writeln!(f, "  [{i}] reg   write={} in=w{}[..] out=w{}[..]",
-                        fmt_bit(r.write), r.data_in.0, r.data_out.0)?,
-                wiring::ComponentWiring::ROM(r) =>
-                    writeln!(f, "  [{i}] rom[{}]  addr=w{}[..] out=w{}[..]",
-                        r.device_slot, r.addr.0, r.out.0)?,
-                wiring::ComponentWiring::RAM(r) =>
-                    writeln!(f, "  [{i}] ram[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
-                        r.device_slot, r.addr.0, fmt_bit(r.write), r.data_in.0, r.out.0)?,
-                wiring::ComponentWiring::MemorySystem(m) =>
-                    writeln!(f, "  [{i}] mem[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
-                        m.device_slot, m.addr.0, fmt_bit(m.write), m.data_in.0, m.out.0)?,
-            }
+            write!(f, "  [{i}] ")?;
+            fmt_component_tree(f, comp, "  ")?;
         }
         Ok(())
     }
