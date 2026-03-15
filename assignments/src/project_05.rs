@@ -212,24 +212,23 @@ impl Component for Decode {
             components: vec![
                 wrap(Buffer { a: self.instr.bit(15).clone(), out: self.is_c.clone() }),
 
-                // bit-14: unused
-                // bit-13: unused
+                // Note: CPU control signalss all gated with is_c so they're false on A-instructions and this
+                // simplifies the logic in CPU
 
-                wrap(Buffer { a: self.instr.bit(12).clone(), out: self.read_m.clone() }),
+                wrap(And { a: self.instr.bit(12).clone(), b: self.is_c.clone().into(), out: self.read_m.clone() }),
 
-                wrap(And { a: self.instr.bit(11).clone(), b: self.is_c.clone().into(), out: self.zx.clone() }),
-                wrap(And { a: self.instr.bit(10).clone(), b: self.is_c.clone().into(), out: self.nx.clone() }),
-                wrap(And { a: self.instr.bit( 9).clone(), b: self.is_c.clone().into(), out: self.zy.clone() }),
-                wrap(And { a: self.instr.bit( 8).clone(), b: self.is_c.clone().into(), out: self.ny.clone() }),
-                // Note: when !is_c, we set f = 0, because And16 is cheaper than Add16, so if one of
-                // them ends up being active, And is prefereable
+                // ALU control lines: mostly just buffer them through because the ALU is dealt with separately
+                wrap(Buffer { a: self.instr.bit(11).clone(), out: self.zx.clone() }),
+                wrap(Buffer { a: self.instr.bit(10).clone(), out: self.nx.clone() }),
+                wrap(Buffer { a: self.instr.bit( 9).clone(), out: self.zy.clone() }),
+                wrap(Buffer { a: self.instr.bit( 8).clone(), out: self.ny.clone() }),
+                // Special-case: prefer f = 0, to bias against evaluating Add16
                 wrap(And { a: self.instr.bit( 7).clone(), b: self.is_c.clone().into(), out: self.f.clone() }),
-                wrap(And { a: self.instr.bit( 6).clone(), b: self.is_c.clone().into(), out: self.no.clone() }),
+                wrap(Buffer { a: self.instr.bit( 6).clone(), out: self.no.clone() }),
 
                 wrap(And { a: self.instr.bit( 5).clone(), b: self.is_c.clone().into(), out: self.write_a.clone() }),
                 wrap(And { a: self.instr.bit( 4).clone(), b: self.is_c.clone().into(), out: self.write_d.clone() }),
                 wrap(And { a: self.instr.bit( 3).clone(), b: self.is_c.clone().into(), out: self.write_m.clone() }),
-
                 wrap(And { a: self.instr.bit( 2).clone(), b: self.is_c.clone().into(), out: self.jmp_lt.clone() }),
                 wrap(And { a: self.instr.bit( 1).clone(), b: self.is_c.clone().into(), out: self.jmp_eq.clone() }),
                 wrap(And { a: self.instr.bit( 0).clone(), b: self.is_c.clone().into(), out: self.jmp_gt.clone() }),
@@ -370,6 +369,7 @@ impl Component for CPU {
         let not_ng  = Not { a: alu_ng.clone().into(), out: Output::new() };
         let not_zr  = Not { a: alu_zr.clone().into(), out: Output::new() };
         let is_pos  = And { a: not_ng.out.clone().into(), b: not_zr.out.clone().into(), out: Output::new() };
+        // Jump signals already gated with is_c in Decode.
         let jlt_and = And { a: jmp_lt.into(), b: alu_ng.into(), out: Output::new() };
         let jeq_and = And { a: jmp_eq.into(), b: alu_zr.into(), out: Output::new() };
         let jgt_and = And { a: jmp_gt.into(), b: is_pos.out.clone().into(), out: Output::new() };

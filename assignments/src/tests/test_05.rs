@@ -98,7 +98,7 @@ fn decode_truth_table() {
 fn decode_optimal() {
     let components = flatten(Decode::chip()).components;
     let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
-    assert_eq!(nands, 24);
+    assert_eq!(nands, 16);
 }
 
 #[test]
@@ -142,7 +142,7 @@ fn cpu_optimal() {
     let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
     let muxes = components.iter().filter(|c| matches!(c, Computational::Mux(_))).count();
     let registers = components.iter().filter(|c| matches!(c, Computational::Register(_))).count();
-    assert_eq!(nands,   395);
+    assert_eq!(nands,   387);
     assert_eq!(muxes,    15);
     assert_eq!(registers, 3);
 }
@@ -329,6 +329,6 @@ fn computer_optimal() {
     let muxes  = components.iter().filter(|c| matches!(c, Computational::Mux(_))).count();
     assert_eq!(memsys,  1);
     assert_eq!(roms,    1);
-    assert_eq!(nands, 395);
+    assert_eq!(nands, 387);
     assert_eq!(muxes,  15);
 }
