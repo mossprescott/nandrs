@@ -151,8 +151,8 @@ fn alu_optimal() {
     let components = flatten(ALU::chip()).components;
     let nands = components.iter().filter(|c| matches!(c, Combinational::Nand(_))).count();
     let muxes = components.iter().filter(|c| matches!(c, Combinational::Mux(_))).count();
-    assert_eq!(nands, 431);
-    assert_eq!(muxes, 4);
+    assert_eq!(nands, 269);
+    assert_eq!(muxes, 9);
 }
 
 
@@ -162,37 +162,46 @@ fn alu_graph() {
     assert_eq!(
         print_graph(&chip),
         "ALU:\n\
-         zeroif16_0.a[0..15] <- x[0..15]\n\
-         zeroif16_0.z <- zx\n\
-         notif16_1.a[0..15] <- zeroif16_0.out[0..15]\n\
-         notif16_1.n <- nx\n\
-         zeroif16_2.a[0..15] <- y[0..15]\n\
-         zeroif16_2.z <- zy\n\
-         notif16_3.a[0..15] <- zeroif16_2.out[0..15]\n\
-         notif16_3.n <- ny\n\
-         and16_4.a[0..15] <- notif16_1.out[0..15]\n\
-         and16_4.b[0..15] <- notif16_3.out[0..15]\n\
-         add16_5.a[0..15] <- notif16_1.out[0..15]\n\
-         add16_5.b[0..15] <- notif16_3.out[0..15]\n\
-         not_6.a <- disable\n\
-         and_7.a <- f\n\
-         and_7.b <- not_6.out\n\
-         mux_8.a0[0..15] <- 0\n\
-         mux_8.a1[0..15] <- add16_5.out[0..15]\n\
-         mux_8.sel <- and_7.out\n\
-         mux_9.a0[0..15] <- and16_4.out[0..15]\n\
-         mux_9.a1[0..15] <- mux_8.out[0..15]\n\
-         mux_9.sel <- f\n\
-         not16_10.a[0..15] <- mux_9.out[0..15]\n\
-         mux_11.a0[0..15] <- mux_9.out[0..15]\n\
-         mux_11.a1[0..15] <- not16_10.out[0..15]\n\
-         mux_11.sel <- no\n\
-         mux_12.a0[0..15] <- mux_11.out[0..15]\n\
-         mux_12.a1[0..15] <- 0\n\
-         mux_12.sel <- disable\n\
-         zero16_13.a[0..15] <- mux_12.out[0..15]\n\
-         neg16_14.a[0..15] <- mux_12.out[0..15]\n\
-         ng <- neg16_14.out\n\
-         out[0..15] <- mux_12.out[0..15]\n\
-         zr <- zero16_13.out");
+         mux_0.a0[0..15] <- x[0..15]\n\
+         mux_0.a1[0..15] <- 0\n\
+         mux_0.sel <- zx\n\
+         not16_1.a[0..15] <- mux_0.out[0..15]\n\
+         mux_2.a0[0..15] <- mux_0.out[0..15]\n\
+         mux_2.a1[0..15] <- not16_1.out[0..15]\n\
+         mux_2.sel <- nx\n\
+         mux_3.a0[0..15] <- y[0..15]\n\
+         mux_3.a1[0..15] <- 0\n\
+         mux_3.sel <- zy\n\
+         not16_4.a[0..15] <- mux_3.out[0..15]\n\
+         mux_5.a0[0..15] <- mux_3.out[0..15]\n\
+         mux_5.a1[0..15] <- not16_4.out[0..15]\n\
+         mux_5.sel <- ny\n\
+         and16_6.a[0..15] <- mux_2.out[0..15]\n\
+         and16_6.b[0..15] <- mux_5.out[0..15]\n\
+         not_7.a <- disable\n\
+         and_8.a <- f\n\
+         and_8.b <- not_7.out\n\
+         mux_9.a0[0..15] <- 0\n\
+         mux_9.a1[0..15] <- mux_2.out[0..15]\n\
+         mux_9.sel <- and_8.out\n\
+         mux_10.a0[0..15] <- 0\n\
+         mux_10.a1[0..15] <- mux_5.out[0..15]\n\
+         mux_10.sel <- and_8.out\n\
+         add16_11.a[0..15] <- mux_9.out[0..15]\n\
+         add16_11.b[0..15] <- mux_10.out[0..15]\n\
+         mux_12.a0[0..15] <- and16_6.out[0..15]\n\
+         mux_12.a1[0..15] <- add16_11.out[0..15]\n\
+         mux_12.sel <- f\n\
+         not16_13.a[0..15] <- mux_12.out[0..15]\n\
+         mux_14.a0[0..15] <- mux_12.out[0..15]\n\
+         mux_14.a1[0..15] <- not16_13.out[0..15]\n\
+         mux_14.sel <- no\n\
+         mux_15.a0[0..15] <- mux_14.out[0..15]\n\
+         mux_15.a1[0..15] <- 0\n\
+         mux_15.sel <- disable\n\
+         zero16_16.a[0..15] <- mux_15.out[0..15]\n\
+         neg16_17.a[0..15] <- mux_15.out[0..15]\n\
+         ng <- neg16_17.out\n\
+         out[0..15] <- mux_15.out[0..15]\n\
+         zr <- zero16_16.out");
 }

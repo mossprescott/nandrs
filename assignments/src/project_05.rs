@@ -220,6 +220,8 @@ impl Component for Decode {
                 wrap(And { a: self.instr.bit(10).clone(), b: self.is_c.clone().into(), out: self.nx.clone() }),
                 wrap(And { a: self.instr.bit( 9).clone(), b: self.is_c.clone().into(), out: self.zy.clone() }),
                 wrap(And { a: self.instr.bit( 8).clone(), b: self.is_c.clone().into(), out: self.ny.clone() }),
+                // Note: when !is_c, we set f = 0, because And16 is cheaper than Add16, so if one of
+                // them ends up being active, And is prefereable
                 wrap(And { a: self.instr.bit( 7).clone(), b: self.is_c.clone().into(), out: self.f.clone() }),
                 wrap(And { a: self.instr.bit( 6).clone(), b: self.is_c.clone().into(), out: self.no.clone() }),
 

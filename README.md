@@ -55,6 +55,11 @@ Storing all the state in Vec<u64> with dense indices instead of HashMaps: about 
 
 Making `Mux` for arbitrary width a primitive: 175KHz. Still evaluating all the logic for both inputs, so far.
 
+Conditional evaluation of just the immediate inputs of each Mux branch; all the bits of just the
+active branch: 250KHz now.
+
+Undo earlier optimization so we have more muxes and less total gates; a little more gating (inputs to Add16 this time): 440KHz.
+
 
 ## Simulation
 

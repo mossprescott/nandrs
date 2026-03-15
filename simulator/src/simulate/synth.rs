@@ -489,41 +489,132 @@ fn populate_mux_branches(
         }
     }
 
-    // Collect exclusive producers of a wire — components whose output wire has
-    // exactly one unique component consumer. Returns indices in evaluation order.
-    fn collect(
+    // Helper: get input wires of a component.
+    fn input_wires(comp: &CW) -> Vec<wiring::WireIndex> {
+        match comp {
+            CW::Nand(n) => vec![n.a.id, n.b.id],
+            CW::Mux(m)  => vec![m.sel.id, m.a0, m.a1],
+            CW::Register(r)     => vec![r.write.id, r.data_in],
+            CW::RAM(r)          => vec![r.write.id, r.data_in, r.addr],
+            CW::ROM(r)          => vec![r.addr],
+            CW::MemorySystem(m) => vec![m.write.id, m.data_in, m.addr],
+        }
+    }
+
+    // Helper: get the output wire of a component (only nands and muxes produce wires).
+    fn output_wire(comp: &CW) -> Option<wiring::WireIndex> {
+        match comp {
+            CW::Nand(n) => Some(n.out.id),
+            CW::Mux(m)  => Some(m.out),
+            _ => None,
+        }
+    }
+
+    /// Collect components that exclusively feed a branch wire using fixed-point iteration.
+    /// Handles internal fan-out: if a wire fans out to two nands that are both in the
+    /// candidate set, their shared producer becomes eligible too.
+    ///
+    /// `mux_ok_wires` lists the wires the mux consumes where we consider the mux an
+    /// acceptable "external" consumer (the branch wire itself and sel). Wires consumed
+    /// by the mux on any other port (i.e., the other branch) must NOT be claimed.
+    fn collect_branch(
         wire: wiring::WireIndex,
+        mux_idx: usize,
+        mux_ok_wires: &HashSet<wiring::WireIndex>,
         consumers: &HashMap<wiring::WireIndex, HashSet<usize>>,
         producers: &HashMap<wiring::WireIndex, Vec<usize>>,
         components: &[CW],
-        claimed: &mut Vec<bool>,
+        claimed: &[bool],
     ) -> Vec<usize> {
-        // A wire is "exclusive" if exactly one component consumes it.
-        // (The sentinel for chip outputs counts as a consumer too.)
-        let consumer_count = consumers.get(&wire).map_or(0, |s| s.len());
-        if consumer_count != 1 {
+        let mut candidates: HashSet<usize> = HashSet::new();
+
+        // Seed: producers of the branch wire, if the wire is exclusively consumed
+        // by the mux (and nothing else outside).
+        let wire_consumers = consumers.get(&wire).map_or(0, |s| s.len());
+        if wire_consumers != 1 {
             return Vec::new();
         }
-        let Some(prod_indices) = producers.get(&wire) else {
-            return Vec::new();
-        };
-        let mut result = Vec::new();
-        for &j in prod_indices {
-            if claimed[j] { continue; }
-            claimed[j] = true;
-            match &components[j] {
-                CW::Nand(n) => {
-                    result.extend(collect(n.a.id, consumers, producers, components, claimed));
-                    result.extend(collect(n.b.id, consumers, producers, components, claimed));
-                }
-                CW::Mux(m) => {
-                    result.extend(collect(m.sel.id, consumers, producers, components, claimed));
-                }
-                _ => {}
+
+        // Add initial producers.
+        if let Some(prods) = producers.get(&wire) {
+            for &j in prods {
+                if !claimed[j] { candidates.insert(j); }
             }
-            result.push(j);
         }
-        result
+
+        // Fixed-point: keep expanding until no new candidates are found.
+        loop {
+            let mut grew = false;
+            // Collect all input wires of current candidates.
+            let input_wires_to_check: Vec<wiring::WireIndex> = candidates.iter()
+                .flat_map(|&j| {
+                    // For muxes, only follow the sel input (a0/a1 are handled by
+                    // collect_mux_branches for the nested mux).
+                    match &components[j] {
+                        CW::Mux(m) => vec![m.sel.id],
+                        other => input_wires(other),
+                    }
+                })
+                .collect();
+
+            for w in input_wires_to_check {
+                let Some(wire_consumers) = consumers.get(&w) else { continue };
+                // All consumers of this wire must be in candidates, or be the mux
+                // consuming on an "ok" port (this branch or sel — NOT the other branch).
+                let all_accounted = wire_consumers.iter().all(|&c| {
+                    if candidates.contains(&c) { return true; }
+                    if c == mux_idx { return mux_ok_wires.contains(&w); }
+                    false
+                });
+                if !all_accounted { continue; }
+                // Add producers of this wire.
+                if let Some(prods) = producers.get(&w) {
+                    for &j in prods {
+                        if !claimed[j] && candidates.insert(j) {
+                            grew = true;
+                        }
+                    }
+                }
+            }
+            if !grew { break; }
+        }
+
+        if candidates.is_empty() {
+            return Vec::new();
+        }
+
+        // Topological sort: emit in evaluation order (dependencies before dependents).
+        let mut sorted = Vec::with_capacity(candidates.len());
+        let mut emitted: HashSet<usize> = HashSet::new();
+        fn topo_visit(
+            j: usize,
+            candidates: &HashSet<usize>,
+            producers: &HashMap<wiring::WireIndex, Vec<usize>>,
+            components: &[CW],
+            emitted: &mut HashSet<usize>,
+            sorted: &mut Vec<usize>,
+        ) {
+            if !emitted.insert(j) { return; }
+            // Visit dependencies first.
+            let inputs = match &components[j] {
+                CW::Mux(m) => vec![m.sel.id],
+                other => input_wires(other),
+            };
+            for w in inputs {
+                if let Some(prods) = producers.get(&w) {
+                    for &p in prods {
+                        if candidates.contains(&p) {
+                            topo_visit(p, candidates, producers, components, emitted, sorted);
+                        }
+                    }
+                }
+            }
+            sorted.push(j);
+        }
+        for &j in &candidates {
+            topo_visit(j, &candidates, producers, components, &mut emitted, &mut sorted);
+        }
+        sorted
     }
 
     // Recursively collect branch assignments for a mux and all nested muxes.
@@ -538,9 +629,19 @@ fn populate_mux_branches(
         assignments: &mut Vec<(usize, Vec<usize>, Vec<usize>)>,
     ) {
         let m = match &components[mux_idx] { CW::Mux(m) => m, _ => return };
-        let (a0, a1) = (m.a0, m.a1);
-        let b0 = collect(a0, consumers, producers, components, claimed);
-        let b1 = collect(a1, consumers, producers, components, claimed);
+        let (a0, a1, sel_wire) = (m.a0, m.a1, m.sel.id);
+        // For branch0: the mux consuming a wire on a0 is ok; on a1 or sel is NOT ok.
+        // sel producers must remain top-level — they're needed before the branch decision.
+        let ok_for_b0: HashSet<wiring::WireIndex> = [a0].into();
+        let ok_for_b1: HashSet<wiring::WireIndex> = [a1].into();
+        let b0 = collect_branch(a0, mux_idx, &ok_for_b0, consumers, producers, components, claimed);
+        let b1 = collect_branch(a1, mux_idx, &ok_for_b1, consumers, producers, components, claimed);
+
+        // Mark collected components as claimed.
+        for &j in b0.iter().chain(b1.iter()) {
+            claimed[j] = true;
+        }
+
         // Recurse into any muxes we just claimed — BEFORE pushing our own assignment.
         for &j in b0.iter().chain(b1.iter()) {
             if matches!(&components[j], CW::Mux(_)) {

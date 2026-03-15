@@ -145,8 +145,8 @@ fn cpu_optimal() {
     let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
     let muxes = components.iter().filter(|c| matches!(c, Computational::Mux(_))).count();
     let registers = components.iter().filter(|c| matches!(c, Computational::Register(_))).count();
-    assert_eq!(nands,   557);
-    assert_eq!(muxes,    10);
+    assert_eq!(nands,   395);
+    assert_eq!(muxes,    15);
     assert_eq!(registers, 3);
 }
 
@@ -332,6 +332,6 @@ fn computer_optimal() {
     let muxes  = components.iter().filter(|c| matches!(c, Computational::Mux(_))).count();
     assert_eq!(memsys,  1);
     assert_eq!(roms,    1);
-    assert_eq!(nands, 557);
-    assert_eq!(muxes,  10);
+    assert_eq!(nands, 395);
+    assert_eq!(muxes,  15);
 }
