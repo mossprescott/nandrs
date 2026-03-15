@@ -60,6 +60,8 @@ active branch: 250KHz now.
 
 Undo earlier optimization so we have more muxes and less total gates; a little more gating (inputs to Add16 this time): 440KHz.
 
+Collapsed Nand/Not to unitary AndWiring op: 550KHz.
+
 
 ## Simulation
 

@@ -88,15 +88,15 @@ fn fmt_component_tree(f: &mut fmt::Formatter<'_>, comp: &wiring::ComponentWiring
         wiring::ComponentWiring::Mux(m) => {
             writeln!(f, "mux   sel={} out=w{}[..]",
                 fmt_bit(m.sel), m.out.0)?;
-            let (t0, _) = count_nands(&m.branch0);
-            let (t1, _) = count_nands(&m.branch1);
-            writeln!(f, "{indent}     a0=w{}[..] ({} nands)", m.a0.0, t0)?;
+            let (t0, _) = count_gates(&m.branch0);
+            let (t1, _) = count_gates(&m.branch1);
+            writeln!(f, "{indent}     a0=w{}[..] ({} gates)", m.a0.0, t0)?;
             let inner = format!("{indent}       ");
             for op in &m.branch0 {
                 write!(f, "{inner}")?;
                 fmt_component_tree(f, op, &inner)?;
             }
-            writeln!(f, "{indent}     a1=w{}[..] ({} nands)", m.a1.0, t1)?;
+            writeln!(f, "{indent}     a1=w{}[..] ({} gates)", m.a1.0, t1)?;
             for op in &m.branch1 {
                 write!(f, "{inner}")?;
                 fmt_component_tree(f, op, &inner)?;
@@ -115,20 +115,23 @@ fn fmt_component_tree(f: &mut fmt::Formatter<'_>, comp: &wiring::ComponentWiring
         wiring::ComponentWiring::MemorySystem(m) =>
             writeln!(f, "mem[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
                 m.device_slot, m.addr.0, fmt_bit(m.write), m.data_in.0, m.out.0),
+        wiring::ComponentWiring::And(n) =>
+            writeln!(f, "and   a={} b={} out={}",
+                fmt_bit(n.a), fmt_bit(n.b), fmt_bit(n.out)),
     }
 }
 
-/// Count nands in a list of components, recursing into mux branches.
-/// Returns (total_nands, min_nands) where min_nands assumes the cheaper branch is taken at each mux.
-fn count_nands(components: &[wiring::ComponentWiring]) -> (u32, u32) {
+/// Count gates (nands + ands) in a list of components, recursing into mux branches.
+/// Returns (total, min) where min assumes the cheaper branch is taken at each mux.
+fn count_gates(components: &[wiring::ComponentWiring]) -> (u32, u32) {
     let mut total = 0u32;
     let mut min = 0u32;
     for comp in components {
         match comp {
-            wiring::ComponentWiring::Nand(_) => { total += 1; min += 1; }
+            wiring::ComponentWiring::Nand(_) | wiring::ComponentWiring::And(_) => { total += 1; min += 1; }
             wiring::ComponentWiring::Mux(m) => {
-                let (t0, m0) = count_nands(&m.branch0);
-                let (t1, m1) = count_nands(&m.branch1);
+                let (t0, m0) = count_gates(&m.branch0);
+                let (t1, m1) = count_gates(&m.branch1);
                 total += t0 + t1;
                 min += m0.min(m1);
             }
@@ -149,11 +152,11 @@ impl fmt::Display for ChipWiring {
                 _ => {}
             }
         }
-        let (total_nands, min_nands) = count_nands(&self.component_wiring);
+        let (total_gates, min_gates) = count_gates(&self.component_wiring);
         writeln!(f, "ChipWiring:")?;
-        write!(f, "  nands:     {} total", total_nands)?;
-        if min_nands < total_nands {
-            writeln!(f, ", {} min/cycle", min_nands)?;
+        write!(f, "  gates:     {} total", total_gates)?;
+        if min_gates < total_gates {
+            writeln!(f, ", {} min/cycle", min_gates)?;
         } else {
             writeln!(f)?;
         }
@@ -429,11 +432,14 @@ where
         }
     }).collect();
 
-    // Post-processing: move exclusive producers into mux branches (recursively).
+    // Peephole: collapse nand+not into and.
     let mut component_wiring = component_wiring;
     let output_wires: Vec<wiring::WireIndex> = chip.reflect().outputs.values()
         .map(|b| wire_indexes[&WireID::from(b)])
         .collect();
+    peephole_nand_not(&mut component_wiring, &output_wires);
+
+    // Post-processing: move exclusive producers into mux branches (recursively).
     populate_mux_branches(&mut component_wiring, &output_wires);
 
     let n_wires = wire_indexes.len();
@@ -469,6 +475,100 @@ where
     }
 }
 
+/// Peephole: replace `nand a,b -> n; nand n,n -> out` with `and a,b -> out`.
+/// The not (self-nand) must be the sole consumer of the nand's output.
+fn peephole_nand_not(components: &mut Vec<wiring::ComponentWiring>, output_wires: &[wiring::WireIndex]) {
+    use std::collections::{HashMap as Map, HashSet};
+    use wiring::ComponentWiring as CW;
+
+    // For each wire bit, track the set of distinct component indices that consume it.
+    // Also track wires consumed as a bus (WireIndex) — those can't be optimized.
+    let mut wire_consumers: Map<(u32, u8), HashSet<usize>> = Map::new();
+    let mut bus_consumed: HashSet<u32> = HashSet::new();
+    // Chip-level outputs consume entire wires.
+    for w in output_wires {
+        bus_consumed.insert(w.0);
+    }
+    for (i, comp) in components.iter().enumerate() {
+        match comp {
+            CW::Nand(n) => {
+                wire_consumers.entry((n.a.id.0, n.a.offset)).or_default().insert(i);
+                wire_consumers.entry((n.b.id.0, n.b.offset)).or_default().insert(i);
+            }
+            CW::And(n) => {
+                wire_consumers.entry((n.a.id.0, n.a.offset)).or_default().insert(i);
+                wire_consumers.entry((n.b.id.0, n.b.offset)).or_default().insert(i);
+            }
+            CW::Mux(m) => {
+                wire_consumers.entry((m.sel.id.0, m.sel.offset)).or_default().insert(i);
+                bus_consumed.insert(m.a0.0);
+                bus_consumed.insert(m.a1.0);
+            }
+            CW::Register(r) => {
+                wire_consumers.entry((r.write.id.0, r.write.offset)).or_default().insert(i);
+                bus_consumed.insert(r.data_in.0);
+            }
+            CW::RAM(r) => {
+                wire_consumers.entry((r.write.id.0, r.write.offset)).or_default().insert(i);
+                bus_consumed.insert(r.data_in.0);
+                bus_consumed.insert(r.addr.0);
+            }
+            CW::MemorySystem(m) => {
+                wire_consumers.entry((m.write.id.0, m.write.offset)).or_default().insert(i);
+                bus_consumed.insert(m.data_in.0);
+                bus_consumed.insert(m.addr.0);
+            }
+            CW::ROM(r) => {
+                bus_consumed.insert(r.addr.0);
+            }
+        }
+    }
+
+    // Build a map from nand output BitRef -> index, for nands whose output has exactly
+    // one consumer component AND whose output wire is not bus-consumed.
+    let mut nand_by_out: Map<(u32, u8), usize> = Map::new();
+    for (i, comp) in components.iter().enumerate() {
+        if let CW::Nand(n) = comp {
+            let key = (n.out.id.0, n.out.offset);
+            if bus_consumed.contains(&n.out.id.0) { continue; }
+            if let Some(consumers) = wire_consumers.get(&key) {
+                if consumers.len() == 1 {
+                    nand_by_out.insert(key, i);
+                }
+            }
+        }
+    }
+
+    // Find not gates (nand with a==b) whose input comes from a single-consumer nand.
+    // Replace the pair with a single And gate.
+    let mut to_remove: HashSet<usize> = HashSet::new();
+    for i in 0..components.len() {
+        if to_remove.contains(&i) { continue; }
+        let CW::Nand(not_gate) = &components[i] else { continue };
+        if not_gate.a != not_gate.b { continue; }
+        let key = (not_gate.a.id.0, not_gate.a.offset);
+        let Some(&nand_idx) = nand_by_out.get(&key) else { continue };
+        if nand_idx == i { continue; }
+        if to_remove.contains(&nand_idx) { continue; }
+        // nand_idx may have already been converted to And by a prior iteration.
+        let CW::Nand(nand_gate) = &components[nand_idx] else { continue };
+        let and = wiring::AndWiring {
+            a: nand_gate.a,
+            b: nand_gate.b,
+            out: not_gate.out,
+        };
+        components[nand_idx] = CW::And(and);
+        to_remove.insert(i);
+    }
+
+    // Remove the consumed not gates (in reverse order to preserve indices).
+    let mut to_remove_sorted: Vec<usize> = to_remove.into_iter().collect();
+    to_remove_sorted.sort_unstable();
+    for &i in to_remove_sorted.iter().rev() {
+        components.remove(i);
+    }
+}
+
 /// Move components that exclusively feed one branch of a mux into that mux's branch list.
 /// Applied recursively: muxes moved into a branch get their own branches populated too.
 fn populate_mux_branches(
@@ -484,6 +584,7 @@ fn populate_mux_branches(
     for (j, comp) in components.iter().enumerate() {
         match comp {
             CW::Nand(n)         => { add_consumer(n.a.id, j); add_consumer(n.b.id, j); }
+            CW::And(n)          => { add_consumer(n.a.id, j); add_consumer(n.b.id, j); }
             CW::Mux(m)          => { add_consumer(m.sel.id, j); add_consumer(m.a0, j); add_consumer(m.a1, j); }
             CW::Register(r)     => { add_consumer(r.write.id, j); add_consumer(r.data_in, j); }
             CW::RAM(r)          => { add_consumer(r.write.id, j); add_consumer(r.data_in, j); add_consumer(r.addr, j); }
@@ -502,6 +603,7 @@ fn populate_mux_branches(
     for (j, comp) in components.iter().enumerate() {
         match comp {
             CW::Nand(n) => producers.entry(n.out.id).or_default().push(j),
+            CW::And(n)  => producers.entry(n.out.id).or_default().push(j),
             CW::Mux(m)  => producers.entry(m.out).or_default().push(j),
             _ => {}
         }
@@ -511,6 +613,7 @@ fn populate_mux_branches(
     fn input_wires(comp: &CW) -> Vec<wiring::WireIndex> {
         match comp {
             CW::Nand(n) => vec![n.a.id, n.b.id],
+            CW::And(n)  => vec![n.a.id, n.b.id],
             CW::Mux(m)  => vec![m.sel.id, m.a0, m.a1],
             CW::Register(r)     => vec![r.write.id, r.data_in],
             CW::RAM(r)          => vec![r.write.id, r.data_in, r.addr],
@@ -523,6 +626,7 @@ fn populate_mux_branches(
     fn output_wire(comp: &CW) -> Option<wiring::WireIndex> {
         match comp {
             CW::Nand(n) => Some(n.out.id),
+            CW::And(n)  => Some(n.out.id),
             CW::Mux(m)  => Some(m.out),
             _ => None,
         }

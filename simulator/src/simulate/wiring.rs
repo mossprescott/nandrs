@@ -33,18 +33,28 @@ pub(super) struct WireRef { pub(super) id: WireIndex, pub(super) offset: u8, pub
 /// Records connections involved in one step of evaluation. Could be called "Op", maybe?
 #[derive(Clone)]
 pub(super) enum ComponentWiring {
+    // primitve:
     Nand(NandWiring),
     Mux(MuxWiring),
+
+    // external:
     Register(RegisterWiring),
     ROM(ROMWiring),
     RAM(RAMWiring),
     MemorySystem(MemorySystemWiring),
+
+    // synthetic:
+    And(AndWiring),
 }
 
-/// A single nand, referring to completely arbitrary bits of the words where it input and outputs
+/// A single nand, referring to completely arbitrary bits of the words where its inputs and output
 /// are stored.
 #[derive(Clone)]
-pub(super) struct NandWiring { pub(super) a: BitRef, pub(super) b: BitRef, pub(super) out: BitRef }
+pub(super) struct NandWiring {
+    pub(super) a: BitRef,
+    pub(super) b: BitRef,
+    pub(super) out: BitRef
+}
 
 /// Select one result or another, as a primitive. Once the selector has been evaluated, only the
 /// inputs needed for the "active" branch need to be evaluated.
@@ -74,7 +84,16 @@ pub(super) struct RAMWiring { pub(super) device_slot: usize, pub(super) out: Wir
 #[derive(Clone)]
 pub(super) struct MemorySystemWiring { pub(super) device_slot: usize, pub(super) out: WireIndex, pub(super) addr: WireIndex, pub(super) write: BitRef, pub(super) data_in: WireIndex }
 
+/// Similar to NandWiring, but (un)inverting the result. This allows two steps to be collapsed
+/// whenever this very common pattern occurs.
+#[derive(Clone)]
+pub(super) struct AndWiring {
+    pub(super) a: BitRef,
+    pub(super) b: BitRef,
+    pub(super) out: BitRef
+}
 
+/// Used during initialization, bot evaluated each cycle.
 pub(super) struct ConstWiring {
     pub(super) value: u64,
     pub(super) out: WireIndex,

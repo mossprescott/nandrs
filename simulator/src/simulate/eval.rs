@@ -226,6 +226,11 @@ fn eval_logic(ws: &mut [u64], component_wiring: &[wiring::ComponentWiring]) {
                     };
                 ws[mux.out.0 as usize] = ws[src.0 as usize];
             }
+            wiring::ComponentWiring::And(and) => {
+                let a = read_bit(ws, and.a);
+                let b = read_bit(ws, and.b);
+                write_bit(ws, and.out, a & b);
+            }
             _ => {}
         }
     }
