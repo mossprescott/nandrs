@@ -79,6 +79,9 @@ fn fmt_wire(wr: wiring::WireRef) -> impl fmt::Display {
 
 fn fmt_component_tree(f: &mut fmt::Formatter<'_>, comp: &wiring::ComponentWiring, indent: &str) -> fmt::Result {
     match comp {
+        wiring::ComponentWiring::Nand(n) if n.a == n.b =>
+            writeln!(f, "not   a={} out={}",
+                fmt_bit(n.a), fmt_bit(n.out)),
         wiring::ComponentWiring::Nand(n) =>
             writeln!(f, "nand  a={} b={} out={}",
                 fmt_bit(n.a), fmt_bit(n.b), fmt_bit(n.out)),
