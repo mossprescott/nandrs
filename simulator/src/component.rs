@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{Component, IC, Input, InputBus, Output, OutputBus, Reflect, AsConst, Chip, Interface};
-use crate::nat::{Nat, N1, N16};
+use crate::nat::{Nat, N16};
 
 // - Nand (Combinational)
 
