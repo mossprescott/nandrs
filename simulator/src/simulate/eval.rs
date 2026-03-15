@@ -215,12 +215,15 @@ fn eval_logic(ws: &mut [u64], component_wiring: &[wiring::ComponentWiring]) {
                 write_bit(ws, nand.out, !(a & b));
             }
             wiring::ComponentWiring::Mux(mux) => {
-                // Evaluate both branches unconditionally for now (the two-pass
-                // scheme requires all components to run on every pass).
-                eval_logic(ws, &mux.branch0);
-                eval_logic(ws, &mux.branch1);
                 let sel = read_bit(ws, mux.sel);
-                let src = if sel { mux.a1 } else { mux.a0 };
+                let src =
+                    if !sel {
+                        eval_logic(ws, &mux.branch0);
+                        mux.a0
+                    } else {
+                        eval_logic(ws, &mux.branch1);
+                        mux.a1
+                    };
                 ws[mux.out.0 as usize] = ws[src.0 as usize];
             }
             _ => {}
