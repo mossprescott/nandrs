@@ -41,7 +41,10 @@ this that way. See the commit comments for a record of when Claude was helpful a
 
 Have a rust toolchain...
 
-`cargo run cargo run --release -p computer -- examples/Pong.asm`
+`cargo run --release -p computer -- examples/Pong.asm --2x`
+
+
+## Performance/Results
 
 An initial, naive simulator ran at about 900Hz (Apple M2, ca. 2026.)
 
@@ -49,6 +52,13 @@ After pre-computing storage location to avoid lookups in the simulation loop, we
 5KHz.
 
 Storing all the state in Vec<u64> with dense indices instead of HashMaps: about 100KHz.
+
+Making `Mux` for arbitrary width a primitive: 175KHz. Still evaluating all the logic for both inputs, so far.
+
+Conditional evaluation of just the immediate inputs of each Mux branch; all the bits of just the
+active branch: 250KHz now.
+
+Undo earlier optimization so we have more muxes and less total gates; a little more gating (inputs to Add16 this time): 440KHz.
 
 
 ## Simulation

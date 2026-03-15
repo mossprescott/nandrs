@@ -1,5 +1,6 @@
 use crate::project_03::{PC, flatten};
 use simulator::declare::{Chip as _};
+use simulator::component::Sequential;
 use simulator::simulate::{MemoryMap, simulate};
 use simulator::print_graph;
 
@@ -68,5 +69,9 @@ fn pc_behavior() {
 
 #[test]
 fn pc_optimal() {
-    assert_eq!(flatten(PC::chip()).components.len(), 230);
+    let components = flatten(PC::chip()).components;
+    let nands = components.iter().filter(|c| matches!(c, Sequential::Nand(_))).count();
+    let muxes = components.iter().filter(|c| matches!(c, Sequential::Mux(_))).count();
+    assert_eq!(nands, 82);
+    assert_eq!(muxes, 3);
 }

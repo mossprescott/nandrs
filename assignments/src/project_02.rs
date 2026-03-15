@@ -3,8 +3,9 @@
 use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, AsConst, Chip};
 use simulator::Reflect as _;
 use simulator::Chip as _;
-use simulator::component::{Combinational, Const, Nand, Buffer};
-use crate::project_01::{Project01Component, Mux16, Not16, And16, Not, Xor, And, Or};
+use simulator::component::Combinational;
+use simulator::nat::N16;
+use crate::project_01::{Project01Component, Nand, Const, Buffer, Mux1, Mux16, Not16, And16, Not, Xor, And, Or};
 
 pub enum Project02Component {
     Project01(Project01Component),
@@ -14,8 +15,6 @@ pub enum Project02Component {
     Add16(Add16),
     Zero16(Zero16),
     Neg16(Neg16),
-    ZeroIf16(ZeroIf16),
-    NotIf16(NotIf16),
     ALU(ALU),
 }
 
@@ -26,8 +25,6 @@ impl From<Inc16>     for Project02Component { fn from(c: Inc16)     -> Self { Pr
 impl From<Add16>     for Project02Component { fn from(c: Add16)     -> Self { Project02Component::Add16(c)     } }
 impl From<Zero16>    for Project02Component { fn from(c: Zero16)    -> Self { Project02Component::Zero16(c)    } }
 impl From<Neg16>     for Project02Component { fn from(c: Neg16)     -> Self { Project02Component::Neg16(c)     } }
-impl From<ZeroIf16>  for Project02Component { fn from(c: ZeroIf16)  -> Self { Project02Component::ZeroIf16(c)  } }
-impl From<NotIf16>   for Project02Component { fn from(c: NotIf16)   -> Self { Project02Component::NotIf16(c)   } }
 impl From<ALU>       for Project02Component { fn from(c: ALU)       -> Self { Project02Component::ALU(c)       } }
 
 impl Component for Project02Component {
@@ -42,8 +39,6 @@ impl Component for Project02Component {
             Project02Component::Add16(c)     => c.expand(),
             Project02Component::Zero16(c)    => c.expand(),
             Project02Component::Neg16(c)     => c.expand(),
-            Project02Component::ZeroIf16(c)  => c.expand(),
-            Project02Component::NotIf16(c)   => c.expand(),
             Project02Component::ALU(c)       => c.expand(),
         }
     }
@@ -59,8 +54,6 @@ impl Reflect for Project02Component {
             Project02Component::Add16(c)     => c.reflect(),
             Project02Component::Zero16(c)    => c.reflect(),
             Project02Component::Neg16(c)     => c.reflect(),
-            Project02Component::ZeroIf16(c)  => c.reflect(),
-            Project02Component::NotIf16(c)   => c.reflect(),
             Project02Component::ALU(c)       => c.reflect(),
         }
     }
@@ -73,8 +66,6 @@ impl Reflect for Project02Component {
             Project02Component::Add16(c)     => c.name(),
             Project02Component::Zero16(c)    => c.name(),
             Project02Component::Neg16(c)     => c.name(),
-            Project02Component::ZeroIf16(c)  => c.name(),
-            Project02Component::NotIf16(c)   => c.name(),
             Project02Component::ALU(c)       => c.name(),
         }
     }
@@ -86,13 +77,13 @@ impl AsConst for Project02Component {
     }
 }
 
-/// Recursively expand until only Nands are left.
-pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Combinational> {
-    fn go(comp: Project02Component) -> Vec<Combinational> {
+/// Recursively expand until only primitives are left.
+pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Combinational<N16>> {
+    fn go(comp: Project02Component) -> Vec<Combinational<N16>> {
         match comp.expand() {
             None => match comp {
                 Project02Component::Project01(p) => crate::project_01::flatten(p).components,
-                _ => panic!("Did not reduce to Nand: {:?}", comp.name()),
+                _ => panic!("Did not reduce to primitive: {:?}", comp.name()),
             },
             Some(ic) => ic.components.into_iter().flat_map(go).collect(),
         }
@@ -307,65 +298,6 @@ impl Component for Neg16 {
     }
 }
 
-/// Sort of the opposite of Zero16...Conditionally replace all the bits with 0. if z, out = 0,
-/// otherwise out = a
-///
-/// This is fewer gates than Mux16 with 0 as one of the inputs, by 16 Nands. Worth the effort? A
-/// little simplification of the flattened graph probably accomplishes the same thing by eliminating
-/// Nands with 0 on one side. pynand has that pass.
-#[derive(Reflect, Chip)]
-pub struct ZeroIf16 {
-    a: Input16,
-    z: Input,
-    out: Output16,
-}
-
-impl Component for ZeroIf16 {
-    type Target = Project02Component;
-
-    /*
-     not_z = Not { a: inputs.z }
-     outputs.out[0] = And { a: inputs.a[i], b: not_z }
-     */
-    fn expand(&self) -> Option<IC<Project02Component>> {
-        let not_z = Not { a: self.z.clone(), out: Output::new() };
-        let not_z_out = not_z.out.clone();
-        let mut components: Vec<Project02Component> = vec![Project01Component::from(not_z).into()];
-        for i in 0..16 {
-            let and = And { a: self.a.bit(i), b: not_z_out.clone().into(), out: self.out.bit(i) };
-            components.push(Project01Component::from(and).into());
-        }
-        Some(IC { name: self.name().to_string(), intf: self.reflect(), components })
-    }
-}
-
-/// Conditionally negate all the bits.
-///
-/// The savings here are much more modest than the similar-looking ZeroIf16 – just one gate.
-#[derive(Reflect, Chip)]
-pub struct NotIf16 {
-    a: Input16,
-    n: Input,
-    out: Output16,
-}
-
-impl Component for NotIf16 {
-    type Target = Project02Component;
-
-    /*
-     out[i] = Xor { a: inputs.a[i], b: inputs.n }
-     XOR with 1 flips the bit; XOR with 0 passes it through.
-     */
-    fn expand(&self) -> Option<IC<Project02Component>> {
-        let mut components: Vec<Project02Component> = Vec::new();
-        for i in 0..16 {
-            let xor = Xor { a: self.a.bit(i), b: self.n.clone(), out: self.out.bit(i) };
-            components.push(Project01Component::from(xor).into());
-        }
-        Some(IC { name: self.name().to_string(), intf: self.reflect(), components })
-    }
-}
-
 /// Hack ALU: computes one of several functions of x and y selected by control bits.
 #[derive(Reflect, Chip)]
 pub struct ALU {
@@ -392,39 +324,77 @@ pub struct ALU {
     pub zr:  Output,
     /// Flag: is the result < 0? (high bit set)
     pub ng:  Output,
+
+    /// Disable: when 1, all outputs are forced to 0. This makes it easier for the simulator to
+    /// identify this logic as inactive and avoid spending time evaluating it.
+    pub disable: Input,
 }
 
 impl Component for ALU {
     type Target = Project02Component;
 
     fn expand(&self) -> Option<IC<Project02Component>> {
-        let x1 = ZeroIf16 { a: self.x.clone(), z: self.zx.clone(), out: Output16::new() };
-        let x2 = NotIf16 { a: x1.out.clone().into(), n: self.nx.clone(), out: Output16::new() };
+        let zero_const = Const { value: 0, out: Output16::new() };
 
-        let y1 = ZeroIf16 { a: self.y.clone(), z: self.zy.clone(), out: Output16::new() };
-        let y2 = NotIf16 { a: y1.out.clone().into(), n: self.ny.clone(), out: Output16::new() };
+        // zx/nx: conditionally zero then negate x
+        let x1 = Mux16 { sel: self.zx.clone(), a0: self.x.clone(), a1: zero_const.out.clone().into(), out: Output16::new() };
+        let x2_not = Not16 { a: x1.out.clone().into(), out: Output16::new() };
+        let x2 = Mux16 { sel: self.nx.clone(), a0: x1.out.clone().into(), a1: x2_not.out.clone().into(), out: Output16::new() };
+
+        // zy/ny: conditionally zero then negate y
+        let y1 = Mux16 { sel: self.zy.clone(), a0: self.y.clone(), a1: zero_const.out.clone().into(), out: Output16::new() };
+        let y2_not = Not16 { a: y1.out.clone().into(), out: Output16::new() };
+        let y2 = Mux16 { sel: self.ny.clone(), a0: y1.out.clone().into(), a1: y2_not.out.clone().into(), out: Output16::new() };
 
         let and = And16 { a: x2.out.clone().into(), b: y2.out.clone().into(), out: Output16::new() };
-        let add = Add16 { a: x2.out.clone().into(), b: y2.out.clone().into(), out: Output16::new() };
 
-        let result = Mux16 { a0: and.out.clone().into(), a1: add.out.clone().into(), sel: self.f.clone(), out: Output16::new() };
+        // Gate Add16 inputs: only active when f=1 AND !disable. Mux16 gives Add16
+        // its own copy of the inputs, breaking the sharing with And16 so the nesting
+        // algorithm can move all Add16 nands into a mux branch.
+        let not_disable = Not { a: self.disable.clone(), out: Output::new() };
+        let add_active = And { a: self.f.clone(), b: not_disable.out.clone().into(), out: Output::new() };
+        let add_x = Mux16 { sel: add_active.out.clone().into(), a0: zero_const.out.clone().into(), a1: x2.out.clone().into(), out: Output16::new() };
+        let add_y = Mux16 { sel: add_active.out.clone().into(), a0: zero_const.out.clone().into(), a1: y2.out.clone().into(), out: Output16::new() };
+        let add = Add16 { a: add_x.out.clone().into(), b: add_y.out.clone().into(), out: Output16::new() };
+
+        let result = Mux16 { sel: self.f.clone(), a0: and.out.clone().into(), a1: add.out.clone().into(), out: Output16::new() };
         let rn = Not16 { a: result.out.clone().into(), out: Output16::new() };
-        let out = Mux16 { a0: result.out.clone().into(), a1: rn.out.clone().into(), sel: self.no.clone(), out: self.out.clone() };
+        let raw_out = Mux16 { sel: self.no.clone(), a0: result.out.clone().into(), a1: rn.out.clone().into(), out: Output16::new() };
 
-        let rz = Zero16 { a: out.out.clone().into(), out: self.zr.clone() };
-        let rneg = Neg16 { a: out.out.clone().into(), out: self.ng.clone() };
+        // Compute zr from raw_out (before the disable gate) so it can be nested
+        // into the disable mux branch along with the rest of the ALU chain.
+        let raw_zr = Zero16 { a: raw_out.out.clone().into(), out: Output::new() };
+
+        // Gate output and zr with disable.  When disabled: out=0, zr=1.
+        let const_one = Const { value: 1, out: Output::new() };
+        let out_gate = Mux16 { sel: self.disable.clone(), a0: raw_out.out.clone().into(), a1: zero_const.out.clone().into(), out: self.out.clone() };
+        let zr_gate = Mux1 { sel: self.disable.clone(), a0: raw_zr.out.clone().into(), a1: const_one.out.bit(0).into(), out: self.zr.clone() };
+
+        // ng reads from the gated output; when disabled out=0 so ng=0 (correct).
+        // Neg16 is 0 nands (just a buffer) so there's nothing to skip.
+        let rneg = Neg16 { a: self.out.clone().into(), out: self.ng.clone() };
 
         Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![
-            x1.into(),
-            x2.into(),
-            y1.into(),
-            y2.into(),
+            Project01Component::from(zero_const).into(),
+            Project01Component::from(const_one).into(),
+            Project01Component::from(x1).into(),
+            Project01Component::from(x2_not).into(),
+            Project01Component::from(x2).into(),
+            Project01Component::from(y1).into(),
+            Project01Component::from(y2_not).into(),
+            Project01Component::from(y2).into(),
             Project01Component::from(and).into(),
+            Project01Component::from(not_disable).into(),
+            Project01Component::from(add_active).into(),
+            Project01Component::from(add_x).into(),
+            Project01Component::from(add_y).into(),
             add.into(),
             Project01Component::from(result).into(),
             Project01Component::from(rn).into(),
-            Project01Component::from(out).into(),
-            rz.into(),
+            Project01Component::from(raw_out).into(),
+            raw_zr.into(),
+            Project01Component::from(out_gate).into(),
+            Project01Component::from(zr_gate).into(),
             rneg.into(),
         ]})
    }

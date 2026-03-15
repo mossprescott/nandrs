@@ -92,11 +92,13 @@ fn decode_truth_table() {
     assert_eq!(state.get("jmp_eq"), 0);
 }
 
+/// Note: the chip still works if decoding uses no gates and just interprets the bits of an A-instr
+/// as control signals, but a little bit of extra clarity here makes simulation more efficient.
 #[test]
 fn decode_optimal() {
     let components = flatten(Decode::chip()).components;
     let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
-    assert_eq!(nands, 0);
+    assert_eq!(nands, 24);
 }
 
 #[test]
@@ -138,7 +140,11 @@ fn cpu_optimal() {
     // TODO: actually what?
     let components = flatten(CPU::chip()).components;
     let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
-    assert_eq!(nands, 928);
+    let muxes = components.iter().filter(|c| matches!(c, Computational::Mux(_))).count();
+    let registers = components.iter().filter(|c| matches!(c, Computational::Register(_))).count();
+    assert_eq!(nands,   395);
+    assert_eq!(muxes,    15);
+    assert_eq!(registers, 3);
 }
 
 fn add_program() -> Vec<u64> {
@@ -216,7 +222,10 @@ fn computer_max_behavior() {
     ram.poke(2, 5);
 
     // TODO: make the looping prologue automatic and factor this out
-    while state.get("pc") <= (pgm.len()-2).try_into().unwrap() { state.ticktock(); }
+    for _ in 0..pgm.len() {
+        state.ticktock();
+        if state.get("pc") > (pgm.len()-2).try_into().unwrap() { break; }
+    }
 
     assert_eq!(ram.peek(3), 5);
 
@@ -228,7 +237,10 @@ fn computer_max_behavior() {
     ram.poke(1, 23456);
     ram.poke(2, 12345);
 
-    while state.get("pc") <= (pgm.len()-2).try_into().unwrap() { state.ticktock(); }
+    for _ in 0..pgm.len() {
+        state.ticktock();
+        if state.get("pc") > (pgm.len()-2).try_into().unwrap() { break; }
+    }
 
     assert_eq!(ram.peek(3), 23456);
 }
@@ -314,7 +326,9 @@ fn computer_optimal() {
     let memsys = components.iter().filter(|c| matches!(c, Computational::MemorySystem(_))).count();
     let roms   = components.iter().filter(|c| matches!(c, Computational::ROM(_))).count();
     let nands  = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
+    let muxes  = components.iter().filter(|c| matches!(c, Computational::Mux(_))).count();
     assert_eq!(memsys,  1);
     assert_eq!(roms,    1);
-    assert_eq!(nands, 928);
+    assert_eq!(nands, 395);
+    assert_eq!(muxes,  15);
 }

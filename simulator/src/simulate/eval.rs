@@ -202,23 +202,29 @@ impl ChipState {
             }
         }
 
-        // Two Nand passes: first propagates RAM/ROM outputs through memory logic
-        // (e.g. MemorySystem muxes), second lets downstream gates (ALU) use the
-        // correctly computed values. Needed because component order puts CPU before
-        // MemorySystem in the flattened list.
-        eval_nands(&mut self.wire_state, &self.wiring.component_wiring);
-        eval_nands(&mut self.wire_state, &self.wiring.component_wiring);
+        eval_logic(&mut self.wire_state, &self.wiring.component_wiring);
     }
 }
 
-fn eval_nands(ws: &mut [u64], component_wiring: &[wiring::ComponentWiring]) {
+fn eval_logic(ws: &mut [u64], component_wiring: &[wiring::ComponentWiring]) {
     for comp in component_wiring {
         match comp {
-            // This variant is cheaper to evaluate; just one bit without masking:
             wiring::ComponentWiring::Nand(nand) => {
                 let a = read_bit(ws, nand.a);
                 let b = read_bit(ws, nand.b);
                 write_bit(ws, nand.out, !(a & b));
+            }
+            wiring::ComponentWiring::Mux(mux) => {
+                let sel = read_bit(ws, mux.sel);
+                let src =
+                    if !sel {
+                        eval_logic(ws, &mux.branch0);
+                        mux.a0
+                    } else {
+                        eval_logic(ws, &mux.branch1);
+                        mux.a1
+                    };
+                ws[mux.out.0 as usize] = ws[src.0 as usize];
             }
             _ => {}
         }

@@ -77,20 +77,87 @@ fn fmt_wire(wr: wiring::WireRef) -> impl fmt::Display {
     D(wr)
 }
 
+fn fmt_component_tree(f: &mut fmt::Formatter<'_>, comp: &wiring::ComponentWiring, indent: &str) -> fmt::Result {
+    match comp {
+        wiring::ComponentWiring::Nand(n) if n.a == n.b =>
+            writeln!(f, "not   a={} out={}",
+                fmt_bit(n.a), fmt_bit(n.out)),
+        wiring::ComponentWiring::Nand(n) =>
+            writeln!(f, "nand  a={} b={} out={}",
+                fmt_bit(n.a), fmt_bit(n.b), fmt_bit(n.out)),
+        wiring::ComponentWiring::Mux(m) => {
+            writeln!(f, "mux   sel={} out=w{}[..]",
+                fmt_bit(m.sel), m.out.0)?;
+            let (t0, _) = count_nands(&m.branch0);
+            let (t1, _) = count_nands(&m.branch1);
+            writeln!(f, "{indent}     a0=w{}[..] ({} nands)", m.a0.0, t0)?;
+            let inner = format!("{indent}       ");
+            for op in &m.branch0 {
+                write!(f, "{inner}")?;
+                fmt_component_tree(f, op, &inner)?;
+            }
+            writeln!(f, "{indent}     a1=w{}[..] ({} nands)", m.a1.0, t1)?;
+            for op in &m.branch1 {
+                write!(f, "{inner}")?;
+                fmt_component_tree(f, op, &inner)?;
+            }
+            Ok(())
+        }
+        wiring::ComponentWiring::Register(r) =>
+            writeln!(f, "reg   write={} in=w{}[..] out=w{}[..]",
+                fmt_bit(r.write), r.data_in.0, r.data_out.0),
+        wiring::ComponentWiring::ROM(r) =>
+            writeln!(f, "rom[{}]  addr=w{}[..] out=w{}[..]",
+                r.device_slot, r.addr.0, r.out.0),
+        wiring::ComponentWiring::RAM(r) =>
+            writeln!(f, "ram[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
+                r.device_slot, r.addr.0, fmt_bit(r.write), r.data_in.0, r.out.0),
+        wiring::ComponentWiring::MemorySystem(m) =>
+            writeln!(f, "mem[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
+                m.device_slot, m.addr.0, fmt_bit(m.write), m.data_in.0, m.out.0),
+    }
+}
+
+/// Count nands in a list of components, recursing into mux branches.
+/// Returns (total_nands, min_nands) where min_nands assumes the cheaper branch is taken at each mux.
+fn count_nands(components: &[wiring::ComponentWiring]) -> (u32, u32) {
+    let mut total = 0u32;
+    let mut min = 0u32;
+    for comp in components {
+        match comp {
+            wiring::ComponentWiring::Nand(_) => { total += 1; min += 1; }
+            wiring::ComponentWiring::Mux(m) => {
+                let (t0, m0) = count_nands(&m.branch0);
+                let (t1, m1) = count_nands(&m.branch1);
+                total += t0 + t1;
+                min += m0.min(m1);
+            }
+            _ => {}
+        }
+    }
+    (total, min)
+}
+
 impl fmt::Display for ChipWiring {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut nands = 0u32;
+        let mut muxes = 0u32;
         let mut registers = 0u32;
         for comp in &self.component_wiring {
             match comp {
-                wiring::ComponentWiring::Nand(_)     => nands += 1,
+                wiring::ComponentWiring::Mux(_)      => muxes += 1,
                 wiring::ComponentWiring::Register(_) => registers += 1,
                 _ => {}
             }
         }
+        let (total_nands, min_nands) = count_nands(&self.component_wiring);
         writeln!(f, "ChipWiring:")?;
-        writeln!(f, "  wires:     {}", self.n_wires)?;
-        writeln!(f, "  nands:     {}", nands)?;
+        write!(f, "  nands:     {} total", total_nands)?;
+        if min_nands < total_nands {
+            writeln!(f, ", {} min/cycle", min_nands)?;
+        } else {
+            writeln!(f)?;
+        }
+        if muxes > 0 { writeln!(f, "  muxes:     {}", muxes)?; }
         if registers > 0 { writeln!(f, "  registers: {}", registers)?; }
         for (i, s) in self.ram_specs.iter().enumerate() {
             writeln!(f, "  ram[{}]:    {} words", i, s.size)?;
@@ -114,29 +181,13 @@ impl fmt::Display for ChipWiring {
             writeln!(f, "  out {name}: {}", fmt_wire(**wr))?;
         }
 
-        let mut consts: Vec<_> = self.const_wiring.iter().collect();
         for cw in &self.const_wiring {
             writeln!(f, "  const: w{} = {}", cw.out.0, cw.value)?;
         }
 
         for (i, comp) in self.component_wiring.iter().enumerate() {
-            match comp {
-                wiring::ComponentWiring::Nand(n) =>
-                    writeln!(f, "  [{i}] nand  a={} b={} out={}",
-                        fmt_bit(n.a), fmt_bit(n.b), fmt_bit(n.out))?,
-                wiring::ComponentWiring::Register(r) =>
-                    writeln!(f, "  [{i}] reg   write={} in=w{}[..] out=w{}[..]",
-                        fmt_bit(r.write), r.data_in.0, r.data_out.0)?,
-                wiring::ComponentWiring::ROM(r) =>
-                    writeln!(f, "  [{i}] rom[{}]  addr=w{}[..] out=w{}[..]",
-                        r.device_slot, r.addr.0, r.out.0)?,
-                wiring::ComponentWiring::RAM(r) =>
-                    writeln!(f, "  [{i}] ram[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
-                        r.device_slot, r.addr.0, fmt_bit(r.write), r.data_in.0, r.out.0)?,
-                wiring::ComponentWiring::MemorySystem(m) =>
-                    writeln!(f, "  [{i}] mem[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
-                        m.device_slot, m.addr.0, fmt_bit(m.write), m.data_in.0, m.out.0)?,
-            }
+            write!(f, "  [{i}] ")?;
+            fmt_component_tree(f, comp, "  ")?;
         }
         Ok(())
     }
@@ -218,6 +269,20 @@ where
                 Computational::Buffer(_) => {
                     // Ignore; already recorded in `renamed`
                 }
+                Computational::Mux(c) => {
+                    let intf = c.reflect();
+                    assign(WireID::from(&intf.inputs["a0"]));
+                    assign(WireID::from(&intf.inputs["a1"]));
+                    assign(WireID::from(&intf.inputs["sel"]));
+                    assign(WireID::from(&intf.outputs["out"]));
+                }
+                Computational::Mux1(c) => {
+                    let intf = c.reflect();
+                    assign(WireID::from(&intf.inputs["a0"]));
+                    assign(WireID::from(&intf.inputs["a1"]));
+                    assign(WireID::from(&intf.inputs["sel"]));
+                    assign(WireID::from(&intf.outputs["out"]));
+                }
                 Computational::Register(c) => {
                     let intf = c.reflect();
                     assign(WireID::from(&intf.inputs["write"]));
@@ -293,6 +358,28 @@ where
             }
             Computational::Const(_)        => None,
             Computational::Buffer(_)       => None,
+            Computational::Mux(c)          => {
+                let intf = c.reflect();
+                Some(CW::Mux(wiring::MuxWiring {
+                    sel: ref_for(&intf.inputs["sel"]),
+                    a0:  wire_indexes[&WireID::from(&intf.inputs["a0"])],
+                    a1:  wire_indexes[&WireID::from(&intf.inputs["a1"])],
+                    out: wire_indexes[&WireID::from(&intf.outputs["out"])],
+                    branch0: Vec::new(),
+                    branch1: Vec::new(),
+                }))
+            }
+            Computational::Mux1(c)         => {
+                let intf = c.reflect();
+                Some(CW::Mux(wiring::MuxWiring {
+                    sel: ref_for(&intf.inputs["sel"]),
+                    a0:  wire_indexes[&WireID::from(&intf.inputs["a0"])],
+                    a1:  wire_indexes[&WireID::from(&intf.inputs["a1"])],
+                    out: wire_indexes[&WireID::from(&intf.outputs["out"])],
+                    branch0: Vec::new(),
+                    branch1: Vec::new(),
+                }))
+            }
             Computational::Register(c)     => {
                 let intf = c.reflect();
                 Some(CW::Register(wiring::RegisterWiring  {
@@ -342,6 +429,13 @@ where
         }
     }).collect();
 
+    // Post-processing: move exclusive producers into mux branches (recursively).
+    let mut component_wiring = component_wiring;
+    let output_wires: Vec<wiring::WireIndex> = chip.reflect().outputs.values()
+        .map(|b| wire_indexes[&WireID::from(b)])
+        .collect();
+    populate_mux_branches(&mut component_wiring, &output_wires);
+
     let n_wires = wire_indexes.len();
     let intf = chip.reflect();
 
@@ -372,5 +466,260 @@ where
         ram_specs,
         rom_specs,
         ms_specs,
+    }
+}
+
+/// Move components that exclusively feed one branch of a mux into that mux's branch list.
+/// Applied recursively: muxes moved into a branch get their own branches populated too.
+fn populate_mux_branches(
+    components: &mut Vec<wiring::ComponentWiring>,
+    extra_consumers: &[wiring::WireIndex],
+) {
+    use std::collections::HashSet;
+    use wiring::ComponentWiring as CW;
+
+    // For each wire, which component indices consume it?
+    let mut consumers: HashMap<wiring::WireIndex, HashSet<usize>> = HashMap::new();
+    let mut add_consumer = |w: wiring::WireIndex, j: usize| { consumers.entry(w).or_default().insert(j); };
+    for (j, comp) in components.iter().enumerate() {
+        match comp {
+            CW::Nand(n)         => { add_consumer(n.a.id, j); add_consumer(n.b.id, j); }
+            CW::Mux(m)          => { add_consumer(m.sel.id, j); add_consumer(m.a0, j); add_consumer(m.a1, j); }
+            CW::Register(r)     => { add_consumer(r.write.id, j); add_consumer(r.data_in, j); }
+            CW::RAM(r)          => { add_consumer(r.write.id, j); add_consumer(r.data_in, j); add_consumer(r.addr, j); }
+            CW::ROM(r)          => { add_consumer(r.addr, j); }
+            CW::MemorySystem(m) => { add_consumer(m.write.id, j); add_consumer(m.data_in, j); add_consumer(m.addr, j); }
+        }
+    }
+    // Extra consumers (chip outputs) use a sentinel index that will never be claimed.
+    let sentinel = components.len();
+    for &w in extra_consumers {
+        consumers.entry(w).or_default().insert(sentinel);
+    }
+
+    // Build producer map: output wire → list of component indices.
+    let mut producers: HashMap<wiring::WireIndex, Vec<usize>> = HashMap::new();
+    for (j, comp) in components.iter().enumerate() {
+        match comp {
+            CW::Nand(n) => producers.entry(n.out.id).or_default().push(j),
+            CW::Mux(m)  => producers.entry(m.out).or_default().push(j),
+            _ => {}
+        }
+    }
+
+    // Helper: get input wires of a component.
+    fn input_wires(comp: &CW) -> Vec<wiring::WireIndex> {
+        match comp {
+            CW::Nand(n) => vec![n.a.id, n.b.id],
+            CW::Mux(m)  => vec![m.sel.id, m.a0, m.a1],
+            CW::Register(r)     => vec![r.write.id, r.data_in],
+            CW::RAM(r)          => vec![r.write.id, r.data_in, r.addr],
+            CW::ROM(r)          => vec![r.addr],
+            CW::MemorySystem(m) => vec![m.write.id, m.data_in, m.addr],
+        }
+    }
+
+    // Helper: get the output wire of a component (only nands and muxes produce wires).
+    fn output_wire(comp: &CW) -> Option<wiring::WireIndex> {
+        match comp {
+            CW::Nand(n) => Some(n.out.id),
+            CW::Mux(m)  => Some(m.out),
+            _ => None,
+        }
+    }
+
+    /// Collect components that exclusively feed a branch wire using fixed-point iteration.
+    /// Handles internal fan-out: if a wire fans out to two nands that are both in the
+    /// candidate set, their shared producer becomes eligible too.
+    ///
+    /// `mux_ok_wires` lists the wires the mux consumes where we consider the mux an
+    /// acceptable "external" consumer (the branch wire itself and sel). Wires consumed
+    /// by the mux on any other port (i.e., the other branch) must NOT be claimed.
+    fn collect_branch(
+        wire: wiring::WireIndex,
+        mux_idx: usize,
+        mux_ok_wires: &HashSet<wiring::WireIndex>,
+        consumers: &HashMap<wiring::WireIndex, HashSet<usize>>,
+        producers: &HashMap<wiring::WireIndex, Vec<usize>>,
+        components: &[CW],
+        claimed: &[bool],
+    ) -> Vec<usize> {
+        let mut candidates: HashSet<usize> = HashSet::new();
+
+        // Seed: producers of the branch wire, if the wire is exclusively consumed
+        // by the mux (and nothing else outside).
+        let wire_consumers = consumers.get(&wire).map_or(0, |s| s.len());
+        if wire_consumers != 1 {
+            return Vec::new();
+        }
+
+        // Add initial producers.
+        if let Some(prods) = producers.get(&wire) {
+            for &j in prods {
+                if !claimed[j] { candidates.insert(j); }
+            }
+        }
+
+        // Fixed-point: keep expanding until no new candidates are found.
+        loop {
+            let mut grew = false;
+            // Collect all input wires of current candidates.
+            let input_wires_to_check: Vec<wiring::WireIndex> = candidates.iter()
+                .flat_map(|&j| input_wires(&components[j]))
+                .collect();
+
+            for w in input_wires_to_check {
+                let Some(wire_consumers) = consumers.get(&w) else { continue };
+                // All consumers of this wire must be in candidates, or be the mux
+                // consuming on an "ok" port (this branch or sel — NOT the other branch).
+                let all_accounted = wire_consumers.iter().all(|&c| {
+                    if candidates.contains(&c) { return true; }
+                    if c == mux_idx { return mux_ok_wires.contains(&w); }
+                    false
+                });
+                if !all_accounted { continue; }
+                // Add producers of this wire.
+                if let Some(prods) = producers.get(&w) {
+                    for &j in prods {
+                        if !claimed[j] && candidates.insert(j) {
+                            grew = true;
+                        }
+                    }
+                }
+            }
+            if !grew { break; }
+        }
+
+        if candidates.is_empty() {
+            return Vec::new();
+        }
+
+        // Topological sort: emit in evaluation order (dependencies before dependents).
+        let mut sorted = Vec::with_capacity(candidates.len());
+        let mut emitted: HashSet<usize> = HashSet::new();
+        fn topo_visit(
+            j: usize,
+            candidates: &HashSet<usize>,
+            producers: &HashMap<wiring::WireIndex, Vec<usize>>,
+            components: &[CW],
+            emitted: &mut HashSet<usize>,
+            sorted: &mut Vec<usize>,
+        ) {
+            if !emitted.insert(j) { return; }
+            // Visit dependencies first.
+            let inputs = input_wires(&components[j]);
+            for w in inputs {
+                if let Some(prods) = producers.get(&w) {
+                    for &p in prods {
+                        if candidates.contains(&p) {
+                            topo_visit(p, candidates, producers, components, emitted, sorted);
+                        }
+                    }
+                }
+            }
+            sorted.push(j);
+        }
+        for &j in &candidates {
+            topo_visit(j, &candidates, producers, components, &mut emitted, &mut sorted);
+        }
+        sorted
+    }
+
+    // Recursively collect branch assignments for a mux and all nested muxes.
+    // Pushes inner assignments BEFORE outer ones so that during assembly,
+    // inner muxes get their branches populated first.
+    fn collect_mux_branches(
+        mux_idx: usize,
+        consumers: &HashMap<wiring::WireIndex, HashSet<usize>>,
+        producers: &HashMap<wiring::WireIndex, Vec<usize>>,
+        components: &[CW],
+        claimed: &mut Vec<bool>,
+        assignments: &mut Vec<(usize, Vec<usize>, Vec<usize>)>,
+    ) {
+        let m = match &components[mux_idx] { CW::Mux(m) => m, _ => return };
+        let (a0, a1, sel_wire) = (m.a0, m.a1, m.sel.id);
+        // For branch0: the mux consuming a wire on a0 is ok; on a1 or sel is NOT ok.
+        // sel producers must remain top-level — they're needed before the branch decision.
+        let ok_for_b0: HashSet<wiring::WireIndex> = [a0].into();
+        let ok_for_b1: HashSet<wiring::WireIndex> = [a1].into();
+        let b0 = collect_branch(a0, mux_idx, &ok_for_b0, consumers, producers, components, claimed);
+        let b1 = collect_branch(a1, mux_idx, &ok_for_b1, consumers, producers, components, claimed);
+
+        // Mark collected components as claimed.
+        for &j in b0.iter().chain(b1.iter()) {
+            claimed[j] = true;
+        }
+
+        // Recurse into any muxes we just claimed — BEFORE pushing our own assignment.
+        for &j in b0.iter().chain(b1.iter()) {
+            if matches!(&components[j], CW::Mux(_)) {
+                collect_mux_branches(j, consumers, producers, components, claimed, assignments);
+            }
+        }
+
+        if !b0.is_empty() || !b1.is_empty() {
+            assignments.push((mux_idx, b0, b1));
+        }
+    }
+
+    // For each top-level mux, collect exclusive producers into branches.
+    // Process in reverse order so outermost muxes claim inner ones first.
+    let mut claimed: Vec<bool> = vec![false; components.len()];
+    let mut assignments: Vec<(usize, Vec<usize>, Vec<usize>)> = Vec::new();
+
+    // Track which muxes are top-level branch owners (not to be extracted).
+    let mut branch_roots: HashSet<usize> = HashSet::new();
+
+    for i in (0..components.len()).rev() {
+        if claimed[i] { continue; }
+        if matches!(&components[i], CW::Mux(_)) {
+            collect_mux_branches(i, &consumers, &producers, components, &mut claimed, &mut assignments);
+            branch_roots.insert(i);
+            // The mux was marked claimed inside collect_mux_branches so its a0/a1
+            // consumers count as claimed. But it stays in the top-level list.
+        }
+    }
+
+    if assignments.is_empty() {
+        return;
+    }
+
+    // Extract claimed components EXCEPT top-level branch roots.
+    let mut extracted: Vec<Option<CW>> = vec![None; components.len()];
+    for j in (0..components.len()).rev() {
+        if claimed[j] && !branch_roots.contains(&j) {
+            extracted[j] = Some(components.remove(j));
+        }
+    }
+
+    // Compute new positions for non-extracted components.
+    let extracted_set: HashSet<usize> = (0..claimed.len())
+        .filter(|&j| claimed[j] && !branch_roots.contains(&j))
+        .collect();
+    let mut shift_at: Vec<usize> = vec![0; claimed.len() + 1];
+    for j in 0..claimed.len() {
+        shift_at[j + 1] = shift_at[j] + if extracted_set.contains(&j) { 1 } else { 0 };
+    }
+
+    // Assemble branches. Assignments are ordered inner-first, so when an outer mux
+    // clones an inner mux from `extracted`, the inner mux already has its branches set.
+    for (orig_idx, b0_indices, b1_indices) in &assignments {
+        let b0: Vec<CW> = b0_indices.iter().map(|&j| extracted[j].clone().unwrap()).collect();
+        let b1: Vec<CW> = b1_indices.iter().map(|&j| extracted[j].clone().unwrap()).collect();
+
+        if branch_roots.contains(orig_idx) {
+            // Top-level mux — update it in the components list
+            let new_idx = orig_idx - shift_at[*orig_idx];
+            if let CW::Mux(m) = &mut components[new_idx] {
+                m.branch0 = b0;
+                m.branch1 = b1;
+            }
+        } else {
+            // Nested mux — update it in-place in extracted
+            if let Some(Some(CW::Mux(m))) = extracted.get_mut(*orig_idx) {
+                m.branch0 = b0;
+                m.branch1 = b1;
+            }
+        }
     }
 }

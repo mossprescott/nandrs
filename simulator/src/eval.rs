@@ -7,12 +7,13 @@ use std::rc::Rc;
 
 use crate::component::Combinational;
 use crate::declare::{BusRef, IC, Reflect};
+use crate::nat::Nat;
 
 /// Evaluate a chip given named input values, returning named output values.
 ///
 /// Values are u64; for 1-bit signals use 0 or 1. For a multi-bit bus of width w,
 /// bits 0..w-1 carry the value.
-pub fn eval<'a, I>(chip: &IC<Combinational>, inputs: I) -> HashMap<String, u64>
+pub fn eval<'a, I, Width: Nat + Clone>(chip: &IC<Combinational<Width>>, inputs: I) -> HashMap<String, u64>
 where
     I: IntoIterator<Item = (&'a str, u64)>,
 {
@@ -52,6 +53,30 @@ where
                 let intf = buffer.reflect();
                 let a = read_bit(&wire_state, &intf.inputs["a"]);
                 write_bit(&mut wire_state, &intf.outputs["out"], a);
+            }
+            Combinational::Mux(mux) => {
+                let intf = mux.reflect();
+                let sel = read_bit(&wire_state, &intf.inputs["sel"]);
+                let src = if sel { &intf.inputs["a1"] } else { &intf.inputs["a0"] };
+                let out = &intf.outputs["out"];
+                let id = wire_id(out);
+                let mask = bus_mask(out);
+                let val = wire_state.get(&wire_id(src)).copied().unwrap_or(0);
+                let shifted = ((val >> src.offset) & width_mask(out.width)) << out.offset;
+                let entry = wire_state.entry(id).or_insert(0);
+                *entry = (*entry & !mask) | shifted;
+            }
+            Combinational::Mux1(mux) => {
+                let intf = mux.reflect();
+                let sel = read_bit(&wire_state, &intf.inputs["sel"]);
+                let src = if sel { &intf.inputs["a1"] } else { &intf.inputs["a0"] };
+                let out = &intf.outputs["out"];
+                let id = wire_id(out);
+                let mask = bus_mask(out);
+                let val = wire_state.get(&wire_id(src)).copied().unwrap_or(0);
+                let shifted = ((val >> src.offset) & width_mask(out.width)) << out.offset;
+                let entry = wire_state.entry(id).or_insert(0);
+                *entry = (*entry & !mask) | shifted;
             }
         }
     }

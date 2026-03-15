@@ -19,18 +19,6 @@ pub(super) struct WireIndex(pub(super) u32);
 
 pub(super) type Indexes = HashMap<WireID, WireIndex>;
 
-/// Records connections involved in one step of evaluation. Could be called "Op", maybe?
-pub(super) enum ComponentWiring {
-    Nand(NandWiring),
-    Register(RegisterWiring),
-    ROM(ROMWiring),
-    RAM(RAMWiring),
-    MemorySystem(MemorySystemWiring),
-    // /// Note: output wiring for consts is not needed during evaluation because the bits are
-    // /// never updated.
-    // Const,
-    // TODO: Not? And? Other re-constructed primitives to save ops?
-}
 
 /// Location of the storage for a single-bit wire, at a certain word index and bit offset within the word.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -41,16 +29,49 @@ pub(super) struct BitRef { pub(super) id: WireIndex, pub(super) offset: u8 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct WireRef { pub(super) id: WireIndex, pub(super) offset: u8, pub(super) width: u8 }
 
+
+/// Records connections involved in one step of evaluation. Could be called "Op", maybe?
+#[derive(Clone)]
+pub(super) enum ComponentWiring {
+    Nand(NandWiring),
+    Mux(MuxWiring),
+    Register(RegisterWiring),
+    ROM(ROMWiring),
+    RAM(RAMWiring),
+    MemorySystem(MemorySystemWiring),
+}
+
 /// A single nand, referring to completely arbitrary bits of the words where it input and outputs
 /// are stored.
+#[derive(Clone)]
 pub(super) struct NandWiring { pub(super) a: BitRef, pub(super) b: BitRef, pub(super) out: BitRef }
 
+/// Select one result or another, as a primitive. Once the selector has been evaluated, only the
+/// inputs needed for the "active" branch need to be evaluated.
+#[derive(Clone)]
+pub(super) struct MuxWiring {
+    pub(super) sel: BitRef,
+    pub(super) a0: WireIndex,
+    pub(super) a1: WireIndex,
+    pub(super) out: WireIndex,
+
+    /// Wiring that needs to be updated in the case that sel == 0
+    pub(super) branch0: Vec<ComponentWiring>,
+
+    /// Wiring that needs to be updated in the case that sel == 1
+    pub(super) branch1: Vec<ComponentWiring>,
+}
+
+#[derive(Clone)]
 pub(super) struct RegisterWiring { pub(super) write: BitRef, pub(super) data_in: WireIndex, pub(super) data_out: WireIndex }
 
+#[derive(Clone)]
 pub(super) struct ROMWiring { pub(super) device_slot: usize, pub(super) out: WireIndex, pub(super) addr: WireIndex }
 
+#[derive(Clone)]
 pub(super) struct RAMWiring { pub(super) device_slot: usize, pub(super) out: WireIndex, pub(super) addr: WireIndex, pub(super) write: BitRef, pub(super) data_in: WireIndex }
 
+#[derive(Clone)]
 pub(super) struct MemorySystemWiring { pub(super) device_slot: usize, pub(super) out: WireIndex, pub(super) addr: WireIndex, pub(super) write: BitRef, pub(super) data_in: WireIndex }
 
 

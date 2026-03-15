@@ -166,9 +166,10 @@ fn main() {
     let trace   = args.contains(&"--trace".to_string());
     let verbose = args.contains(&"--verbose".to_string());
     let print   = args.contains(&"--print".to_string());
+    let no_exec = args.contains(&"--no-exec".to_string());
     let scale   = if args.contains(&"--2x".to_string()) { 2 } else { 1 };
     let path = args.iter().find(|a| !a.starts_with('-') && *a != &args[0])
-        .expect("usage: computer [--trace] [--verbose] [--2x] <rom-file>");
+        .expect("usage: computer [--trace] [--verbose] [--print] [--no-exec] [--2x] <rom-file>");
 
     let src = fs::read_to_string(path).unwrap_or_else(|e| {
         eprintln!("error reading {path}: {e}");
@@ -198,6 +199,10 @@ fn main() {
     };
 
     find_rom(&state).flash(instructions.iter().map(|&v| v as u64).collect());
+
+    if no_exec {
+        return;
+    }
 
     let ram = find_ram(&state);
     let screen = find_screen(&state);
