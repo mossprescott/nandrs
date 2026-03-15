@@ -439,6 +439,9 @@ where
         .collect();
     peephole_nand_not(&mut component_wiring, &output_wires);
 
+    // Remove gates whose output is never consumed.
+    eliminate_dead_gates(&mut component_wiring, &output_wires);
+
     // Post-processing: move exclusive producers into mux branches (recursively).
     populate_mux_branches(&mut component_wiring, &output_wires);
 
@@ -566,6 +569,73 @@ fn peephole_nand_not(components: &mut Vec<wiring::ComponentWiring>, output_wires
     to_remove_sorted.sort_unstable();
     for &i in to_remove_sorted.iter().rev() {
         components.remove(i);
+    }
+}
+
+/// Remove gates (Nand/And) whose output wire has no consumers at all.
+/// Iterates to a fixed point, since removing a gate may leave its inputs' producers dead too.
+fn eliminate_dead_gates(components: &mut Vec<wiring::ComponentWiring>, output_wires: &[wiring::WireIndex]) {
+    use std::collections::HashSet;
+    use wiring::ComponentWiring as CW;
+
+    loop {
+        // Collect all consumed wire bits and bus-consumed wires.
+        let mut consumed_bits: HashSet<(u32, u8)> = HashSet::new();
+        let mut bus_consumed: HashSet<u32> = HashSet::new();
+        for w in output_wires {
+            bus_consumed.insert(w.0);
+        }
+        for comp in components.iter() {
+            match comp {
+                CW::Nand(n) => {
+                    consumed_bits.insert((n.a.id.0, n.a.offset));
+                    consumed_bits.insert((n.b.id.0, n.b.offset));
+                }
+                CW::And(n) => {
+                    consumed_bits.insert((n.a.id.0, n.a.offset));
+                    consumed_bits.insert((n.b.id.0, n.b.offset));
+                }
+                CW::Mux(m) => {
+                    consumed_bits.insert((m.sel.id.0, m.sel.offset));
+                    bus_consumed.insert(m.a0.0);
+                    bus_consumed.insert(m.a1.0);
+                }
+                CW::Register(r) => {
+                    consumed_bits.insert((r.write.id.0, r.write.offset));
+                    bus_consumed.insert(r.data_in.0);
+                }
+                CW::RAM(r) => {
+                    consumed_bits.insert((r.write.id.0, r.write.offset));
+                    bus_consumed.insert(r.data_in.0);
+                    bus_consumed.insert(r.addr.0);
+                }
+                CW::MemorySystem(m) => {
+                    consumed_bits.insert((m.write.id.0, m.write.offset));
+                    bus_consumed.insert(m.data_in.0);
+                    bus_consumed.insert(m.addr.0);
+                }
+                CW::ROM(r) => {
+                    bus_consumed.insert(r.addr.0);
+                }
+            }
+        }
+
+        let before = components.len();
+        components.retain(|comp| {
+            match comp {
+                CW::Nand(n) => {
+                    bus_consumed.contains(&n.out.id.0)
+                        || consumed_bits.contains(&(n.out.id.0, n.out.offset))
+                }
+                CW::And(n) => {
+                    bus_consumed.contains(&n.out.id.0)
+                        || consumed_bits.contains(&(n.out.id.0, n.out.offset))
+                }
+                _ => true, // keep registers, RAM, ROM, muxes, memory systems
+            }
+        });
+
+        if components.len() == before { break; }
     }
 }
 

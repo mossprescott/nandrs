@@ -62,6 +62,11 @@ Undo earlier optimization so we have more muxes and less total gates; a little m
 
 Collapsed Nand/Not to unitary AndWiring op: 550KHz.
 
+Pruned unused outputs, including the carry-out bit from Add16, which allowed the mux folding pass to pullin the whole adder, or something like that: >900KHz.
+
+Things to look at next:
+- more than one place where there are 16 parallel Nands (i.e. And16 or Not16, probably); peephole optimize them?
+
 
 ## Simulation
 
