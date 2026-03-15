@@ -411,6 +411,91 @@ where
         }
     }).collect();
 
+    // Post-processing: move exclusive producers into mux branches.
+    let mut component_wiring = component_wiring;
+    {
+        use wiring::ComponentWiring as CW;
+
+        // Count how many components consume each wire (as an input).
+        let mut consumer_count: HashMap<wiring::WireIndex, usize> = HashMap::new();
+        let mut count = |w: wiring::WireIndex| *consumer_count.entry(w).or_insert(0) += 1;
+
+        for comp in &component_wiring {
+            match comp {
+                CW::Nand(n)         => { count(n.a.id); count(n.b.id); }
+                CW::Mux(m)          => { count(m.sel.id); count(m.a0); count(m.a1); }
+                CW::Register(r)     => { count(r.write.id); count(r.data_in); }
+                CW::RAM(r)          => { count(r.write.id); count(r.data_in); count(r.addr); }
+                CW::ROM(r)          => { count(r.addr); }
+                CW::MemorySystem(m) => { count(m.write.id); count(m.data_in); count(m.addr); }
+            }
+        }
+
+        // Chip-level outputs are also consumers.
+        for (_, b) in chip.reflect().outputs.iter() {
+            count(wire_indexes[&WireID::from(b)]);
+        }
+        drop(count);
+
+        // For each mux, check if a0/a1 wires are exclusively consumed by it.
+        // Collect (mux_index, wire, branch) pairs.
+        let mut claims: Vec<(usize, wiring::WireIndex, u8)> = Vec::new();
+        for (i, comp) in component_wiring.iter().enumerate() {
+            if let CW::Mux(m) = comp {
+                if consumer_count.get(&m.a0) == Some(&1) {
+                    claims.push((i, m.a0, 0));
+                }
+                if consumer_count.get(&m.a1) == Some(&1) {
+                    claims.push((i, m.a1, 1));
+                }
+            }
+        }
+
+        // Find producers for each claimed wire and mark them for removal.
+        // marked[j] = Some((mux_index, branch))
+        let mut marked: Vec<Option<(usize, u8)>> = vec![None; component_wiring.len()];
+        for (mux_idx, wire, branch) in &claims {
+            for (j, comp) in component_wiring.iter().enumerate() {
+                let output_wire = match comp {
+                    CW::Nand(n) => n.out.id,
+                    _ => continue,
+                };
+                if output_wire == *wire {
+                    marked[j] = Some((*mux_idx, *branch));
+                }
+            }
+        }
+
+        // Collect branches per mux, then remove marked components and assign.
+        let mut branch_contents: HashMap<usize, (Vec<wiring::ComponentWiring>, Vec<wiring::ComponentWiring>)> = HashMap::new();
+
+        // Compute index shift: how many marked elements appear before each position.
+        let mut shift_at: Vec<usize> = vec![0; marked.len() + 1];
+        for j in 0..marked.len() {
+            shift_at[j + 1] = shift_at[j] + if marked[j].is_some() { 1 } else { 0 };
+        }
+
+        // Remove marked elements in reverse order (preserves earlier indices) and collect.
+        for j in (0..marked.len()).rev() {
+            if let Some((mux_idx, branch)) = marked[j] {
+                let comp = component_wiring.remove(j);
+                let entry = branch_contents.entry(mux_idx).or_insert_with(|| (Vec::new(), Vec::new()));
+                if branch == 0 { entry.0.push(comp); } else { entry.1.push(comp); }
+            }
+        }
+
+        // Assign branches to their muxes (adjusting for shifted indices).
+        for (orig_mux_idx, (mut b0, mut b1)) in branch_contents {
+            let new_idx = orig_mux_idx - shift_at[orig_mux_idx];
+            if let CW::Mux(m) = &mut component_wiring[new_idx] {
+                b0.reverse();
+                b1.reverse();
+                m.branch0 = b0;
+                m.branch1 = b1;
+            }
+        }
+    }
+
     let n_wires = wire_indexes.len();
     let intf = chip.reflect();
 

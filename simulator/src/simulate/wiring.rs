@@ -31,6 +31,7 @@ pub(super) struct WireRef { pub(super) id: WireIndex, pub(super) offset: u8, pub
 
 
 /// Records connections involved in one step of evaluation. Could be called "Op", maybe?
+#[derive(Clone)]
 pub(super) enum ComponentWiring {
     Nand(NandWiring),
     Mux(MuxWiring),
@@ -42,10 +43,12 @@ pub(super) enum ComponentWiring {
 
 /// A single nand, referring to completely arbitrary bits of the words where it input and outputs
 /// are stored.
+#[derive(Clone)]
 pub(super) struct NandWiring { pub(super) a: BitRef, pub(super) b: BitRef, pub(super) out: BitRef }
 
 /// Select one result or another, as a primitive. Once the selector has been evaluated, only the
 /// inputs needed for the "active" branch need to be evaluated.
+#[derive(Clone)]
 pub(super) struct MuxWiring {
     pub(super) sel: BitRef,
     pub(super) a0: WireIndex,
@@ -59,12 +62,16 @@ pub(super) struct MuxWiring {
     pub(super) branch1: Vec<ComponentWiring>,
 }
 
+#[derive(Clone)]
 pub(super) struct RegisterWiring { pub(super) write: BitRef, pub(super) data_in: WireIndex, pub(super) data_out: WireIndex }
 
+#[derive(Clone)]
 pub(super) struct ROMWiring { pub(super) device_slot: usize, pub(super) out: WireIndex, pub(super) addr: WireIndex }
 
+#[derive(Clone)]
 pub(super) struct RAMWiring { pub(super) device_slot: usize, pub(super) out: WireIndex, pub(super) addr: WireIndex, pub(super) write: BitRef, pub(super) data_in: WireIndex }
 
+#[derive(Clone)]
 pub(super) struct MemorySystemWiring { pub(super) device_slot: usize, pub(super) out: WireIndex, pub(super) addr: WireIndex, pub(super) write: BitRef, pub(super) data_in: WireIndex }
 
 
