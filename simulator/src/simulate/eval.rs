@@ -202,11 +202,6 @@ impl ChipState {
             }
         }
 
-        // Two Nand passes: first propagates RAM/ROM outputs through memory logic
-        // (e.g. MemorySystem muxes), second lets downstream gates (ALU) use the
-        // correctly computed values. Needed because component order puts CPU before
-        // MemorySystem in the flattened list.
-        eval_logic(&mut self.wire_state, &self.wiring.component_wiring);
         eval_logic(&mut self.wire_state, &self.wiring.component_wiring);
     }
 }
