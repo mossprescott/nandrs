@@ -92,11 +92,13 @@ fn decode_truth_table() {
     assert_eq!(state.get("jmp_eq"), 0);
 }
 
+/// Note: the chip still works if decoding uses no gates and just interprets the bits of an A-instr
+/// as control signals, but a little bit of extra clarity here makes simulation more efficient.
 #[test]
 fn decode_optimal() {
     let components = flatten(Decode::chip()).components;
     let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
-    assert_eq!(nands, 0);
+    assert_eq!(nands, 24);
 }
 
 #[test]
@@ -143,8 +145,8 @@ fn cpu_optimal() {
     let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
     let muxes = components.iter().filter(|c| matches!(c, Computational::Mux(_))).count();
     let registers = components.iter().filter(|c| matches!(c, Computational::Register(_))).count();
-    assert_eq!(nands,   541);
-    assert_eq!(muxes,     9);
+    assert_eq!(nands,   557);
+    assert_eq!(muxes,    10);
     assert_eq!(registers, 3);
 }
 
@@ -330,6 +332,6 @@ fn computer_optimal() {
     let muxes  = components.iter().filter(|c| matches!(c, Computational::Mux(_))).count();
     assert_eq!(memsys,  1);
     assert_eq!(roms,    1);
-    assert_eq!(nands, 541);
-    assert_eq!(muxes,   9);
+    assert_eq!(nands, 557);
+    assert_eq!(muxes,  10);
 }

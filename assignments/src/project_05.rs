@@ -149,8 +149,12 @@ pub fn find_rom(state: &ChipState) -> ROMHandle {
         .expect("no ROM found")
 }
 
-/// Pure wiring; this component just makes the unpacking of instructions easier to test and
-/// to use separately.
+/// Strictly speaking, this *could* be pure wiring; this component just makes the unpacking of
+/// instructions easier to test and to use separately.
+///
+/// But treating the bits of an A-instruction as control signals means the simulator has to evaluate
+/// lots of meaningless signals (mostly, the ALU), so all these control lines are low when is_c is
+/// low. That costs a few gates, but saves a *lot* of evaluation.
 #[derive(Reflect, Chip)]
 pub struct Decode {
     /// Instuction word from the ROM
@@ -187,7 +191,7 @@ pub struct Decode {
 }
 
 impl Component for Decode {
-    // Note: in fact, this is only using Buffer, which is only Combinational, but it keeps
+    // Note: in fact, this is only using Buffer and And, which is only Combinational, but it keeps
     // life simple if everything in this file flattens to the same type.
     type Target = Project05Component;
 
@@ -206,25 +210,26 @@ impl Component for Decode {
             intf: self.reflect(),
             components: vec![
                 wrap(Buffer { a: self.instr.bit(15).clone(), out: self.is_c.clone() }),
+
                 // bit-14: unused
                 // bit-13: unused
 
                 wrap(Buffer { a: self.instr.bit(12).clone(), out: self.read_m.clone() }),
 
-                wrap(Buffer { a: self.instr.bit(11).clone(), out: self.zx.clone() }),
-                wrap(Buffer { a: self.instr.bit(10).clone(), out: self.nx.clone() }),
-                wrap(Buffer { a: self.instr.bit( 9).clone(), out: self.zy.clone() }),
-                wrap(Buffer { a: self.instr.bit( 8).clone(), out: self.ny.clone() }),
-                wrap(Buffer { a: self.instr.bit( 7).clone(), out: self.f.clone() }),
-                wrap(Buffer { a: self.instr.bit( 6).clone(), out: self.no.clone() }),
+                wrap(And { a: self.instr.bit(11).clone(), b: self.is_c.clone().into(), out: self.zx.clone() }),
+                wrap(And { a: self.instr.bit(10).clone(), b: self.is_c.clone().into(), out: self.nx.clone() }),
+                wrap(And { a: self.instr.bit( 9).clone(), b: self.is_c.clone().into(), out: self.zy.clone() }),
+                wrap(And { a: self.instr.bit( 8).clone(), b: self.is_c.clone().into(), out: self.ny.clone() }),
+                wrap(And { a: self.instr.bit( 7).clone(), b: self.is_c.clone().into(), out: self.f.clone() }),
+                wrap(And { a: self.instr.bit( 6).clone(), b: self.is_c.clone().into(), out: self.no.clone() }),
 
-                wrap(Buffer { a: self.instr.bit( 5).clone(), out: self.write_a.clone() }),
-                wrap(Buffer { a: self.instr.bit( 4).clone(), out: self.write_d.clone() }),
-                wrap(Buffer { a: self.instr.bit( 3).clone(), out: self.write_m.clone() }),
+                wrap(And { a: self.instr.bit( 5).clone(), b: self.is_c.clone().into(), out: self.write_a.clone() }),
+                wrap(And { a: self.instr.bit( 4).clone(), b: self.is_c.clone().into(), out: self.write_d.clone() }),
+                wrap(And { a: self.instr.bit( 3).clone(), b: self.is_c.clone().into(), out: self.write_m.clone() }),
 
-                wrap(Buffer { a: self.instr.bit( 2).clone(), out: self.jmp_lt.clone() }),
-                wrap(Buffer { a: self.instr.bit( 1).clone(), out: self.jmp_eq.clone() }),
-                wrap(Buffer { a: self.instr.bit( 0).clone(), out: self.jmp_gt.clone() }),
+                wrap(And { a: self.instr.bit( 2).clone(), b: self.is_c.clone().into(), out: self.jmp_lt.clone() }),
+                wrap(And { a: self.instr.bit( 1).clone(), b: self.is_c.clone().into(), out: self.jmp_eq.clone() }),
+                wrap(And { a: self.instr.bit( 0).clone(), b: self.is_c.clone().into(), out: self.jmp_gt.clone() }),
             ],
         })
     }
@@ -351,17 +356,12 @@ impl Component for CPU {
         };
         components.push(p01(next_addr_mux));
 
-        // === load_d = AND(is_c, write_d) ===
-        let load_d_gate = And { a: is_c.clone().into(), b: dec_write_d.into(), out: Output::new() };
-        let load_d = load_d_gate.out.clone();
-        components.push(p01(load_d_gate));
-
-        // === D register ===
-        let reg_d = Register16 { data_in: self.mem_data_out.clone().into(), write: load_d.into(), data_out: reg_d_out };
+        // === D register (write_d already gated with is_c in Decode) ===
+        let reg_d = Register16 { data_in: self.mem_data_out.clone().into(), write: dec_write_d.into(), data_out: reg_d_out };
         components.push(p03(reg_d));
 
-        // === mem_write = AND(is_c, write_m) ===
-        components.push(p01(And { a: is_c.clone().into(), b: dec_write_m.into(), out: self.mem_write.clone() }));
+        // === mem_write (write_m already gated with is_c in Decode) ===
+        components.push(p01(Buffer { a: dec_write_m.into(), out: self.mem_write.clone() }));
 
         // === Jump logic ===
         let not_ng  = Not { a: alu_ng.clone().into(), out: Output::new() };
@@ -372,11 +372,10 @@ impl Component for CPU {
         let jgt_and = And { a: jmp_gt.into(), b: is_pos.out.clone().into(), out: Output::new() };
         let j_lt_eq = Or  { a: jlt_and.out.clone().into(), b: jeq_and.out.clone().into(), out: Output::new() };
         let jump_any= Or  { a: j_lt_eq.out.clone().into(), b: jgt_and.out.clone().into(), out: Output::new() };
-        let do_jump = And { a: is_c.clone().into(), b: jump_any.out.clone().into(), out: Output::new() };
-        let do_jump_out = do_jump.out.clone();
+        let do_jump_out = jump_any.out.clone();
         for g in [p01(not_ng), p01(not_zr), p01(is_pos),
                   p01(jlt_and), p01(jeq_and), p01(jgt_and),
-                  p01(j_lt_eq), p01(jump_any), p01(do_jump)] {
+                  p01(j_lt_eq), p01(jump_any)] {
             components.push(g);
         }
 

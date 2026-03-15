@@ -151,8 +151,8 @@ fn alu_optimal() {
     let components = flatten(ALU::chip()).components;
     let nands = components.iter().filter(|c| matches!(c, Combinational::Nand(_))).count();
     let muxes = components.iter().filter(|c| matches!(c, Combinational::Mux(_))).count();
-    assert_eq!(nands, 433);
-    assert_eq!(muxes, 3);
+    assert_eq!(nands, 431);
+    assert_eq!(muxes, 4);
 }
 
 
@@ -174,24 +174,25 @@ fn alu_graph() {
          and16_4.b[0..15] <- notif16_3.out[0..15]\n\
          add16_5.a[0..15] <- notif16_1.out[0..15]\n\
          add16_5.b[0..15] <- notif16_3.out[0..15]\n\
-         mux_6.a0[0..15] <- and16_4.out[0..15]\n\
-         mux_6.a1[0..15] <- add16_5.out[0..15]\n\
-         mux_6.sel <- f\n\
-         not16_7.a[0..15] <- mux_6.out[0..15]\n\
-         mux_8.a0[0..15] <- mux_6.out[0..15]\n\
-         mux_8.a1[0..15] <- not16_7.out[0..15]\n\
-         mux_8.sel <- no\n\
-         zero16_9.a[0..15] <- mux_8.out[0..15]\n\
-         neg16_10.a[0..15] <- mux_8.out[0..15]\n\
-         not_11.a <- disable\n\
-         mux_12.a0[0..15] <- mux_8.out[0..15]\n\
+         not_6.a <- disable\n\
+         and_7.a <- f\n\
+         and_7.b <- not_6.out\n\
+         mux_8.a0[0..15] <- 0\n\
+         mux_8.a1[0..15] <- add16_5.out[0..15]\n\
+         mux_8.sel <- and_7.out\n\
+         mux_9.a0[0..15] <- and16_4.out[0..15]\n\
+         mux_9.a1[0..15] <- mux_8.out[0..15]\n\
+         mux_9.sel <- f\n\
+         not16_10.a[0..15] <- mux_9.out[0..15]\n\
+         mux_11.a0[0..15] <- mux_9.out[0..15]\n\
+         mux_11.a1[0..15] <- not16_10.out[0..15]\n\
+         mux_11.sel <- no\n\
+         mux_12.a0[0..15] <- mux_11.out[0..15]\n\
          mux_12.a1[0..15] <- 0\n\
          mux_12.sel <- disable\n\
-         and_13.a <- not_11.out\n\
-         and_13.b <- zero16_9.out\n\
-         and_14.a <- not_11.out\n\
-         and_14.b <- neg16_10.out\n\
-         ng <- and_14.out\n\
+         zero16_13.a[0..15] <- mux_12.out[0..15]\n\
+         neg16_14.a[0..15] <- mux_12.out[0..15]\n\
+         ng <- neg16_14.out\n\
          out[0..15] <- mux_12.out[0..15]\n\
-         zr <- and_13.out");
+         zr <- zero16_13.out");
 }
