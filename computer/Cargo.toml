@@ -1,0 +1,13 @@
+[package]
+name = "computer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+simulator = { path = "../simulator" }
+assignments = { path = "../assignments" }
+minifb = "0.27"
+png = "0.17"
+
+[build-dependencies]
+png = "0.17"
