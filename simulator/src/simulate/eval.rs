@@ -14,10 +14,11 @@ pub struct ChipState {
     /// The graph of components, input, and outputs, and where state is to be stored.
     wiring:       ChipWiring,
 
-    ram_devices:  Vec<DeviceRAM>,
-    rom_devices:  Vec<Rc<RefCell<crate::device::ROM>>>,
-    ms_devices:   Vec<Rc<RefCell<MSDevice>>>,
-    bus_residents: Vec<BusResident>,
+    ram_devices:    Vec<DeviceRAM>,
+    rom_devices:    Vec<Rc<RefCell<crate::device::ROM>>>,
+    ms_devices:     Vec<Rc<RefCell<MSDevice>>>,
+    serial_devices: Vec<Rc<RefCell<crate::device::Serial>>>,
+    bus_residents:   Vec<BusResident>,
 
     /// State of register contents as of the last clock cycle, as well as any wires holding constant
     /// values.
@@ -58,6 +59,10 @@ pub fn initialize(wiring: ChipWiring) -> ChipState {
         Rc::new(RefCell::new(MSDevice { devices: overlays }))
     }).collect();
 
+    let serial_devices: Vec<Rc<RefCell<crate::device::Serial>>> = wiring.serial_specs.iter()
+        .map(|_| Rc::new(RefCell::new(crate::device::Serial::new())))
+        .collect();
+
     let mut bus_residents: Vec<BusResident> = Vec::new();
     for ram in &ram_devices {
         bus_residents.push(BusResident::RAM(RAMHandle { base: 0, inner: Rc::clone(ram) }));
@@ -66,6 +71,9 @@ pub fn initialize(wiring: ChipWiring) -> ChipState {
         bus_residents.push(BusResident::ROM(ROMHandle { inner: Rc::clone(rom) }));
     }
     bus_residents.extend(ms_region_handles.into_iter().map(BusResident::RAM));
+    for serial in &serial_devices {
+        bus_residents.push(BusResident::Serial(SerialHandle { inner: Rc::clone(serial) }));
+    }
 
     let mut reg_state = vec![0u64; n_wires];
     for cw in &wiring.const_wiring {
@@ -77,6 +85,7 @@ pub fn initialize(wiring: ChipWiring) -> ChipState {
         ram_devices,
         rom_devices,
         ms_devices,
+        serial_devices,
         bus_residents,
         reg_state,
         input_vals: HashMap::new(),
@@ -141,6 +150,11 @@ impl ChipState {
                         let _ = self.ms_devices[ms.device_slot].borrow_mut().write(self.wire_state[ms.data_in.0 as usize]);
                     }
                 }
+                wiring::ComponentWiring::Serial(s) => {
+                    if read_bit(&self.wire_state, s.write) {
+                        let _ = self.serial_devices[s.device_slot].borrow_mut().write(self.wire_state[s.data_in.0 as usize]);
+                    }
+                }
                 _ => {}
             }
         }
@@ -197,6 +211,9 @@ impl ChipState {
                 }
                 wiring::ComponentWiring::MemorySystem(ms) => {
                     self.wire_state[ms.out.0 as usize] = self.ms_devices[ms.device_slot].borrow().read().unwrap_or(0);
+                }
+                wiring::ComponentWiring::Serial(s) => {
+                    self.wire_state[s.out.0 as usize] = self.serial_devices[s.device_slot].borrow().read().unwrap_or(0);
                 }
                 _ => {}
             }
@@ -266,8 +283,7 @@ fn write_bit(ws: &mut [u64], b: wiring::BitRef, value: bool) {
 pub enum BusResident {
     RAM(RAMHandle),
     ROM(ROMHandle),
-    // Future: Keyboard(KeyboardHandle),
-    // Future: TTY(TTYHandle),
+    Serial(SerialHandle),
 }
 
 /// A clonable handle to a RAM instance (standalone or a region within a MemorySystem).
@@ -296,4 +312,21 @@ impl ROMHandle {
         let _ = self.inner.borrow_mut().flash(data.into_boxed_slice());
     }
     pub fn size(&self) -> usize { self.inner.borrow().size }
+}
+
+/// A clonable handle to a Serial I/O device in the simulated circuit.
+#[derive(Clone)]
+pub struct SerialHandle {
+    inner: Rc<RefCell<crate::device::Serial>>,
+}
+
+impl SerialHandle {
+    /// Push a value from the outside world for the chip to read.
+    pub fn push(&self, val: u64)   { self.inner.borrow_mut().push(val); }
+    /// Pull the last value written by the chip.
+    pub fn pull(&self) -> u64      { self.inner.borrow().pull() }
+    /// Check whether the chip wrote during the last cycle.
+    pub fn was_written(&self) -> bool { self.inner.borrow().was_written() }
+    /// Clear the written flag.
+    pub fn clear(&self)            { self.inner.borrow_mut().clear(); }
 }

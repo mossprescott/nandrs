@@ -375,6 +375,55 @@ impl<A: Nat, D: Nat> Component for ROM<A, D> {
     }
 }
 
+
+/// Read/write one word at a time from/to the outside world. Could represent a directly-connected
+/// keyboard (as in the original design), or a serial port, a debug interface, or some combination
+/// of the above.
+///
+/// The chip sees data_out (read from the device) and can write via data_in + write.
+/// The simulator provides the backing store; the harness can push/pull values through a handle.
+#[derive(Clone)]
+pub struct Serial<Width: Nat> {
+    /// Data output: value made available to the chip by the external device.
+    pub data_out: OutputBus<Width>,
+
+    /// Data input: value the chip wants to send to the external device.
+    pub data_in: InputBus<Width>,
+
+    /// Write strobe: when 1, data_in is latched to the external device.
+    pub write: Input,
+}
+
+impl<W: Nat + Clone> Reflect for Serial<W> {
+    fn reflect(&self) -> Interface {
+        Interface {
+            inputs: HashMap::from([
+                ("data_in".to_string(), self.data_in.clone().into()),
+                ("write".to_string(),   self.write.clone().into()),
+            ]),
+            outputs: HashMap::from([
+                ("data_out".to_string(), self.data_out.clone().into()),
+            ]),
+        }
+    }
+    fn name(&self) -> String { "Serial".into() }
+}
+
+impl<W: Nat> Component for Serial<W> {
+    type Target = Serial<W>;
+    fn expand(&self) -> Option<IC<Serial<W>>> { None }
+}
+
+impl<W: Nat> Chip for Serial<W> {
+    fn chip() -> Self {
+        Serial { data_out: OutputBus::<W>::new(), data_in: InputBus::<W>::new(), write: Input::new() }
+    }
+}
+
+impl<W: Nat> AsConst for Serial<W> {
+    fn as_const(&self) -> Option<u64> { None }
+}
+
 /// Abstracted writable memory system; presents the same interface as a RAM, but the simulator
 /// allows an arbitrary implementation to be supplied. This is analogous to dropping a CPU into
 /// a new system where some other chip is in charge of managing the bus.
@@ -423,48 +472,58 @@ impl<A: Nat, D: Nat> AsConst for MemorySystem<A, D> {
     fn as_const(&self) -> Option<u64> { None }
 }
 
-
 // - Computational
 
 /// Type of components that participate in computers, including logic, registers, memory, and I/O.
 #[derive(Clone)]
 pub enum Computational<A: Nat, D: Nat> {
+    // combinational:
     Nand(Nand),
     Const(Const),
     Buffer(Buffer),
     Mux(Mux<D>),
     Mux1(Mux1),
+    // sequential:
     Register(Register<D>),
+    // computational:
     RAM(RAM<A, D>),
     ROM(ROM<A, D>),
+    Serial(Serial<D>),
     MemorySystem(MemorySystem<A, D>),
-    // TODO: I/O (Keyboard, TTY)
 }
 
 impl<A: Nat + Clone, D: Nat + Clone> Reflect for Computational<A, D> {
     fn reflect(&self) -> Interface {
         match self {
+            // combinational:
             Self::Nand(c)         => c.reflect(),
             Self::Const(c)        => c.reflect(),
             Self::Buffer(c)       => c.reflect(),
             Self::Mux(c)          => c.reflect(),
             Self::Mux1(c)         => c.reflect(),
+            // sequential:
             Self::Register(c)     => c.reflect(),
+            // computational:
             Self::RAM(c)          => c.reflect(),
             Self::ROM(c)          => c.reflect(),
+            Self::Serial(c)       => c.reflect(),
             Self::MemorySystem(c) => c.reflect(),
         }
     }
     fn name(&self) -> String {
         match self {
+            // combinational:
             Self::Nand(c)         => c.name(),
             Self::Const(c)        => c.name(),
             Self::Buffer(c)       => c.name(),
             Self::Mux(c)          => c.name(),
             Self::Mux1(c)         => c.name(),
+            // sequential:
             Self::Register(c)     => c.name(),
+            // computational:
             Self::RAM(c)          => c.name(),
             Self::ROM(c)          => c.name(),
+            Self::Serial(c)       => c.name(),
             Self::MemorySystem(c) => c.name(),
         }
     }
@@ -480,6 +539,7 @@ impl<A: Nat, D: Nat> Component for Computational<A, D> {
 
 pub type RAM16           = RAM<N16, N16>;
 pub type ROM16           = ROM<N16, N16>;
+pub type Serial16        = Serial<N16>;
 pub type MemorySystem16  = MemorySystem<N16, N16>;
 pub type Computational16 = Computational<N16, N16>;
 
