@@ -93,21 +93,23 @@ the fancier simulator.
 In addition to the essential primitive, `Nand`, the following are provided to help define designs in
 a natural way that can also be simulated efficiently:
 
+Combinational:
 - `Const`: no inputs, output is a fixed set of bits. No runtime cost.
-- `Buffer`: passes its singl, singe-bit input directly to its output. This is just a convenience
+- `Buffer`: passes its single, singe-bit input directly to its output. This is just a convenience
   components can use, often to connect inputs directly to outputs. No runtime cost.
-- `Mux`: two (muti-bit) inputs, and a `sel` input controlling which one is used. During simulation, `sel` is evaluated first; then the simulator only evaluates as needed for the "active" input.
+- `Mux`: two (muti-bit) inputs, and a `sel` input controlling which one is used. During simulation,
+  `sel` is evaluated first; then the simulator only evaluates as needed for the "active" input.
+- `FullAdder`: add three bits (left, right, and carry-in), producing `sum` and `carry` outputs.
+
+Sequential:
+- `Register`: multi-bit, latched, on-chip memory cell.
 
 
 ## Support Chips
 
-For the sake of efficiency, a few components are provided to the simulation as primitives; they
-are emulated directly in Rust, so their function is fixed. They interface with user circuits in the
-same way as any other component.
+Memory and I/O devices that would interface with a CPU over some kind of off-chip bus, are
+implemented in Rust with fixed functionality but some flexibility in use.
 
-- Register
-    - `bits`: arbitrary word size
-    - inputs: `load`, `data[bits]`, `out[bits]`
 - ROM
     - read-only memory, configured via `flash()`
     - `data_bits`: arbitrary word size (up to the host word size in bits, most likely 64)
@@ -122,16 +124,17 @@ same way as any other component.
     - outputs: `data_out[data_bits]`
     - `addr` is latched; the address that was applied in the *previous* cycle is   in effect
     - TODO: configurable "read" latency beyond the one cycle that the Hack design requires.
-- (TODO) I/O
-    - `Keyboard`: for reading one word at a time from the keyboard, serial interface, or other simulated device.
-    - `TTY`: for writing one word at a time to a printer, screen, serial interface, or other imaginary interface.
+- Serial
+    - a location where a single word of data can be exchanged between the CPU and the outside world.
+    Depending on the harness, can be treated an emulated Keyboard/Printer or external terminal, etc.
 - MemoryMap
     - exposes the same interface as RAM, and internally maps writes and reads to one or more
-      components (RAMs, ROMs, etc.), so they all share a flat address space.
+    components (RAMs, ROMs, and Serial) in a common address space.
+
 
 ## I/O
 
-Terminal-style: see "I/O" above. Characters can be written and read to and from the outside world
+Terminal-style: see `Serial` above. Characters can be written and read to and from the outside world
 using the builtin components for minimal overhead. During the simulation, the components can be
 wired to stdin/out, captured for testing, etc.
 
