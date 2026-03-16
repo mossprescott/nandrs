@@ -71,7 +71,9 @@ fn pc_behavior() {
 fn pc_optimal() {
     let components = flatten(PC::chip()).components;
     let nands = components.iter().filter(|c| matches!(c, Sequential::Nand(_))).count();
+    let adders = components.iter().filter(|c| matches!(c, Sequential::Adder(_))).count();
     let muxes = components.iter().filter(|c| matches!(c, Sequential::Mux(_))).count();
-    assert_eq!(nands, 82);
+    assert_eq!(nands, 7);
+    assert_eq!(adders, 15);
     assert_eq!(muxes, 3);
 }

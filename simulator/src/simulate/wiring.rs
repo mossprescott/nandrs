@@ -36,6 +36,7 @@ pub(super) enum ComponentWiring {
     // primitve:
     Nand(NandWiring),
     Mux(MuxWiring),
+    Adder(AdderWiring),
 
     // external:
     Register(RegisterWiring),
@@ -72,6 +73,17 @@ pub(super) struct MuxWiring {
     /// Wiring that needs to be updated in the case that sel == 1
     pub(super) branch1: Vec<ComponentWiring>,
 }
+
+/// Add a single bit-slice.
+#[derive(Clone)]
+pub(super) struct AdderWiring {
+    pub(super) a: BitRef,
+    pub(super) b: BitRef,
+    pub(super) c: BitRef,
+    pub(super) sum: BitRef,
+    pub(super) carry: BitRef,
+}
+
 
 #[derive(Clone)]
 pub(super) struct RegisterWiring { pub(super) write: BitRef, pub(super) data_in: WireIndex, pub(super) data_out: WireIndex }

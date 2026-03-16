@@ -1,11 +1,22 @@
-use simulator::{print_graph, Chip as _};
+use simulator::{Component, print_graph, Chip as _};
 use simulator::component::Combinational;
 use simulator::eval::eval;
-use crate::project_02::{flatten, HalfAdder, FullAdder, Inc16, Add16, Zero16, Neg16, ALU};
+use crate::project_01;
+use crate::project_02::{flatten, MyHalfAdder, MyFullAdder, Inc16, Add16, Zero16, Neg16, ALU};
+
+/// Flatten a chip that expands directly to Project01Components (e.g. MyHalfAdder, MyFullAdder).
+fn flatten_nands<C: simulator::Reflect + Component<Target = project_01::Project01Component>>(chip: C) -> simulator::IC<Combinational<simulator::nat::N16>> {
+    let ic = chip.expand().expect("expected expandable component");
+    simulator::IC {
+        name: format!("{} (flat)", chip.name()),
+        intf: chip.reflect(),
+        components: ic.components.into_iter().flat_map(|c| project_01::flatten(c).components).collect(),
+    }
+}
 
 #[test]
 fn half_adder_truth_table() {
-    let chip = flatten(HalfAdder::chip());
+    let chip = flatten_nands(MyHalfAdder::chip());
     let r = eval(&chip, [("a", 0), ("b", 0)]); assert_eq!(r["sum"], 0); assert_eq!(r["carry"], 0);
     let r = eval(&chip, [("a", 0), ("b", 1)]); assert_eq!(r["sum"], 1); assert_eq!(r["carry"], 0);
     let r = eval(&chip, [("a", 1), ("b", 0)]); assert_eq!(r["sum"], 1); assert_eq!(r["carry"], 0);
@@ -14,12 +25,12 @@ fn half_adder_truth_table() {
 
 #[test]
 fn half_adder_optimal() {
-    assert_eq!(flatten(HalfAdder::chip()).components.len(), 5);
+    assert_eq!(flatten_nands(MyHalfAdder::chip()).components.len(), 5);
 }
 
 #[test]
 fn full_adder_truth_table() {
-    let chip = flatten(FullAdder::chip());
+    let chip = flatten_nands(MyFullAdder::chip());
     let r = eval(&chip, [("a", 0), ("b", 0), ("c", 0)]); assert_eq!(r["sum"], 0); assert_eq!(r["carry"], 0);
     let r = eval(&chip, [("a", 0), ("b", 0), ("c", 1)]); assert_eq!(r["sum"], 1); assert_eq!(r["carry"], 0);
     let r = eval(&chip, [("a", 0), ("b", 1), ("c", 0)]); assert_eq!(r["sum"], 1); assert_eq!(r["carry"], 0);
@@ -32,7 +43,7 @@ fn full_adder_truth_table() {
 
 #[test]
 fn full_adder_optimal() {
-    assert_eq!(flatten(FullAdder::chip()).components.len(), 9);
+    assert_eq!(flatten_nands(MyFullAdder::chip()).components.len(), 9);
 }
 
 #[test]
@@ -46,9 +57,12 @@ fn inc16_truth_table() {
 
 #[test]
 fn inc16_optimal() {
-    // Not(1) for bit 0 + 15 x HalfAdder(6) = 91
-    // Not(1) + 15 x HalfAdder(5) = 76
-    assert_eq!(flatten(Inc16::chip()).components.len(), 76);
+    let components = flatten(Inc16::chip()).components;
+    let nands = components.iter().filter(|c| matches!(c, Combinational::Nand(_))).count();
+    let adders = components.iter().filter(|c| matches!(c, Combinational::Adder(_))).count();
+    // Not(1) for bit 0, plus 15 FullAdders for the carry chain
+    assert_eq!(nands, 1);
+    assert_eq!(adders, 15);
 }
 
 #[test]
@@ -64,8 +78,11 @@ fn add16_truth_table() {
 
 #[test]
 fn add16_optimal() {
-    // HalfAdder(5) + 15 x FullAdder(9) = 140
-    assert_eq!(flatten(Add16::chip()).components.len(), 140);
+    let components = flatten(Add16::chip()).components;
+    let nands = components.iter().filter(|c| matches!(c, Combinational::Nand(_))).count();
+    let adders = components.iter().filter(|c| matches!(c, Combinational::Adder(_))).count();
+    assert_eq!(nands, 0);
+    assert_eq!(adders, 16);
 }
 
 #[test]
@@ -150,8 +167,10 @@ fn alu_truth_table() {
 fn alu_optimal() {
     let components = flatten(ALU::chip()).components;
     let nands = components.iter().filter(|c| matches!(c, Combinational::Nand(_))).count();
+    let adders = components.iter().filter(|c| matches!(c, Combinational::Adder(_))).count();
     let muxes = components.iter().filter(|c| matches!(c, Combinational::Mux(_))).count();
-    assert_eq!(nands, 269);
+    assert_eq!(nands, 129);
+    assert_eq!(adders, 16);
     assert_eq!(muxes, 9);
 }
 

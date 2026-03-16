@@ -52,11 +52,11 @@ impl Component for Project01Component {
     fn expand(&self) -> Option<IC<Project01Component>> {
         match self {
             // primitive:
-            Project01Component::Nand(c)  => c.expand().map(|ic| unreachable!()),
-            Project01Component::Buffer(c) => c.expand().map(|ic| unreachable!()),
-            Project01Component::Const(c) => c.expand().map(|ic| unreachable!()),
-            Project01Component::Mux1(c)  => c.expand().map(|ic| unreachable!()),
-            Project01Component::Mux16(c) => c.expand().map(|ic| unreachable!()),
+            Project01Component::Nand(c)  => None,
+            Project01Component::Buffer(c) => None,
+            Project01Component::Const(c) => None,
+            Project01Component::Mux1(c)  => None,
+            Project01Component::Mux16(c) => None,
             // non-primitive:
             Project01Component::Not(c)   => c.expand(),
             Project01Component::And(c)   => c.expand(),
@@ -122,7 +122,7 @@ pub fn flatten<C: Reflect + Into<Project01Component>>(chip: C) -> IC<Combination
                 Project01Component::Const(c) => vec![c.into()],
                 Project01Component::Buffer(c) => vec![c.into()],
                 Project01Component::Mux1(c) => vec![Combinational::Mux1(c)],
-                Project01Component::Mux16(c) => vec![c.into()],
+                Project01Component::Mux16(c) => vec![Combinational::Mux(c)],
                 _ => panic!("Did not reduce to primitive: {:?}", comp.name()),
             },
             Some(ic) => ic.components.into_iter().flat_map(go).collect(),
@@ -233,7 +233,7 @@ impl Component for Xor {
 pub type Mux = simulator::component::Mux<N1>;
 
 /// Mux is now provided as a primitive (for arbitrary bits wide), but it's interesting to
-/// implementing separately anyway; this version isn't used by any other components
+/// implement separately anyway; this version isn't used by any other components
 ///
 /// Passes a0 through when sel is 0, a1 when sel is 1.
 #[derive(Reflect, Chip)]

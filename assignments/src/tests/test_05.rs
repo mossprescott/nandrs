@@ -140,9 +140,11 @@ fn cpu_optimal() {
     // TODO: actually what?
     let components = flatten(CPU::chip()).components;
     let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
+    let adders = components.iter().filter(|c| matches!(c, Computational::Adder(_))).count();
     let muxes = components.iter().filter(|c| matches!(c, Computational::Mux(_))).count();
     let registers = components.iter().filter(|c| matches!(c, Computational::Register(_))).count();
-    assert_eq!(nands,   387);
+    assert_eq!(nands,   172);
+    assert_eq!(adders,   31);
     assert_eq!(muxes,    15);
     assert_eq!(registers, 3);
 }
@@ -353,9 +355,11 @@ fn computer_optimal() {
     let memsys = components.iter().filter(|c| matches!(c, Computational::MemorySystem(_))).count();
     let roms   = components.iter().filter(|c| matches!(c, Computational::ROM(_))).count();
     let nands  = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
+    let adders = components.iter().filter(|c| matches!(c, Computational::Adder(_))).count();
     let muxes  = components.iter().filter(|c| matches!(c, Computational::Mux(_))).count();
     assert_eq!(memsys,  1);
     assert_eq!(roms,    1);
-    assert_eq!(nands, 387);
+    assert_eq!(nands, 172);
+    assert_eq!(adders,  31);
     assert_eq!(muxes,  15);
 }

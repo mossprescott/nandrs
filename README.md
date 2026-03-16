@@ -64,17 +64,11 @@ Collapsed Nand/Not to unitary AndWiring op: 550KHz.
 
 Pruned unused outputs, including the carry-out bit from Add16, which allowed the mux folding pass to pull in the whole adder, or something like that: >900KHz.
 
+Made FullAdder (the bit-slice adder) primitive: 1.25MHz. Actually surprisingly little speed-up
+considering FullAdder was nine gates/operations.
+
 Things to look at next:
 - more than one place where there are 16 parallel Nands (i.e. And16 or Not16, probably); peephole optimize them?
-- Inc16 and Add16 contribute a lot of the nand gates (5/bit for inc, 9/bit for Add). Obviously the
-  simulation could do either in a single step, for 5x/9x less wiring steps (time 16 bits per cycle.)
-  But there's no obvious, simple, general way to detect these patterns. If the chip doesn't
-  implement its adders the way we expect, they just won't match. And I don't really want to make
-  adders primitive.
-- On second thought, I don't want to make *16-bit ripple adder* a primitive. That's far too
-  specific. But maybe making one-bit *full-adder* primitive is reasonable. Surely there's nothing
-  interesting about those 9 Nands vs whatever other way you might add 3 bits, is there? That would
-  still allow for other ALU designs, while reducing the gate count for simulation dramatically.
 
 ## Simulation
 
