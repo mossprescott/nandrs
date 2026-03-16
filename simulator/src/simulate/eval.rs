@@ -5,9 +5,51 @@ use std::rc::Rc;
 use crate::device::MemoryDevice as _;
 
 use super::{ChipWiring, wiring};
+use super::memory::RegionMap;
 
-type DeviceRAM = Rc<RefCell<crate::device::RAM>>;
-type MSDevice   = crate::device::MemorySystem<DeviceRAM>;
+type DeviceRAM    = Rc<RefCell<crate::device::RAM>>;
+type DeviceROM    = Rc<RefCell<crate::device::ROM>>;
+type DeviceSerial = Rc<RefCell<crate::device::Serial>>;
+
+/// A device that can appear as a region within a MemorySystem's address space.
+enum MSRegion {
+    RAM(DeviceRAM),
+    ROM(DeviceROM),
+    Serial(DeviceSerial),
+}
+
+impl crate::device::MemoryDevice for MSRegion {
+    fn set_addr(&mut self, addr: crate::device::Addr) -> Result<(), crate::device::Error> {
+        match self {
+            MSRegion::RAM(d)    => d.borrow_mut().set_addr(addr),
+            MSRegion::ROM(d)    => d.borrow_mut().set_addr(addr),
+            MSRegion::Serial(d) => d.borrow_mut().set_addr(addr),
+        }
+    }
+    fn ticktock(&mut self) {
+        match self {
+            MSRegion::RAM(d)    => d.borrow_mut().ticktock(),
+            MSRegion::ROM(d)    => d.borrow_mut().ticktock(),
+            MSRegion::Serial(d) => d.borrow_mut().ticktock(),
+        }
+    }
+    fn read(&self) -> Result<crate::device::Data, crate::device::Error> {
+        match self {
+            MSRegion::RAM(d)    => d.borrow().read(),
+            MSRegion::ROM(d)    => d.borrow().read(),
+            MSRegion::Serial(d) => d.borrow().read(),
+        }
+    }
+    fn write(&mut self, word: crate::device::Data) -> Result<(), crate::device::Error> {
+        match self {
+            MSRegion::RAM(d)    => d.borrow_mut().write(word),
+            MSRegion::ROM(d)    => d.borrow_mut().write(word),
+            MSRegion::Serial(d) => d.borrow_mut().write(word),
+        }
+    }
+}
+
+type MSDevice = crate::device::MemorySystem<MSRegion>;
 
 /// Runtime state of a simulated chip, and access to its inputs and outputs.
 pub struct ChipState {
@@ -48,13 +90,27 @@ pub fn initialize(wiring: ChipWiring) -> ChipState {
         .map(|s| Rc::new(RefCell::new(crate::device::ROM::new(s.size))))
         .collect();
 
-    let mut ms_region_handles: Vec<RAMHandle> = Vec::new();
+    let mut ms_bus_residents: Vec<BusResident> = Vec::new();
     let ms_devices: Vec<Rc<RefCell<MSDevice>>> = wiring.ms_specs.iter().map(|spec| {
-        let mut overlays: Vec<crate::device::Overlay<DeviceRAM>> = Vec::new();
+        let mut overlays: Vec<crate::device::Overlay<MSRegion>> = Vec::new();
         for region in &spec.regions {
-            let ram: DeviceRAM = Rc::new(RefCell::new(crate::device::RAM::new(region.size)));
-            ms_region_handles.push(RAMHandle { base: region.base, inner: Rc::clone(&ram) });
-            overlays.push(crate::device::Overlay { base: region.base, device: ram });
+            match region {
+                RegionMap::RAM(r) => {
+                    let ram: DeviceRAM = Rc::new(RefCell::new(crate::device::RAM::new(r.size)));
+                    ms_bus_residents.push(BusResident::RAM(RAMHandle { base: r.base, inner: Rc::clone(&ram) }));
+                    overlays.push(crate::device::Overlay { base: r.base, device: MSRegion::RAM(ram) });
+                }
+                RegionMap::ROM(r) => {
+                    let rom: DeviceROM = Rc::new(RefCell::new(crate::device::ROM::new(r.size)));
+                    ms_bus_residents.push(BusResident::ROM(ROMHandle { inner: Rc::clone(&rom) }));
+                    overlays.push(crate::device::Overlay { base: r.base, device: MSRegion::ROM(rom) });
+                }
+                RegionMap::Serial(s) => {
+                    let serial: DeviceSerial = Rc::new(RefCell::new(crate::device::Serial::new()));
+                    ms_bus_residents.push(BusResident::Serial(SerialHandle { inner: Rc::clone(&serial) }));
+                    overlays.push(crate::device::Overlay { base: s.base, device: MSRegion::Serial(serial) });
+                }
+            }
         }
         Rc::new(RefCell::new(MSDevice { devices: overlays }))
     }).collect();
@@ -70,7 +126,7 @@ pub fn initialize(wiring: ChipWiring) -> ChipState {
     for rom in &rom_devices {
         bus_residents.push(BusResident::ROM(ROMHandle { inner: Rc::clone(rom) }));
     }
-    bus_residents.extend(ms_region_handles.into_iter().map(BusResident::RAM));
+    bus_residents.extend(ms_bus_residents);
     for serial in &serial_devices {
         bus_residents.push(BusResident::Serial(SerialHandle { inner: Rc::clone(serial) }));
     }

@@ -1,8 +1,10 @@
 mod wiring;
+mod memory;
 mod synth;
 mod eval;
 
-pub use synth::{synthesize, ChipWiring, RAMSpec, ROMSpec, MemorySystemSpec, SerialSpec, MemoryMap, RAMMap};
+pub use memory::{MemoryMap, RegionMap, RAMMap, ROMMap, SerialMap};
+pub use synth::{synthesize, ChipWiring, RAMSpec, ROMSpec, MemorySystemSpec, SerialSpec};
 pub use eval::{initialize, ChipState, BusResident, RAMHandle, ROMHandle, SerialHandle};
 
 /// Synthesize a chip and initialize its state in one step.

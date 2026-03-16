@@ -6,6 +6,7 @@ use crate::component::{Computational, Computational16};
 use crate::declare::{BusRef, IC, Reflect as _};
 
 use super::wiring::{self, Indexes, WireID, WireIndex, WireRef};
+use super::memory::{MemoryMap, RegionMap};
 
 /// Static, synthesized description of the circuit's wiring. Computed once and never mutated.
 pub struct ChipWiring {
@@ -34,28 +35,8 @@ pub struct ROMSpec { pub size: usize }
 /// Descriptor for a Serial I/O component.
 pub struct SerialSpec;
 
-/// Descriptor for a MemorySystem component, including its RAM region layout.
-pub struct MemorySystemSpec { pub regions: Vec<RAMMap> }
-
-/// Descriptor for one contiguous RAM region in a memory map.
-pub struct RAMMap {
-    pub size: usize,
-    pub base: usize,
-}
-
-/// Descriptor for the memory layout passed to [`synthesize`].
-///
-/// Specifies which regions exist and where they appear in the address space.
-/// All actual data storage lives in device RAM instances created by [`super::initialize`].
-pub struct MemoryMap {
-    pub contents: Vec<RAMMap>,
-}
-
-impl MemoryMap {
-    pub fn new(contents: Vec<RAMMap>) -> Self {
-        MemoryMap { contents }
-    }
-}
+/// Descriptor for a MemorySystem component, including its region layout.
+pub struct MemorySystemSpec { pub regions: Vec<RegionMap> }
 
 fn fmt_bit(b: wiring::BitRef) -> impl fmt::Display {
     struct D(wiring::BitRef);
@@ -185,7 +166,13 @@ impl fmt::Display for ChipWiring {
         }
         for (i, ms) in self.ms_specs.iter().enumerate() {
             writeln!(f, "  memory[{}]:", i)?;
-            for r in &ms.regions { writeln!(f, "    {} words @ 0x{:04x}", r.size, r.base)?; }
+            for r in &ms.regions {
+                match r {
+                    RegionMap::RAM(m)    => writeln!(f, "    RAM: {} words @ 0x{:04x}", m.size, m.base)?,
+                    RegionMap::ROM(m)    => writeln!(f, "    ROM: {} words @ 0x{:04x}", m.size, m.base)?,
+                    RegionMap::Serial(m) => writeln!(f, "    Serial @ 0x{:04x}", m.base)?,
+                }
+            }
         }
 
         let mut inputs: Vec<_> = self.input_wiring.iter().collect();
@@ -451,7 +438,7 @@ where
             }
             Computational::MemorySystem(c) => {
                 let slot = ms_specs.len();
-                let regions = memory_map.take().expect("only one MemorySystem supported").contents;
+                let regions = memory_map.take().expect("only one MemorySystem supported").regions;
                 ms_specs.push(MemorySystemSpec { regions });
 
                 let intf = c.reflect();
