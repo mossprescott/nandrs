@@ -205,6 +205,48 @@ impl<T: MemoryDevice> MemoryDevice for MemorySystem<T> {
     }
 }
 
+/// Single-word I/O device. The outside world pushes a value in; the chip can read it.
+/// The chip can also write a value out.
+///
+/// Unlike RAM/ROM, there is no address — it's a single register in each direction.
+pub struct Serial {
+    /// Value available for the chip to read (set by the harness/outside world).
+    read_val: Data,
+    /// Value written by the chip (readable by the harness/outside world).
+    write_val: Data,
+    /// Whether the chip wrote this cycle.
+    written: bool,
+}
+
+impl Serial {
+    pub fn new() -> Self {
+        Serial { read_val: 0, write_val: 0, written: false }
+    }
+
+    /// Push a value from the outside world for the chip to read.
+    pub fn push(&mut self, val: Data) { self.read_val = val; }
+
+    /// Pull the last value written by the chip (or 0 if nothing was written).
+    pub fn pull(&self) -> Data { self.write_val }
+
+    /// Check whether the chip wrote during the last cycle.
+    pub fn was_written(&self) -> bool { self.written }
+
+    /// Clear the written flag (call after pulling).
+    pub fn clear(&mut self) { self.written = false; }
+}
+
+impl MemoryDevice for Serial {
+    fn set_addr(&mut self, _addr: Addr) -> Result<(), Error> { Ok(()) }
+    fn ticktock(&mut self) {}
+    fn read(&self) -> Result<Data, Error> { Ok(self.read_val) }
+    fn write(&mut self, word: Data) -> Result<(), Error> {
+        self.write_val = word;
+        self.written = true;
+        Ok(())
+    }
+}
+
 /// Allow `Rc<RefCell<RAM>>` to be used as a `MemoryDevice`, enabling shared ownership of a RAM
 /// region (e.g. between a `MemorySystem` overlay and an external handle).
 impl MemoryDevice for std::rc::Rc<std::cell::RefCell<RAM>> {

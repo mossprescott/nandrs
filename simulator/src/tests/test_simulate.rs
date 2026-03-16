@@ -1,6 +1,6 @@
-use crate::component::{Register16, Sequential16, RAM16, Computational16};
+use crate::component::{Register16, Sequential16, RAM16, Serial16, Computational16};
 use crate::declare::{Chip as _, IC, Reflect as _};
-use crate::simulate::{simulate, MemoryMap};
+use crate::simulate::{simulate, BusResident, MemoryMap};
 
 #[test]
 fn register_behavior() {
@@ -82,3 +82,45 @@ fn ram_behavior() {
 
 // TODO: test RAM latency
 // TODO: test RAM limits (address out of bounds)
+
+/// Test reading and writing data via the Serial device.
+#[test]
+fn serial_behavior() {
+    let serial = Serial16::chip();
+    let chip = IC {
+        name: serial.name().to_string(),
+        intf: serial.reflect(),
+        components: vec![Computational16::Serial(serial)],
+    };
+    let mut state = simulate(&chip, MemoryMap::new(vec![]));
+
+    let handle = state.bus_residents().iter()
+        .find_map(|r| if let BusResident::Serial(h) = r { Some(h.clone()) } else { None })
+        .expect("no serial device");
+
+    // Initially reads 0.
+    assert_eq!(state.get("data_out"), 0);
+
+    // Push a value from the outside world; chip sees it after ticktock.
+    handle.push(1234);
+    state.ticktock();
+    assert_eq!(state.get("data_out"), 1234);
+
+    // Chip writes back via data_in + write strobe.
+    state.set("data_in", 5678);
+    state.set("write", 1);
+    state.ticktock();
+    assert_eq!(handle.pull(), 5678);
+    assert!(handle.was_written());
+
+    // Clear and verify.
+    handle.clear();
+    assert!(!handle.was_written());
+
+    // Push a new value; visible after ticktock.
+    handle.push(42);
+    state.set("write", 0);
+    state.ticktock();
+    assert_eq!(state.get("data_out"), 42);
+    assert_eq!(handle.pull(), 5678); // last chip write still available
+}

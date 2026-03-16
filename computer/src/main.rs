@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use minifb::{Key, Window, WindowOptions};
 
-use assignments::project_05::{Computer, flatten, find_ram, find_rom, find_screen, memory_system};
+use assignments::project_05::{Computer, flatten, find_ram, find_rom, find_screen, find_keyboard, memory_system};
 use assignments::project_06::{assemble, Program};
 use simulator::declare::Chip as _;
 use simulator::simulate::{simulate, synthesize, initialize, RAMHandle};
@@ -206,6 +206,7 @@ fn main() {
 
     let ram = find_ram(&state);
     let screen = find_screen(&state);
+    let keyboard = find_keyboard(&state);
     let win_width  = (WIDTH  + 2 * BEZEL) * scale;
     let win_height = (HEIGHT + 2 * BEZEL) * scale;
     let mut pixels = load_bezel(scale);
@@ -272,8 +273,7 @@ fn main() {
             }
         }
 
-        // TODO: inject hack_keycode into simulator once keyboard RAM support is added
-        let _key = hack_keycode(&window);
+        keyboard.push(hack_keycode(&window));
 
         render_screen(&screen, &mut pixels, scale);
         window.update_with_buffer(&pixels, win_width, win_height).unwrap();

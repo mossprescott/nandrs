@@ -41,6 +41,7 @@ pub(super) enum ComponentWiring {
     Register(RegisterWiring),
     ROM(ROMWiring),
     RAM(RAMWiring),
+    Serial(SerialWiring),
     MemorySystem(MemorySystemWiring),
 
     // synthetic:
@@ -83,6 +84,9 @@ pub(super) struct RAMWiring { pub(super) device_slot: usize, pub(super) out: Wir
 
 #[derive(Clone)]
 pub(super) struct MemorySystemWiring { pub(super) device_slot: usize, pub(super) out: WireIndex, pub(super) addr: WireIndex, pub(super) write: BitRef, pub(super) data_in: WireIndex }
+
+#[derive(Clone)]
+pub(super) struct SerialWiring { pub(super) device_slot: usize, pub(super) out: WireIndex, pub(super) write: BitRef, pub(super) data_in: WireIndex }
 
 /// Similar to NandWiring, but (un)inverting the result. This allows two steps to be collapsed
 /// whenever this very common pattern occurs.

@@ -6,6 +6,7 @@ use crate::component::{Computational, Computational16};
 use crate::declare::{BusRef, IC, Reflect as _};
 
 use super::wiring::{self, Indexes, WireID, WireIndex, WireRef};
+use super::memory::{MemoryMap, RegionMap};
 
 /// Static, synthesized description of the circuit's wiring. Computed once and never mutated.
 pub struct ChipWiring {
@@ -19,6 +20,8 @@ pub struct ChipWiring {
     pub ram_specs: Vec<RAMSpec>,
     /// One entry per ROM component; the index is the device slot referenced by the wiring.
     pub rom_specs: Vec<ROMSpec>,
+    /// One entry per Serial I/O component.
+    pub serial_specs: Vec<SerialSpec>,
     /// One entry per MemorySystem component, including the RAM region layout.
     pub ms_specs: Vec<MemorySystemSpec>,
 }
@@ -29,28 +32,11 @@ pub struct RAMSpec { pub size: usize }
 /// Descriptor for a ROM component.
 pub struct ROMSpec { pub size: usize }
 
-/// Descriptor for a MemorySystem component, including its RAM region layout.
-pub struct MemorySystemSpec { pub regions: Vec<RAMMap> }
+/// Descriptor for a Serial I/O component.
+pub struct SerialSpec;
 
-/// Descriptor for one contiguous RAM region in a memory map.
-pub struct RAMMap {
-    pub size: usize,
-    pub base: usize,
-}
-
-/// Descriptor for the memory layout passed to [`synthesize`].
-///
-/// Specifies which regions exist and where they appear in the address space.
-/// All actual data storage lives in device RAM instances created by [`super::initialize`].
-pub struct MemoryMap {
-    pub contents: Vec<RAMMap>,
-}
-
-impl MemoryMap {
-    pub fn new(contents: Vec<RAMMap>) -> Self {
-        MemoryMap { contents }
-    }
-}
+/// Descriptor for a MemorySystem component, including its region layout.
+pub struct MemorySystemSpec { pub regions: Vec<RegionMap> }
 
 fn fmt_bit(b: wiring::BitRef) -> impl fmt::Display {
     struct D(wiring::BitRef);
@@ -103,18 +89,25 @@ fn fmt_component_tree(f: &mut fmt::Formatter<'_>, comp: &wiring::ComponentWiring
             }
             Ok(())
         }
+
         wiring::ComponentWiring::Register(r) =>
             writeln!(f, "reg   write={} in=w{}[..] out=w{}[..]",
                 fmt_bit(r.write), r.data_in.0, r.data_out.0),
-        wiring::ComponentWiring::ROM(r) =>
-            writeln!(f, "rom[{}]  addr=w{}[..] out=w{}[..]",
-                r.device_slot, r.addr.0, r.out.0),
+
         wiring::ComponentWiring::RAM(r) =>
             writeln!(f, "ram[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
                 r.device_slot, r.addr.0, fmt_bit(r.write), r.data_in.0, r.out.0),
+        wiring::ComponentWiring::ROM(r) =>
+            writeln!(f, "rom[{}]  addr=w{}[..] out=w{}[..]",
+                r.device_slot, r.addr.0, r.out.0),
+        wiring::ComponentWiring::Serial(s) =>
+            writeln!(f, "serial[{}]  write={} in=w{}[..] out=w{}[..]",
+                s.device_slot, fmt_bit(s.write), s.data_in.0, s.out.0),
         wiring::ComponentWiring::MemorySystem(m) =>
             writeln!(f, "mem[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
                 m.device_slot, m.addr.0, fmt_bit(m.write), m.data_in.0, m.out.0),
+
+        // synthetic:
         wiring::ComponentWiring::And(n) =>
             writeln!(f, "and   a={} b={} out={}",
                 fmt_bit(n.a), fmt_bit(n.b), fmt_bit(n.out)),
@@ -168,9 +161,18 @@ impl fmt::Display for ChipWiring {
         for (i, s) in self.rom_specs.iter().enumerate() {
             writeln!(f, "  rom[{}]:    {} words", i, s.size)?;
         }
+        for (i, _) in self.serial_specs.iter().enumerate() {
+            writeln!(f, "  serial[{}]", i)?;
+        }
         for (i, ms) in self.ms_specs.iter().enumerate() {
             writeln!(f, "  memory[{}]:", i)?;
-            for r in &ms.regions { writeln!(f, "    {} words @ 0x{:04x}", r.size, r.base)?; }
+            for r in &ms.regions {
+                match r {
+                    RegionMap::RAM(m)    => writeln!(f, "    RAM: {} words @ 0x{:04x}", m.size, m.base)?,
+                    RegionMap::ROM(m)    => writeln!(f, "    ROM: {} words @ 0x{:04x}", m.size, m.base)?,
+                    RegionMap::Serial(m) => writeln!(f, "    Serial @ 0x{:04x}", m.base)?,
+                }
+            }
         }
 
         let mut inputs: Vec<_> = self.input_wiring.iter().collect();
@@ -304,6 +306,12 @@ where
                     assign(WireID::from(&intf.outputs["out"]));
                     assign(WireID::from(&intf.inputs["addr"]));
                 }
+                Computational::Serial(c) => {
+                    let intf = c.reflect();
+                    assign(WireID::from(&intf.outputs["data_out"]));
+                    assign(WireID::from(&intf.inputs["write"]));
+                    assign(WireID::from(&intf.inputs["data_in"]));
+                }
                 Computational::MemorySystem(c) => {
                     let intf = c.reflect();
                     assign(WireID::from(&intf.outputs["data_out"]));
@@ -317,7 +325,8 @@ where
 
     let mut ram_specs: Vec<RAMSpec> = Vec::new();
     let mut rom_specs: Vec<ROMSpec> = Vec::new();
-    let mut ms_specs:  Vec<MemorySystemSpec>  = Vec::new();
+    let mut serial_specs: Vec<SerialSpec> = Vec::new();
+    let mut ms_specs: Vec<MemorySystemSpec>  = Vec::new();
 
     let ref_for = |b: &BusRef| {
         let id = &WireID::from(b);
@@ -415,9 +424,21 @@ where
                     addr: wire_indexes[&WireID::from(&intf.inputs["addr"])],
                 }))
             }
+            Computational::Serial(_c) => {
+                let slot = serial_specs.len();
+                serial_specs.push(SerialSpec);
+
+                let intf = _c.reflect();
+                Some(CW::Serial(wiring::SerialWiring {
+                    device_slot: slot,
+                    out:     wire_indexes[&WireID::from(&intf.outputs["data_out"])],
+                    write:   ref_for(&intf.inputs["write"]),
+                    data_in: wire_indexes[&WireID::from(&intf.inputs["data_in"])],
+                }))
+            }
             Computational::MemorySystem(c) => {
                 let slot = ms_specs.len();
-                let regions = memory_map.take().expect("only one MemorySystem supported").contents;
+                let regions = memory_map.take().expect("only one MemorySystem supported").regions;
                 ms_specs.push(MemorySystemSpec { regions });
 
                 let intf = c.reflect();
@@ -474,6 +495,7 @@ where
         n_wires,
         ram_specs,
         rom_specs,
+        serial_specs,
         ms_specs,
     }
 }
@@ -516,13 +538,17 @@ fn peephole_nand_not(components: &mut Vec<wiring::ComponentWiring>, output_wires
                 bus_consumed.insert(r.data_in.0);
                 bus_consumed.insert(r.addr.0);
             }
+            CW::ROM(r) => {
+                bus_consumed.insert(r.addr.0);
+            }
+            CW::Serial(s) => {
+                wire_consumers.entry((s.write.id.0, s.write.offset)).or_default().insert(i);
+                bus_consumed.insert(s.data_in.0);
+            }
             CW::MemorySystem(m) => {
                 wire_consumers.entry((m.write.id.0, m.write.offset)).or_default().insert(i);
                 bus_consumed.insert(m.data_in.0);
                 bus_consumed.insert(m.addr.0);
-            }
-            CW::ROM(r) => {
-                bus_consumed.insert(r.addr.0);
             }
         }
     }
@@ -609,13 +635,17 @@ fn eliminate_dead_gates(components: &mut Vec<wiring::ComponentWiring>, output_wi
                     bus_consumed.insert(r.data_in.0);
                     bus_consumed.insert(r.addr.0);
                 }
+                CW::ROM(r) => {
+                    bus_consumed.insert(r.addr.0);
+                }
+                CW::Serial(s) => {
+                    consumed_bits.insert((s.write.id.0, s.write.offset));
+                    bus_consumed.insert(s.data_in.0);
+                }
                 CW::MemorySystem(m) => {
                     consumed_bits.insert((m.write.id.0, m.write.offset));
                     bus_consumed.insert(m.data_in.0);
                     bus_consumed.insert(m.addr.0);
-                }
-                CW::ROM(r) => {
-                    bus_consumed.insert(r.addr.0);
                 }
             }
         }
@@ -659,6 +689,7 @@ fn populate_mux_branches(
             CW::Register(r)     => { add_consumer(r.write.id, j); add_consumer(r.data_in, j); }
             CW::RAM(r)          => { add_consumer(r.write.id, j); add_consumer(r.data_in, j); add_consumer(r.addr, j); }
             CW::ROM(r)          => { add_consumer(r.addr, j); }
+            CW::Serial(s)       => { add_consumer(s.write.id, j); add_consumer(s.data_in, j); }
             CW::MemorySystem(m) => { add_consumer(m.write.id, j); add_consumer(m.data_in, j); add_consumer(m.addr, j); }
         }
     }
@@ -682,12 +713,13 @@ fn populate_mux_branches(
     // Helper: get input wires of a component.
     fn input_wires(comp: &CW) -> Vec<wiring::WireIndex> {
         match comp {
-            CW::Nand(n) => vec![n.a.id, n.b.id],
-            CW::And(n)  => vec![n.a.id, n.b.id],
-            CW::Mux(m)  => vec![m.sel.id, m.a0, m.a1],
+            CW::Nand(n)         => vec![n.a.id, n.b.id],
+            CW::And(n)          => vec![n.a.id, n.b.id],
+            CW::Mux(m)          => vec![m.sel.id, m.a0, m.a1],
             CW::Register(r)     => vec![r.write.id, r.data_in],
             CW::RAM(r)          => vec![r.write.id, r.data_in, r.addr],
             CW::ROM(r)          => vec![r.addr],
+            CW::Serial(s)       => vec![s.write.id, s.data_in],
             CW::MemorySystem(m) => vec![m.write.id, m.data_in, m.addr],
         }
     }

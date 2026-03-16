@@ -4,7 +4,7 @@ use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, 
 use simulator::Reflect as _;
 use simulator::Chip as _;
 use simulator::component::{Buffer, Nand, Register16, RAM16, ROM16, MemorySystem16, Sequential, Computational, Computational16};
-use simulator::simulate::{ChipState, BusResident, ROMHandle, RAMHandle, MemoryMap, RAMMap};
+use simulator::simulate::{ChipState, BusResident, ROMHandle, RAMHandle, SerialHandle, MemoryMap, RegionMap, RAMMap, ROMMap, SerialMap};
 use crate::project_01::{Project01Component, Const, Not, And, Or, Mux16};
 use crate::project_02::{Project02Component, ALU};
 use crate::project_03::{Project03Component, PC};
@@ -116,18 +116,34 @@ pub fn flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Computation
     }
 }
 
-/// Our MemorySystem: Main RAM (16KB), screen buffer (8KB), and I/O, starting from address 0.
-pub fn memory_system() -> MemoryMap {
-    MemoryMap::new(vec![
-        RAMMap { size: 16*1024, base: 0 },
-        RAMMap { size:  8*1024, base: 16*1024 },
-        // RAMMap for keyboard at 24*1024 when needed
-    ])
-}
-
 pub const RAM_BASE:    u16 = 0 * 1024;
 pub const SCREEN_BASE: u16 = 16 * 1024;
 pub const KEYBOARD:    u16 = 24 * 1024;
+
+/// Our MemorySystem: Main RAM (16KB), screen buffer (8KB), and I/O, starting from address 0.
+///
+/// Note: the ROM is *not* mapped into this address space; it has it's own separate connection to
+/// the CPU.
+pub fn memory_system() -> MemoryMap {
+    MemoryMap {
+        regions: vec![
+            // Main memory:
+            RegionMap::RAM(RAMMap {
+                size: (SCREEN_BASE - RAM_BASE) as usize,
+                base: RAM_BASE as usize
+            }),
+            // Screen buffer:
+            RegionMap::RAM(RAMMap {
+                size: (KEYBOARD - SCREEN_BASE) as usize,
+                base: SCREEN_BASE as usize
+            }),
+            // "Keyboard":
+            RegionMap::Serial(SerialMap {
+                base: KEYBOARD as usize
+            }),
+        ],
+    }
+}
 
 /// Access the main RAM region (base address 0) of the MemorySystem.
 pub fn find_ram(state: &ChipState) -> RAMHandle {
@@ -141,6 +157,14 @@ pub fn find_screen(state: &ChipState) -> RAMHandle {
     state.bus_residents().iter()
         .find_map(|r| if let BusResident::RAM(h) = r { if h.base == SCREEN_BASE as usize { Some(h.clone()) } else { None } } else { None })
         .expect("no RAM region at SCREEN_BASE")
+}
+
+/// Access the serial interface which is normally used to provide keyboard input to the CPU,
+/// assuming a normal MemorySystem is present. Otherwise panic.
+pub fn find_keyboard(state: &ChipState) -> SerialHandle {
+    state.bus_residents().iter()
+        .find_map(|r| if let BusResident::Serial(h) = r { Some(h.clone()) } else { None })
+        .expect("no Serial device found")
 }
 
 /// Access the ROM, assuming a normal MemorySystem is present. Otherwise panic.

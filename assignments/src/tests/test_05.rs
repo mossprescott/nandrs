@@ -1,4 +1,4 @@
-use crate::project_05::{CPU, Computer, Decode, flatten, SCREEN_BASE, find_ram, find_screen, find_rom, memory_system};
+use crate::project_05::{CPU, Computer, Decode, flatten, SCREEN_BASE, KEYBOARD, find_ram, find_screen, find_rom, find_keyboard, memory_system};
 use crate::project_06::parse_statement;
 use simulator::declare::{Chip as _, IC};
 use simulator::simulate::{simulate, ChipState, MemoryMap};
@@ -318,6 +318,33 @@ fn computer_stack_adjust() {
     // stack: [] (SP = 256); R5 = 256
     assert_eq!(ram.peek(0), 256);
     assert_eq!(ram.peek(5), 256);
+}
+
+#[test]
+fn computer_read_keyboard() {
+    let chip = flatten(Computer::chip());
+    let mut state = simulate(&chip, memory_system());
+
+    let rom = find_rom(&state);
+    let ram = find_ram(&state);
+    let keyboard = find_keyboard(&state);
+
+    let pgm: Vec<u64> = [
+        "@24576", // KEYBOARD
+        "D=M",
+        "@5",
+        "M=D",
+    ]
+        .map(|op| instr(op).into())
+        .to_vec();
+    rom.flash(pgm.clone());
+
+    keyboard.push(76);
+
+    for _ in 0..pgm.len() { state.ticktock(); }
+
+    assert_eq!(ram.peek(5), 76);
+    assert_eq!(ram.peek(KEYBOARD.into()), 0);  // The actual RAM is unaffected (doesn't map this address anyway)
 }
 
 #[test]

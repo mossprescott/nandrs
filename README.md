@@ -62,11 +62,19 @@ Undo earlier optimization so we have more muxes and less total gates; a little m
 
 Collapsed Nand/Not to unitary AndWiring op: 550KHz.
 
-Pruned unused outputs, including the carry-out bit from Add16, which allowed the mux folding pass to pullin the whole adder, or something like that: >900KHz.
+Pruned unused outputs, including the carry-out bit from Add16, which allowed the mux folding pass to pull in the whole adder, or something like that: >900KHz.
 
 Things to look at next:
 - more than one place where there are 16 parallel Nands (i.e. And16 or Not16, probably); peephole optimize them?
-
+- Inc16 and Add16 contribute a lot of the nand gates (5/bit for inc, 9/bit for Add). Obviously the
+  simulation could do either in a single step, for 5x/9x less wiring steps (time 16 bits per cycle.)
+  But there's no obvious, simple, general way to detect these patterns. If the chip doesn't
+  implement its adders the way we expect, they just won't match. And I don't really want to make
+  adders primitive.
+- On second thought, I don't want to make *16-bit ripple adder* a primitive. That's far too
+  specific. But maybe making one-bit *full-adder* primitive is reasonable. Surely there's nothing
+  interesting about those 9 Nands vs whatever other way you might add 3 bits, is there? That would
+  still allow for other ALU designs, while reducing the gate count for simulation dramatically.
 
 ## Simulation
 
@@ -140,12 +148,12 @@ actual screen.
 ## The Chip DSL
 
 The first interface to the simulator is an API for constructing descriptions of circuits. This
-description, called a `??? (TBD)`, consists of primitive/native and composite *components*,
-whose outputs and inputs are wired together.
+description, a `struct` which implements the `Component` trait, consists of primitive/native and
+composite *components*, whose outputs and inputs are wired together.
 
 Each type of component has a predefined set of inputs and outputs. For example, the primitive
 `Nand` has two one-bit inputs, `a` and `b`, and a single one-bit output `out`. An component can
-have more interesting inputs and outputs than that, any many user-defined components will.
+have more interesting inputs and outputs than that, d many user-defined components will.
 
 Components are constructed and used in several separate phases:
 
@@ -155,18 +163,19 @@ Any novel components are defined as `struct`s with corresponding `Component` imp
 
 `fn expand()` specifies how the component behaves, in terms of more primitive components.
 
-For example, a simple circuit might consist of just two Nands, with the output of one connected to
+For example, a simple circuit might consist of just two `Nand`s, with the output of one connected to
 the inputs of the other.
 
 ### Construction
 
-The final chip is assembled out of the necessary components. Any component can be realized as a complete
-chip; for example, when testing a single logic unit. See `Chip::chip()`.
+The final chip is assembled out of the necessary components. Any component can be realized as a
+complete chip; for example, when testing a single logic unit. See `Chip::chip()`, which is typically
+derived.
 
 ### Expansion
 
-The complete chip is expanded recursively so that all sub-components are reduced to just the
-pre-defined primitives and support chips descibed above.
+The complete chip is expanded recursively (flattened) so that all sub-components are reduced to just
+the pre-defined primitives and support chips descibed above.
 
 Before and/or after expansion, the graph may be transformed, for example to eliminate unused
 elements.
