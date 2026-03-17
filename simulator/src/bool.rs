@@ -1,6 +1,6 @@
 /// Type-level booleans.
 ///
-/// https://gist.github.com/bodil/a6f61e139fdf892b1a632c55f7cffc8b
+/// <https://gist.github.com/bodil/a6f61e139fdf892b1a632c55f7cffc8b>
 
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]

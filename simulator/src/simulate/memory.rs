@@ -19,7 +19,7 @@ pub enum RegionMap {
     Serial(SerialMap),
 }
 
-/// Descriptor for the memory layout passed to [`synthesize`].
+/// Descriptor for the memory layout passed to [`super::synthesize`].
 ///
 /// Specifies which regions exist and where they appear in the address space.
 /// All actual data storage lives in device instances.

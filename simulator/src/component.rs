@@ -309,7 +309,7 @@ impl<Width: Nat> Component for Register<Width> {
 pub type Register16 = Register<N16>;
 
 /// Type of components that participate in "sequential" circuits of a defined width: Combinational
-/// and Register<Width>.
+/// and `Register<Width>`.
 #[derive(Clone)]
 pub enum Sequential<Width: Nat> {
     Nand(Nand),

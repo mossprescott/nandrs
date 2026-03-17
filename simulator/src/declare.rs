@@ -72,7 +72,7 @@ impl<Width: Nat> OutputBus<Width> {
         OutputBus { width: PhantomData, id: self.id.clone(), offset: self.offset + i }
     }
 
-    /// Slice `len` bits starting at `offset` from this bus, returning an InputBus<Width>
+    /// Slice `len` bits starting at `offset` from this bus, returning an `InputBus<Width>`
     /// with the same wire identity but a runtime-specified effective width.
     /// Useful for connecting a subset of a wide bus to a narrower address input.
     pub fn mask(&self, offset: usize, len: usize) -> InputBus<Width> {
