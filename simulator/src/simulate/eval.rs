@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::device::MemoryDevice as _;
+use crate::word::{Word, Storable};
 
 use super::{ChipWiring, wiring};
 use super::memory::RegionMap;
@@ -52,9 +53,11 @@ impl crate::device::MemoryDevice for MSRegion {
 type MSDevice = crate::device::MemorySystem<MSRegion>;
 
 /// Runtime state of a simulated chip, and access to its inputs and outputs.
-pub struct ChipState {
+///
+/// Internal state is stored in u64 for efficiency.
+pub struct ChipState<Width: Storable> {
     /// The graph of components, input, and outputs, and where state is to be stored.
-    wiring:       ChipWiring,
+    wiring:       ChipWiring<Width>,
 
     ram_devices:    Vec<DeviceRAM>,
     rom_devices:    Vec<Rc<RefCell<crate::device::ROM>>>,
@@ -79,7 +82,7 @@ pub struct ChipState {
 }
 
 /// Allocate simulation state (RAM/ROM buffers, registers) and run an initial evaluation.
-pub fn initialize(wiring: ChipWiring) -> ChipState {
+pub fn initialize<Width: Storable>(wiring: ChipWiring<Width>) -> ChipState<Width> {
     let n_wires = wiring.n_wires;
 
     let ram_devices: Vec<DeviceRAM> = wiring.ram_specs.iter()
@@ -152,25 +155,25 @@ pub fn initialize(wiring: ChipWiring) -> ChipState {
     state
 }
 
-impl ChipState {
+impl<D: Storable> ChipState<D> {
 
     /// Set the value of an input. Combinational outputs will reflect this on the next `get()`.
-    pub fn set(&mut self, name: &str, value: u64) {
+    pub fn set(&mut self, name: &str, value: Word<D>) {
         if let Some(&wr) = self.wiring.input_wiring.get(name) {
-            self.input_vals.insert(wr, value);
+            self.input_vals.insert(wr, value.unsigned());
         }
         self.dirty = true;
     }
 
     /// Get the value of an output, re-evaluating combinational logic if any inputs changed.
-    pub fn get(&mut self, name: &str) -> u64 {
+    pub fn get(&mut self, name: &str) -> Word<D> {
         if self.dirty {
             self.evaluate();
             self.dirty = false;
         }
-        self.wiring.output_wiring.get(name)
+        Word::new(self.wiring.output_wiring.get(name)
             .map(|&wr| read_bus(&self.wire_state, wr))
-            .unwrap_or(0)
+            .unwrap_or(0))
     }
 
     /// RAM and ROM instances present in the simulated circuit.

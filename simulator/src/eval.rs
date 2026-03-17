@@ -13,9 +13,9 @@ use crate::word::{Storable, Word};
 /// Evaluate a chip statelessly; given named input values, return named output values.
 ///
 /// Input and output values are `Word<Width>`, wrapping the raw bits in a width-aware type.
-pub fn eval<'a, I, Width: Nat + Clone>(chip: &IC<Combinational<Width>>, inputs: I) -> HashMap<String, Word<Width>>
+pub fn eval<'a, Width: Nat + Clone, I>(chip: &IC<Combinational<Width>>, inputs: I) -> HashMap<String, Word<Width>>
 where
-    Width: Storable<crate::nat::N0>,
+    Width: Storable,
     I: IntoIterator<Item = (&'a str, Word<Width>)>,
 {
     let intf = chip.reflect();

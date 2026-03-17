@@ -4,7 +4,9 @@ use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, 
 use simulator::Reflect as _;
 use simulator::Chip as _;
 use simulator::component::{Buffer, Nand, Register16, RAM16, ROM16, MemorySystem16, Sequential, Computational, Computational16};
+use simulator::nat::N16;
 use simulator::simulate::{ChipState, BusResident, ROMHandle, RAMHandle, SerialHandle, MemoryMap, RegionMap, RAMMap, ROMMap, SerialMap};
+use simulator::word::Word16;
 use crate::project_01::{Project01Component, Const, Not, And, Or, Mux16};
 use crate::project_02::{Project02Component, ALU};
 use crate::project_03::{Project03Component, PC};
@@ -147,14 +149,14 @@ pub fn memory_system() -> MemoryMap {
 }
 
 /// Access the main RAM region (base address 0) of the MemorySystem.
-pub fn find_ram(state: &ChipState) -> RAMHandle {
+pub fn find_ram(state: &ChipState<N16>) -> RAMHandle {
     state.bus_residents().iter()
         .find_map(|r| if let BusResident::RAM(h) = r { if h.base == 0 { Some(h.clone()) } else { None } } else { None })
         .expect("no RAM region at base 0")
 }
 
 /// Access the screen RAM region (base address 16384) of the MemorySystem.
-pub fn find_screen(state: &ChipState) -> RAMHandle {
+pub fn find_screen(state: &ChipState<N16>) -> RAMHandle {
     state.bus_residents().iter()
         .find_map(|r| if let BusResident::RAM(h) = r { if h.base == SCREEN_BASE as usize { Some(h.clone()) } else { None } } else { None })
         .expect("no RAM region at SCREEN_BASE")
@@ -162,14 +164,14 @@ pub fn find_screen(state: &ChipState) -> RAMHandle {
 
 /// Access the serial interface which is normally used to provide keyboard input to the CPU,
 /// assuming a normal MemorySystem is present. Otherwise panic.
-pub fn find_keyboard(state: &ChipState) -> SerialHandle {
+pub fn find_keyboard(state: &ChipState<N16>) -> SerialHandle {
     state.bus_residents().iter()
         .find_map(|r| if let BusResident::Serial(h) = r { Some(h.clone()) } else { None })
         .expect("no Serial device found")
 }
 
 /// Access the ROM, assuming a normal MemorySystem is present. Otherwise panic.
-pub fn find_rom(state: &ChipState) -> ROMHandle {
+pub fn find_rom(state: &ChipState<N16>) -> ROMHandle {
     state.bus_residents().iter()
         .find_map(|r| if let BusResident::ROM(h) = r { Some(h.clone()) } else { None })
         .expect("no ROM found")

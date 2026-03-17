@@ -3,7 +3,9 @@ use crate::project_06::parse_statement;
 use simulator::declare::{Chip as _, IC};
 use simulator::simulate::{simulate, ChipState, MemoryMap};
 use simulator::component::{Computational, Computational16, MemorySystem16};
+use simulator::nat::N16;
 use simulator::print_graph;
+use simulator::word::Word16;
 
 /// Mostly this is testing the simulator's handling of the memory mapping we specified.
 #[test]
@@ -15,37 +17,37 @@ fn memory_system_behavior() {
     let ram    = find_ram(&state);
     let screen = find_screen(&state);
 
-    state.set("addr", 0);
+    state.set("addr", 0u16.into());
     state.ticktock();  // latch new address
-    state.set("data_in", 1234);
-    state.set("write", 1);
+    state.set("data_in", 1234u16.into());
+    state.set("write", true.into());
 
     // Now advance the clock:
     state.ticktock();
-    assert_eq!(state.get("data_out"), 1234);
+    assert_eq!(state.get("data_out"), 1234u16.into());
     assert_eq!(ram.peek(0), 1234);
 
     // Now write to the screen buffer:
     state.set("addr", SCREEN_BASE.into());
     state.ticktock();  // latch new address
-    state.set("data_in", 0x5555);
+    state.set("data_in", 0x5555u16.into());
     state.ticktock();
 
-    assert_eq!(state.get("data_out"), 0x5555);
+    assert_eq!(state.get("data_out"), 0x5555u16.into());
     assert_eq!(screen.peek(0), 0x5555);  // Address is mapped to the base of the screen ram
     assert_eq!(ram.peek(0), 1234);  // Unaffected
 
     // Out-of-range address; reads 0:
-    state.set("addr", 0x8000);
-    state.set("write", 0);
+    state.set("addr", 0x8000u16.into());
+    state.set("write", false.into());
     state.ticktock();
-    assert_eq!(state.get("data_out"), 0);
+    assert_eq!(state.get("data_out"), 0u16.into());
 
     // Bad write; nothing explodes:
-    state.set("data_in", 5678);
-    state.set("write", 1);
+    state.set("data_in", 5678u16.into());
+    state.set("write", true.into());
     state.ticktock();
-    assert_eq!(state.get("data_out"), 0);
+    assert_eq!(state.get("data_out"), 0u16.into());
 }
 
 // #[test]
@@ -57,7 +59,7 @@ fn memory_system_behavior() {
 //     assert_eq!(rams,    2);
 // }
 
-fn simulate_loud(chip: &IC<Computational16>, mmap: MemoryMap) -> ChipState {
+fn simulate_loud(chip: &IC<Computational16>, mmap: MemoryMap) -> ChipState<N16> {
     use simulator::simulate::{initialize, synthesize};
 
     let wiring = synthesize(&chip, mmap);
@@ -84,12 +86,41 @@ fn decode_truth_table() {
     let mut state = simulate_loud(&chip, no_ram);
 
     state.set("instr", instr("@1234").into());
-    assert_eq!(state.get("is_c"), 0);
+    assert_eq!(state.get("is_c"), false.into());
 
     state.set("instr", instr("D=0").into());
-    assert_eq!(state.get("is_c"), 1);
-    assert_eq!(state.get("write_d"), 1);
-    assert_eq!(state.get("jmp_eq"), 0);
+    assert_eq!(state.get("is_c"), true.into());
+    assert_eq!(state.get("write_d"), true.into());
+    assert_eq!(state.get("jmp_eq"), false.into());
+}
+
+#[test]
+fn decode_strict_truth_table() {
+     let chip = Decode::chip();
+
+    // When it breaks, it's nice to see what it tried to do
+    println!("{}", print_graph(&chip));
+
+    let chip = flatten(chip);
+
+    let no_ram = MemoryMap::new(vec![]);
+    let mut state = simulate_loud(&chip, no_ram);
+
+    // Every possible bit set:
+    state.set("instr", instr("@0x7FFF").into());
+    assert_eq!(state.get("is_c"), false.into());
+
+    // All the control signals for the CPU are false:
+    assert_eq!(state.get("write_a"), false.into());
+    assert_eq!(state.get("write_d"), false.into());
+    assert_eq!(state.get("write_m"), false.into());
+    assert_eq!(state.get("jmp_lt"), false.into());
+    assert_eq!(state.get("jmp_eq"), false.into());
+    assert_eq!(state.get("jmp_gt"), false.into());
+
+    // For the ALU, the Add operation is *not* selected.
+    assert_eq!(state.get("f"), false.into());
+
 }
 
 /// Note: the chip still works if decoding uses no gates and just interprets the bits of an A-instr
@@ -99,6 +130,7 @@ fn decode_optimal() {
     let components = flatten(Decode::chip()).components;
     let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
     assert_eq!(nands, 16);
+    // TODO: ??
 }
 
 #[test]
@@ -115,7 +147,7 @@ fn cpu_behavior() {
 
     // Load constant 1234 into A
     state.set("instr", instr("@1234").into());
-    assert_eq!(state.get("mem_write"), 0);
+    assert_eq!(state.get("mem_write"), false.into());
     state.ticktock();
 
     // Move it to D
@@ -129,9 +161,9 @@ fn cpu_behavior() {
     // "Write" to M (exposing the value)
     state.set("instr", instr("M=D").into());
     // Note: values all available within the cycle
-    assert_eq!(state.get("mem_write"), 1);
-    assert_eq!(state.get("mem_data_out"), 1234);
-    assert_eq!(state.get("mem_addr"), 256);
+    assert_eq!(state.get("mem_write"), true.into());
+    assert_eq!(state.get("mem_data_out"), 1234u16.into());
+    assert_eq!(state.get("mem_addr"), 256u16.into());
 }
 
 #[test]
@@ -174,7 +206,7 @@ fn computer_add_behavior() {
 
     for _ in 0..pgm.len() { state.ticktock(); }
 
-    assert_eq!(state.get("pc"), 6);
+    assert_eq!(state.get("pc"), 6u16.into());
     assert_eq!(ram.peek(1), 5);
 }
 
@@ -226,14 +258,14 @@ fn computer_max_behavior() {
     // TODO: make the looping prologue automatic and factor this out
     for _ in 0..pgm.len() {
         state.ticktock();
-        if state.get("pc") > (pgm.len()-2).try_into().unwrap() { break; }
+        if state.get("pc").unsigned() > (pgm.len()-2).try_into().unwrap() { break; }
     }
 
     assert_eq!(ram.peek(3), 5);
 
-    state.set("reset", 1);
+    state.set("reset", true.into());
     state.ticktock();
-    state.set("reset", 0);
+    state.set("reset", false.into());
 
     // Max in RAM[1]:
     ram.poke(1, 23456);
@@ -241,7 +273,7 @@ fn computer_max_behavior() {
 
     for _ in 0..pgm.len() {
         state.ticktock();
-        if state.get("pc") > (pgm.len()-2).try_into().unwrap() { break; }
+        if state.get("pc").unsigned() > (pgm.len()-2).try_into().unwrap() { break; }
     }
 
     assert_eq!(ram.peek(3), 23456);
@@ -279,8 +311,8 @@ fn computer_indirect_jump() {
     let ram = find_ram(&state);
 
     // Store target address in R14, then jump to it (as in a "call" or "return" sequence)
-    let target: u64 = 100;
-    ram.poke(14, target);
+    let target: Word16 = 100u16.into();
+    ram.poke(14, target.unsigned());
 
     let pgm: Vec<u64> = ["@14", "A=M", "JMP"]
         .map(|op| instr(op).into())

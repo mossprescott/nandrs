@@ -1,6 +1,7 @@
 use crate::project_03::{PC, flatten};
 use simulator::declare::{Chip as _};
 use simulator::component::Sequential;
+use simulator::nat::N16;
 use simulator::simulate::{MemoryMap, simulate};
 use simulator::print_graph;
 
@@ -14,57 +15,57 @@ fn pc_behavior() {
     let chip = flatten(chip);
 
     let no_ram = MemoryMap::new(vec![]);
-    let mut state = simulate(&chip, no_ram);
+    let mut state = simulate::<_, N16, N16>(&chip, no_ram);
 
-    assert_eq!(state.get("out"), 0);
+    assert_eq!(state.get("out"), 0u16.into());
 
     state.ticktock();
 
-    assert_eq!(state.get("out"), 0); // No change: no flags set
+    assert_eq!(state.get("out"), 0u16.into()); // No change: no flags set
 
     // "Normal" operation: inc is set and the value marches forward:
 
-    state.set("inc", 1);
+    state.set("inc", true.into());
 
-    assert_eq!(state.get("out"), 0); // No change: previous value still latched
-
-    state.ticktock();
-    assert_eq!(state.get("out"), 1);
+    assert_eq!(state.get("out"), 0u16.into()); // No change: previous value still latched
 
     state.ticktock();
-    assert_eq!(state.get("out"), 2);
+    assert_eq!(state.get("out"), 1u16.into());
+
+    state.ticktock();
+    assert_eq!(state.get("out"), 2u16.into());
 
     // Now hold the updated value:
 
-    state.set("inc", 0);
+    state.set("inc", false.into());
 
     state.ticktock();
 
-    assert_eq!(state.get("out"), 2);
+    assert_eq!(state.get("out"), 2u16.into());
 
     // Re-assert inc, but override it with a load:
 
-    state.set("inc", 1);
-    state.set("addr", 0x1234);
-    state.set("load", 1);
+    state.set("inc", true.into());
+    state.set("addr", 0x1234u16.into());
+    state.set("load", true.into());
 
     state.ticktock();
-    assert_eq!(state.get("out"), 0x1234);
+    assert_eq!(state.get("out"), 0x1234u16.into());
 
     state.ticktock();
-    assert_eq!(state.get("out"), 0x1234);  // Load still in effect
+    assert_eq!(state.get("out"), 0x1234u16.into());  // Load still in effect
 
-    state.set("load", 0);
+    state.set("load", false.into());
     state.ticktock();
-    assert_eq!(state.get("out"), 0x1235);  // addr ignored now, back to inc
+    assert_eq!(state.get("out"), 0x1235u16.into());  // addr ignored now, back to inc
 
     // Pull the ejection switch:
 
-    state.set("load", 1);  // Will be ignored while reset is asserted
-    state.set("reset", 1);
+    state.set("load", true.into());  // Will be ignored while reset is asserted
+    state.set("reset", true.into());
 
     state.ticktock();
-    assert_eq!(state.get("out"), 0);
+    assert_eq!(state.get("out"), 0u16.into());
 }
 
 #[test]

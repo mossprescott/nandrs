@@ -1,15 +1,18 @@
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::fmt;
+use std::marker::PhantomData;
 
-use crate::component::{Computational, Computational16};
+use crate::component::Computational;
 use crate::declare::{BusRef, IC, Reflect as _};
+use crate::nat::Nat;
+use crate::word::{Word, Storable};
 
 use super::wiring::{self, Indexes, WireID, WireIndex, WireRef};
 use super::memory::{MemoryMap, RegionMap};
 
 /// Static, synthesized description of the circuit's wiring. Computed once and never mutated.
-pub struct ChipWiring {
+pub struct ChipWiring<Width: Storable> {
     pub(super) component_wiring: Vec<wiring::ComponentWiring>,
     pub(super) input_wiring:  HashMap<String, wiring::WireRef>,
     pub(super) output_wiring: HashMap<String, wiring::WireRef>,
@@ -24,6 +27,8 @@ pub struct ChipWiring {
     pub serial_specs: Vec<SerialSpec>,
     /// One entry per MemorySystem component, including the RAM region layout.
     pub ms_specs: Vec<MemorySystemSpec>,
+
+    _width: PhantomData<Width>,
 }
 
 /// Descriptor for a standalone RAM component.
@@ -157,7 +162,7 @@ fn count_components(components: &[wiring::ComponentWiring]) -> ComponentCounts {
     ComponentCounts { gates, adders }
 }
 
-impl fmt::Display for ChipWiring {
+impl<Width: Storable> fmt::Display for ChipWiring<Width> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut muxes = 0u32;
         let mut registers = 0u32;
@@ -220,7 +225,7 @@ impl fmt::Display for ChipWiring {
         }
 
         for cw in &self.const_wiring {
-            writeln!(f, "  const: w{} = {}", cw.out.0, cw.value)?;
+            writeln!(f, "  const: w{} = {}", cw.out.0, Word::<Width>::new(cw.value))?;
         }
 
         for (i, comp) in self.component_wiring.iter().enumerate() {
@@ -238,11 +243,11 @@ impl fmt::Display for ChipWiring {
 ///
 /// Note: currently 16-bit words are assumed, but up to 64-bits wouldn't be a problem if the type
 /// was generalized.
-pub fn synthesize<C>(chip: &IC<C>, memory_map: MemoryMap) -> ChipWiring
+pub fn synthesize<C, A: Nat + Storable + Clone, D: Nat + Storable + Clone>(chip: &IC<C>, memory_map: MemoryMap) -> ChipWiring<D>
 where
-    C: Clone + crate::Reflect + Into<Computational16>,
+    C: Clone + crate::Reflect + Into<Computational<A, D>>,
 {
-    let components: Vec<Computational16> = chip.components.iter().cloned().map(Into::into).collect();
+    let components: Vec<Computational<A, D>> = chip.components.iter().cloned().map(Into::into).collect();
     let mut memory_map = Some(memory_map);
 
     // Build map of wires that have been connected directly to some existing wire; when the Buffer's
@@ -549,6 +554,7 @@ where
         rom_specs,
         serial_specs,
         ms_specs,
+        _width: PhantomData,
     }
 }
 

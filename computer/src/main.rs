@@ -9,6 +9,7 @@ use assignments::project_05::{Computer, flatten, find_ram, find_rom, find_screen
 use assignments::project_06::{assemble, Program};
 use simulator::declare::Chip as _;
 use simulator::simulate::{simulate, synthesize, initialize, RAMHandle};
+use simulator::word::Word16;
 
 const WIDTH: usize = 512;
 const HEIGHT: usize = 256;
@@ -178,9 +179,10 @@ fn main() {
 
     let Program { instructions, symbols } = assemble(&src);
 
-    let mut symbols_by_addr: HashMap<u16, Vec<String>> = HashMap::new();
+    let mut symbols_by_addr: HashMap<Word16, Vec<String>> = HashMap::new();
     for (name, addr) in &symbols {
-        symbols_by_addr.entry(*addr).or_default().push(name.clone());
+        let addr: Word16 = (*addr).into();
+        symbols_by_addr.entry(addr).or_default().push(name.clone());
     }
 
     println!("computer: loaded {} instructions from {path}", instructions.len());
@@ -220,16 +222,16 @@ fn main() {
     let mut interval_start = Instant::now();
     let mut interval_cycles: u64 = 0;
 
-    let print_state = |pc: u16, cycle: u64| {
+    let print_state = |pc: Word16, cycle: u64| {
         let labels = symbols_by_addr.get(&pc).map(|v| format!(" [{}]", v.join(", "))).unwrap_or_default();
         println!("pc={pc}{labels}: (cycle {})", fmt_commas(cycle));
         println!("  SP: {}", ram.peek(0));
-        let asm = instructions.get(pc as usize).map(|&i| disassemble(i)).unwrap_or("?".to_string());
+        let asm = instructions.get(pc.unsigned() as usize).map(|&i| disassemble(i)).unwrap_or("?".to_string());
         println!("  {asm}")
     };
 
     const TRACE_SKIP: &[&str] = &["math.abs", "math.multiply"];
-    let print_fn_entry = |pc: u16, cycle: u64| {
+    let print_fn_entry = |pc: Word16, cycle: u64| {
         if let Some(labels) = symbols_by_addr.get(&pc) {
             let fn_labels: Vec<&str> = labels.iter()
                 .filter(|l| l.contains('.') && !l.contains('$') && !l.contains('_'))
@@ -243,13 +245,13 @@ fn main() {
     };
 
     if verbose {
-        print_state(state.get("pc") as u16, cycle);
+        print_state(state.get("pc"), cycle);
     } else if trace {
-        print_fn_entry(state.get("pc") as u16, cycle);
+        print_fn_entry(state.get("pc"), cycle);
     }
 
     let mut halted = false;
-    let halt_addr = symbols.get("sys.halt").copied();
+    let halt_addr: Option<Word16> = symbols.get("sys.halt").copied().map(Into::into);
 
     while window.is_open() {
         if !halted {
@@ -261,14 +263,14 @@ fn main() {
                 interval_cycles += 1;
                 batch += 1;
 
-                let pc = state.get("pc") as u16;
+                let pc = state.get("pc");
                 if verbose {
                     let labels = symbols_by_addr.get(&pc).map(|v| format!(" [{}]", v.join(", "))).unwrap_or_default();
                     if !labels.is_empty() {
                         print_state(pc, cycle);
                     }
                 } else if trace {
-                    print_fn_entry(state.get("pc") as u16, cycle);
+                    print_fn_entry(state.get("pc"), cycle);
                 }
 
                 if halt_addr == Some(pc) {
