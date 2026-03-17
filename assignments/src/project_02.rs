@@ -3,13 +3,13 @@
 use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, AsConst, Chip};
 use simulator::Reflect as _;
 use simulator::Chip as _;
-use simulator::component::Combinational;
+use simulator::component::{Combinational, FullAdder};
 use simulator::nat::N16;
 use crate::project_01::{Project01Component, Nand, Const, Buffer, Mux1, Mux16, Not16, And16, Not, Xor, And, Or};
 
 pub enum Project02Component {
     Project01(Project01Component),
-    HalfAdder(HalfAdder),
+    // HalfAdder(HalfAdder),
     FullAdder(FullAdder),
     Inc16(Inc16),
     Add16(Add16),
@@ -19,7 +19,6 @@ pub enum Project02Component {
 }
 
 impl From<Project01Component> for Project02Component { fn from(c: Project01Component) -> Self { Project02Component::Project01(c) } }
-impl From<HalfAdder> for Project02Component { fn from(c: HalfAdder) -> Self { Project02Component::HalfAdder(c) } }
 impl From<FullAdder> for Project02Component { fn from(c: FullAdder) -> Self { Project02Component::FullAdder(c) } }
 impl From<Inc16>     for Project02Component { fn from(c: Inc16)     -> Self { Project02Component::Inc16(c)     } }
 impl From<Add16>     for Project02Component { fn from(c: Add16)     -> Self { Project02Component::Add16(c)     } }
@@ -33,8 +32,7 @@ impl Component for Project02Component {
     fn expand(&self) -> Option<IC<Project02Component>> {
         match self {
             Project02Component::Project01(c) => c.expand().map(|ic| IC { name: ic.name, intf: ic.intf, components: ic.components.into_iter().map(Into::into).collect() }),
-            Project02Component::HalfAdder(c) => c.expand(),
-            Project02Component::FullAdder(c) => c.expand(),
+            Project02Component::FullAdder(_) => None,
             Project02Component::Inc16(c)     => c.expand(),
             Project02Component::Add16(c)     => c.expand(),
             Project02Component::Zero16(c)    => c.expand(),
@@ -48,7 +46,6 @@ impl Reflect for Project02Component {
     fn reflect(&self) -> simulator::Interface {
         match self {
             Project02Component::Project01(c) => c.reflect(),
-            Project02Component::HalfAdder(c) => c.reflect(),
             Project02Component::FullAdder(c) => c.reflect(),
             Project02Component::Inc16(c)     => c.reflect(),
             Project02Component::Add16(c)     => c.reflect(),
@@ -60,7 +57,6 @@ impl Reflect for Project02Component {
     fn name(&self) -> String {
         match self {
             Project02Component::Project01(c) => c.name(),
-            Project02Component::HalfAdder(c) => c.name(),
             Project02Component::FullAdder(c) => c.name(),
             Project02Component::Inc16(c)     => c.name(),
             Project02Component::Add16(c)     => c.name(),
@@ -83,6 +79,7 @@ pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Combination
         match comp.expand() {
             None => match comp {
                 Project02Component::Project01(p) => crate::project_01::flatten(p).components,
+                Project02Component::FullAdder(c) => vec![Combinational::Adder(c)],
                 _ => panic!("Did not reduce to primitive: {:?}", comp.name()),
             },
             Some(ic) => ic.components.into_iter().flat_map(go).collect(),
@@ -95,17 +92,22 @@ pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Combination
     }
 }
 
+/// FullAdder is now provided as a primitive, but it's interesting to implement this separately
+/// anyway; this version isn't used by any other components.
+///
 /// sum = 1s-digit of two-bit sum, carry = 2s-digit
+///
+/// Future: for pedagocical purposes, define this as HalfAdder here, with reduction to Nands.
 #[derive(Reflect, Chip)]
-pub struct HalfAdder {
+pub struct MyHalfAdder {
     pub a:     Input,
     pub b:     Input,
     pub sum:   Output,
     pub carry: Output,
 }
 
-impl Component for HalfAdder {
-    type Target = Project02Component;
+impl Component for MyHalfAdder {
+    type Target = Project01Component;
 
     /*
     Equivalent to:
@@ -113,7 +115,7 @@ impl Component for HalfAdder {
       carry = And {a = inputs.a, b: inputs.b}
     but flattened to use only 5 Nands.
      */
-    fn expand(&self) -> Option<IC<Project02Component>> {
+    fn expand(&self) -> Option<IC<Project01Component>> {
         // n1 = NAND(a,b) is shared: XOR reuses it, carry = NOT(n1) = NAND(n1,n1)
         let n1    = Nand { a: self.a.clone(),        b: self.b.clone(),        out: Output::new() };
         let n2    = Nand { a: self.a.clone(),         b: n1.out.clone().into(), out: Output::new() };
@@ -121,18 +123,24 @@ impl Component for HalfAdder {
         let sum   = Nand { a: n2.out.clone().into(),  b: n3.out.clone().into(), out: self.sum.clone() };
         let carry = Nand { a: n1.out.clone().into(),  b: n1.out.clone().into(), out: self.carry.clone() };
         Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![
-            Project01Component::from(n1).into(),
-            Project01Component::from(n2).into(),
-            Project01Component::from(n3).into(),
-            Project01Component::from(sum).into(),
-            Project01Component::from(carry).into(),
+            n1.into(),
+            n2.into(),
+            n3.into(),
+            sum.into(),
+            carry.into(),
         ]})
     }
 }
 
+/// FullAdder is now provided as a primitive, but it's interesting to implement separately anyway;
+/// this version isn't used by any other components
+///
 /// sum = 1s-digit of three-bit sum, carry = 2s-digit
+///
+/// Future: for pedagocical purposes, define this here, with reduction to Nands. Then arrange for it
+/// *not* to be expanded when we want to do an efficient simulation.
 #[derive(Reflect, Chip)]
-pub struct FullAdder {
+pub struct MyFullAdder {
     pub a:     Input,
     pub b:     Input,
     pub c:     Input,
@@ -140,13 +148,13 @@ pub struct FullAdder {
     pub carry: Output,
 }
 
-impl Component for FullAdder {
-    type Target = Project02Component;
+impl Component for MyFullAdder {
+    type Target = Project01Component;
 
     /*
      Some sharing of common gates to get down to the minimal 9 gates.
      */
-    fn expand(&self) -> Option<IC<Project02Component>> {
+    fn expand(&self) -> Option<IC<Project01Component>> {
         // n4 = XOR(a,b); n5 = NAND(c, n4) shared by sum and carry paths
         let n1    = Nand { a: self.a.clone(),        b: self.b.clone(),        out: Output::new() };
         let n2    = Nand { a: self.a.clone(),         b: n1.out.clone().into(), out: Output::new() };
@@ -158,15 +166,15 @@ impl Component for FullAdder {
         let sum   = Nand { a: n6.out.clone().into(),  b: n7.out.clone().into(), out: self.sum.clone() };
         let carry = Nand { a: n1.out.clone().into(),  b: n5.out.clone().into(), out: self.carry.clone() };
         Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![
-            Project01Component::from(n1).into(),
-            Project01Component::from(n2).into(),
-            Project01Component::from(n3).into(),
-            Project01Component::from(n4).into(),
-            Project01Component::from(n5).into(),
-            Project01Component::from(n6).into(),
-            Project01Component::from(n7).into(),
-            Project01Component::from(sum).into(),
-            Project01Component::from(carry).into(),
+            n1.into(),
+            n2.into(),
+            n3.into(),
+            n4.into(),
+            n5.into(),
+            n6.into(),
+            n7.into(),
+            sum.into(),
+            carry.into(),
         ]})
     }
 }
@@ -182,15 +190,26 @@ impl Component for Inc16 {
     type Target = Project02Component;
 
     fn expand(&self) -> Option<IC<Project02Component>> {
+        let zero = Const { value: 0, out: Output16::new() };
+        let zero_bit: Input = zero.out.bit(0).into();
         // bit 0: out[0] = NOT(a[0]); carry = a[0] (the carry-in is implicitly 1)
         let a0   = self.a.bit(0);
         let not0 = Not { a: a0.clone(), out: self.out.bit(0) };
         let mut carry: Input = a0;
-        let mut components: Vec<Project02Component> = vec![Project01Component::from(not0).into()];
+        let mut components: Vec<Project02Component> = vec![
+            Project01Component::from(zero).into(),
+            Project01Component::from(not0).into(),
+        ];
         for i in 1..16 {
-            let ha = HalfAdder { a: self.a.bit(i), b: carry, sum: self.out.bit(i), carry: Output::new() };
-            carry = ha.carry.clone().into();
-            components.push(ha.into());
+            let add = FullAdder {
+                a: self.a.bit(i),
+                b: zero_bit.clone(),
+                c: carry,
+                sum: self.out.bit(i),
+                carry: Output::new(),
+            };
+            carry = add.carry.clone().into();
+            components.push(add.into());
         }
         Some(IC { name: self.name().to_string(), intf: self.reflect(), components })
     }
@@ -208,13 +227,32 @@ impl Component for Add16 {
     type Target = Project02Component;
 
     fn expand(&self) -> Option<IC<Project02Component>> {
-        let ha0 = HalfAdder { a: self.a.bit(0), b: self.b.bit(0), sum: self.out.bit(0), carry: Output::new() };
-        let mut carry: Input = ha0.carry.clone().into();
-        let mut components: Vec<Project02Component> = vec![ha0.into()];
+        let zero = Const { value: 0, out: Output16::new() };
+
+        // bit 0: half-add (carry-in is 0)
+        let add0 = FullAdder {
+            a: self.a.bit(0),
+            b: self.b.bit(0),
+            c: zero.out.bit(0).into(),
+            sum: self.out.bit(0),
+            carry: Output::new(),
+        };
+        let mut carry: Input = add0.carry.clone().into();
+        let mut components: Vec<Project02Component> = vec![
+            Project01Component::from(zero).into(),
+            add0.into(),
+        ];
+
         for i in 1..16 {
-            let fa = FullAdder { a: self.a.bit(i), b: self.b.bit(i), c: carry, sum: self.out.bit(i), carry: Output::new() };
-            carry = fa.carry.clone().into();
-            components.push(fa.into());
+            let add = FullAdder {
+                a: self.a.bit(i),
+                b: self.b.bit(i),
+                c: carry,
+                sum: self.out.bit(i),
+                carry: Output::new(),
+            };
+            carry = add.carry.clone().into();
+            components.push(add.into());
         }
         Some(IC { name: self.name().to_string(), intf: self.reflect(), components })
     }

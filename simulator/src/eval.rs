@@ -39,7 +39,8 @@ where
                 let intf = nand.reflect();
                 let a = read_bit(&wire_state, &intf.inputs["a"]);
                 let b = read_bit(&wire_state, &intf.inputs["b"]);
-                write_bit(&mut wire_state, &intf.outputs["out"], !(a & b));
+                write_bit(&mut wire_state, &intf.outputs["out"],
+                    !(a & b));
             }
             Combinational::Const(c) => {
                 let intf = c.reflect();
@@ -77,6 +78,17 @@ where
                 let shifted = ((val >> src.offset) & width_mask(out.width)) << out.offset;
                 let entry = wire_state.entry(id).or_insert(0);
                 *entry = (*entry & !mask) | shifted;
+            }
+            Combinational::Adder(adder) => {
+                let intf = adder.reflect();
+                let a = read_bit(&wire_state, &intf.inputs["a"]);
+                let b = read_bit(&wire_state, &intf.inputs["b"]);
+                let c = read_bit(&wire_state, &intf.inputs["c"]);
+                let total = a as u64 + b as u64 + c as u64;
+                let sum_ref = &intf.outputs["sum"];
+                let carry_ref = &intf.outputs["carry"];
+                write_bit(&mut wire_state, sum_ref, total & 1 != 0);
+                write_bit(&mut wire_state, carry_ref, total & 2 != 0);
             }
         }
     }

@@ -60,11 +60,12 @@ pub fn flatten<C: Reflect + Into<Project03Component>>(chip: C) -> IC<Sequential1
                     crate::project_02::flatten(p)
                         .components.into_iter()
                         .map(|c| match c {
-                            Combinational::Nand(n)  => Sequential::Nand(n),
-                            Combinational::Const(c) => Sequential::Const(c),
+                            Combinational::Nand(n)   => Sequential::Nand(n),
+                            Combinational::Const(c)  => Sequential::Const(c),
                             Combinational::Buffer(c) => Sequential::Buffer(c),
-                            Combinational::Mux(m)   => Sequential::Mux(m),
-                            Combinational::Mux1(m)  => Sequential::Mux1(m),
+                            Combinational::Mux(m)    => Sequential::Mux(m),
+                            Combinational::Mux1(m)   => Sequential::Mux1(m),
+                            Combinational::Adder(a)  => Sequential::Adder(a),
                         })
                         .collect(),
                 Project03Component::Register16(reg) => vec![Sequential::Register(reg)],

@@ -304,6 +304,14 @@ fn eval_logic(ws: &mut [u64], component_wiring: &[wiring::ComponentWiring]) {
                 let b = read_bit(ws, and.b);
                 write_bit(ws, and.out, a & b);
             }
+            wiring::ComponentWiring::Adder(add) => {
+                let a = read_bit(ws, add.a) as u64;
+                let b = read_bit(ws, add.b) as u64;
+                let c = read_bit(ws, add.c) as u64;
+                let total = a + b + c;  // 0..3
+                write_bit(ws, add.sum,   total & 1 != 0);
+                write_bit(ws, add.carry, total & 2 != 0);
+            }
             _ => {}
         }
     }

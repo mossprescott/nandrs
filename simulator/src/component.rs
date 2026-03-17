@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use crate::{Component, IC, Input, InputBus, Output, OutputBus, Reflect, AsConst, Chip, Interface};
-use crate::nat::{Nat, N1, N16};
+use crate::nat::{Nat, N1, N16, IsGreater};
+
+/// No components; this is the type that primitive components expand into.
+pub enum Void {}
 
 // - Nand (Combinational)
 
@@ -34,14 +37,14 @@ impl Chip for Nand {
     }
 }
 
-/// Nothing to expand; Nand is Nand.
-impl Component for Nand {
-    type Target = Nand;
+// /// Nothing to expand; Nand is Nand.
+// impl Component for Nand {
+//     type Target = Void;
 
-    fn expand(&self) -> Option<IC<Nand>> {
-        None
-    }
-}
+//     fn expand(&self) -> Option<IC<Void>> {
+//         None
+//     }
+// }
 
 /// No-cost "component" that just supplies some fixed zero/one bits.
 ///
@@ -162,6 +165,60 @@ impl<Width: Nat> Component for Mux<Width> {
 pub type Mux1 = Mux<N1>;
 pub type Mux16 = Mux<N16>;
 
+/// Single-bit slice off a multi-bit adder: adds three bits, producing a two-bit result
+///
+/// sum = 1s-digit of three-bit sum, carry = 2s-digit
+#[derive(Clone)]
+pub struct FullAdder {
+    /// "Left" input bit:
+    pub a: Input,
+    /// "Right" input bit:
+    pub b: Input,
+    /// "Carry-in" bit:
+    pub c: Input,
+
+    /// 1s digit of a + b + c:
+    pub sum: Output,
+    /// 2s digit of a + b + c:
+    pub carry: Output,
+}
+
+impl Reflect for FullAdder {
+    fn reflect(&self) -> Interface {
+        Interface {
+            inputs: HashMap::from([
+                ("a".to_string(), self.a.clone().into()),
+                ("b".to_string(), self.b.clone().into()),
+                ("c".to_string(), self.c.clone().into()),
+            ]),
+            outputs: HashMap::from([
+                ("sum".to_string(), self.sum.clone().into()),
+                ("carry".to_string(), self.carry.clone().into()),
+            ]),
+        }
+    }
+    fn name(&self) -> String { "FullAdder".into() }
+}
+
+impl Chip for FullAdder {
+    fn chip() -> Self {
+        FullAdder {
+            a: Input::new(),
+            b: Input::new(),
+            c: Input::new(),
+            sum: Output::new(),
+            carry: Output::new(),
+        }
+    }
+}
+
+/// Nothing to expand; FullAdder is primitive.
+impl Component for FullAdder {
+    type Target = FullAdder;
+
+    fn expand(&self) -> Option<IC<FullAdder>> { None }
+}
+
 /// Type of components that participate in "combinational" circuits:
 /// - most importantly Nand
 /// - pseudo-components Const and Buffer
@@ -173,12 +230,19 @@ pub enum Combinational<Width: Nat> {
     Mux(Mux<Width>),
     /// For conditionalizing chains of logic, we need a single-bit Mux as well.
     Mux1(Mux1),
+    Adder(FullAdder),
 }
 
 impl<Width: Nat> From<Nand>  for Combinational<Width> { fn from(c: Nand)  -> Self { Combinational::Nand(c)  } }
 impl<Width: Nat> From<Const> for Combinational<Width> { fn from(c: Const) -> Self { Combinational::Const(c) } }
 impl<Width: Nat> From<Buffer> for Combinational<Width> { fn from(c: Buffer) -> Self { Combinational::Buffer(c) } }
-impl<Width: Nat> From<Mux<Width>> for Combinational<Width> { fn from(c: Mux<Width>) -> Self { Combinational::Mux(c) } }
+impl<Width: Nat> From<Mux<Width>> for Combinational<Width>
+  where Width: IsGreater<N1>
+{
+    fn from(c: Mux<Width>) -> Self { Combinational::Mux(c) }
+}
+impl<Width: Nat> From<Mux<N1>> for Combinational<Width> { fn from(c: Mux<N1>) -> Self { Combinational::Mux1(c) } }
+impl<Width: Nat> From<FullAdder> for Combinational<Width> { fn from(c: FullAdder) -> Self { Combinational::Adder(c) } }
 
 impl<Width: Nat + Clone> Reflect for Combinational<Width> {
     fn reflect(&self) -> Interface {
@@ -188,6 +252,7 @@ impl<Width: Nat + Clone> Reflect for Combinational<Width> {
             Self::Buffer(c) => c.reflect(),
             Self::Mux(c)    => c.reflect(),
             Self::Mux1(c)   => c.reflect(),
+            Self::Adder(c)  => c.reflect(),
         }
     }
     fn name(&self) -> String {
@@ -197,6 +262,7 @@ impl<Width: Nat + Clone> Reflect for Combinational<Width> {
             Self::Buffer(c) => c.name(),
             Self::Mux(c)    => c.name(),
             Self::Mux1(c)   => c.name(),
+            Self::Adder(c)  => c.name(),
         }
     }
 }
@@ -251,6 +317,7 @@ pub enum Sequential<Width: Nat> {
     Buffer(Buffer),
     Mux(Mux<Width>),
     Mux1(Mux1),
+    Adder(FullAdder),
     Register(Register<Width>),
 }
 
@@ -262,6 +329,7 @@ impl<Width: Nat + Clone> Reflect for Sequential<Width> {
             Self::Buffer(c)   => c.reflect(),
             Self::Mux(c)      => c.reflect(),
             Self::Mux1(c)     => c.reflect(),
+            Self::Adder(c)    => c.reflect(),
             Self::Register(c) => c.reflect(),
         }
     }
@@ -272,6 +340,7 @@ impl<Width: Nat + Clone> Reflect for Sequential<Width> {
             Self::Buffer(c)   => c.name(),
             Self::Mux(c)      => c.name(),
             Self::Mux1(c)     => c.name(),
+            Self::Adder(c)    => c.name(),
             Self::Register(c) => c.name(),
         }
     }
@@ -483,6 +552,7 @@ pub enum Computational<A: Nat, D: Nat> {
     Buffer(Buffer),
     Mux(Mux<D>),
     Mux1(Mux1),
+    Adder(FullAdder),
     // sequential:
     Register(Register<D>),
     // computational:
@@ -501,6 +571,7 @@ impl<A: Nat + Clone, D: Nat + Clone> Reflect for Computational<A, D> {
             Self::Buffer(c)       => c.reflect(),
             Self::Mux(c)          => c.reflect(),
             Self::Mux1(c)         => c.reflect(),
+            Self::Adder(c)        => c.reflect(),
             // sequential:
             Self::Register(c)     => c.reflect(),
             // computational:
@@ -518,6 +589,7 @@ impl<A: Nat + Clone, D: Nat + Clone> Reflect for Computational<A, D> {
             Self::Buffer(c)       => c.name(),
             Self::Mux(c)          => c.name(),
             Self::Mux1(c)         => c.name(),
+            Self::Adder(c)        => c.name(),
             // sequential:
             Self::Register(c)     => c.name(),
             // computational:
@@ -551,6 +623,7 @@ impl<A: Nat, D: Nat> From<Sequential<D>> for Computational<A, D> {
             Sequential::Buffer(n)   => Computational::Buffer(n),
             Sequential::Mux(m)      => Computational::Mux(m),
             Sequential::Mux1(m)     => Computational::Mux1(m),
+            Sequential::Adder(m)    => Computational::Adder(m),
             Sequential::Register(r) => Computational::Register(r),
         }
     }
