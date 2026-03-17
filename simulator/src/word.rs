@@ -36,11 +36,17 @@ where
 {}
 
 /// Store bits which can be treated as a signed or unsigned value of the specified width.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct Word<Width: Storable> {
     val: u64,
     _width: PhantomData<Width>,
 }
+
+impl<Width: Storable> Clone for Word<Width> {
+    fn clone(&self) -> Self { *self }
+}
+
+impl<Width: Storable> Copy for Word<Width> {}
 
 impl<Width: Storable> Hash for Word<Width> {
     fn hash<H: Hasher>(&self, state: &mut H) {
