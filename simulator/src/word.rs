@@ -36,7 +36,7 @@ where
 {}
 
 /// Store bits which can be treated as a signed or unsigned value of the specified width.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Word<Width: Storable> {
     val: u64,
     _width: PhantomData<Width>,
@@ -82,6 +82,7 @@ impl<Width: Nat + Storable> Word<Width> {
     }
 }
 
+/// Show decimal, hex, and signed decimal.
 impl<Width: Storable> fmt::Display for Word<Width> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let w = Width::as_int();
@@ -93,6 +94,13 @@ impl<Width: Storable> fmt::Display for Word<Width> {
         } else {
             write!(f, "{} (0x{:0>width$X})", signed, unsigned, width = hex_digits)
         }
+    }
+}
+
+/// Same as `Display::fmt`, so we get nice readable test failures.
+impl<Width: Storable> fmt::Debug for Word<Width> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
     }
 }
 
