@@ -123,14 +123,11 @@ fn decode_strict_truth_table() {
 
 }
 
-/// Note: the chip still works if decoding uses no gates and just interprets the bits of an A-instr
-/// as control signals, but a little bit of extra clarity here makes simulation more efficient.
 #[test]
 fn decode_optimal() {
     let components = flatten(Decode::chip()).components;
     let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
     assert_eq!(nands, 16);
-    // TODO: ??
 }
 
 #[test]
