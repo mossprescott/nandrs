@@ -4,10 +4,11 @@
 /// The idea is: during simulation, bits are bits; everything is stored in u64, which is assumed to be
 /// efficiently handled by the host.
 
+use std::fmt;
 use std::marker::PhantomData;
 
 use crate::bool::False;
-use crate::nat::{Cmp, Compare, IsGreater, IsLess, Nat, N0, N8, N16, N32, N64};
+use crate::nat::{Cmp, Compare, IsGreater, IsLess, Nat, N0, N1, N8, N16, N32, N64};
 
 /// A type-level width that can handle at least `Min` bits, and will it in our usual storage word (u64).
 ///
@@ -25,16 +26,13 @@ where
         + IsLess<Compare<Width, Min>, Output = False>,
 {}
 
+/// Store bits which can be treated as a signed or unsigned value of the specified width.
+// FIXME: if equality is defined here, it should consider only significant bits
+#[derive(Clone, Copy, Debug)]
 pub struct Word<Width: Storable<N0>> {
     val: u64,
     _width: PhantomData<Width>,
 }
-
-pub type Word8 = Word<N8>;
-pub type Word16 = Word<N16>;
-pub type Word32 = Word<N32>;
-pub type Word64 = Word<N64>;
-
 
 impl<Width: Storable<N0>> Word<Width> {
     /// Unsafe: accept any bits.
@@ -70,6 +68,25 @@ impl<Width: Storable<N0>> Word<Width> {
     }
 }
 
+impl<Width: Storable<N0>> fmt::Display for Word<Width> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let w = Width::as_int();
+        let hex_digits = (w + 3) / 4;
+        let signed = self.signed();
+        let unsigned = self.unsigned();
+        if signed < 0 {
+            write!(f, "{} (0x{:0>width$X}; {})", signed, unsigned, unsigned, width = hex_digits)
+        } else {
+            write!(f, "{} (0x{:0>width$X})", signed, unsigned, width = hex_digits)
+        }
+    }
+}
+
+/// Safe conversion for a single bit
+impl<Width: Storable<N0> + Storable<N1>> From<bool> for Word<Width> {
+    fn from(val: bool) -> Word<Width> { Word::<Width>::new(val as u64) }
+}
+
 /// Safe conversion for 16-bit signed values
 impl<Width: Storable<N0> + Storable<N16>> From<i16> for Word<Width> {
     fn from(val: i16) -> Word<Width> { Word::<Width>::new(val as u16 as u64) }
@@ -99,6 +116,12 @@ impl<Width: Storable<N0> + Storable<N64>> From<i64> for Word<Width> {
 impl<Width: Storable<N0> + Storable<N64>> From<u64> for Word<Width> {
     fn from(val: u64) -> Word<Width> { Word::<Width>::new(val) }
 }
+
+pub type Word8 = Word<N8>;
+pub type Word16 = Word<N16>;
+pub type Word32 = Word<N32>;
+pub type Word64 = Word<N64>;
+
 
 #[cfg(test)]
 mod tests {
@@ -132,6 +155,15 @@ mod tests {
 
         // Type error: can't store a 32-bit value in Word16
         // let z: Word16 = (-1i32).into();
+    }
+
+    #[test]
+    fn display16() {
+        let x: Word16 = (1u16).into();
+        assert_eq!(format!("{x}"), "1 (0x0001)");
+
+        let y: Word16 = (-1i16).into();
+        assert_eq!(format!("{y}"), "-1 (0xFFFF; 65535)");
     }
 
     #[test]

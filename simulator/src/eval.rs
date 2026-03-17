@@ -8,14 +8,15 @@ use std::rc::Rc;
 use crate::component::Combinational;
 use crate::declare::{BusRef, IC, Reflect};
 use crate::nat::Nat;
+use crate::word::{Storable, Word};
 
-/// Evaluate a chip given named input values, returning named output values.
+/// Evaluate a chip statelessly; given named input values, return named output values.
 ///
-/// Values are u64; for 1-bit signals use 0 or 1. For a multi-bit bus of width w,
-/// bits 0..w-1 carry the value.
-pub fn eval<'a, I, Width: Nat + Clone>(chip: &IC<Combinational<Width>>, inputs: I) -> HashMap<String, u64>
+/// Input and output values are `Word<Width>`, wrapping the raw bits in a width-aware type.
+pub fn eval<'a, I, Width: Nat + Clone>(chip: &IC<Combinational<Width>>, inputs: I) -> HashMap<String, Word<Width>>
 where
-    I: IntoIterator<Item = (&'a str, u64)>,
+    Width: Storable<crate::nat::N0>,
+    I: IntoIterator<Item = (&'a str, Word<Width>)>,
 {
     let intf = chip.reflect();
 
@@ -28,7 +29,7 @@ where
             let id = wire_id(busref);
             let mask = bus_mask(busref);
             let entry = wire_state.entry(id).or_insert(0);
-            *entry = (*entry & !mask) | ((value << busref.offset) & mask);
+            *entry = (*entry & !mask) | ((value.unsigned() << busref.offset) & mask);
         }
     }
 
@@ -98,7 +99,7 @@ where
         .iter()
         .map(|(name, busref)| {
             let val = wire_state.get(&wire_id(busref)).copied().unwrap_or(0);
-            (name.clone(), (val >> busref.offset) & width_mask(busref.width))
+            (name.clone(), Word::new((val >> busref.offset) & width_mask(busref.width)))
         })
         .collect()
 }
