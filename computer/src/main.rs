@@ -248,57 +248,72 @@ fn main() {
         print_fn_entry(state.get("pc") as u16, cycle);
     }
 
+    let mut halted = false;
+    let halt_addr = symbols.get("sys.halt").copied();
+
     while window.is_open() {
-        let frame_start = Instant::now();
-        let mut batch: u64 = 0;
-        loop {
-            state.ticktock();
-            cycle += 1;
-            interval_cycles += 1;
-            batch += 1;
+        if !halted {
+            let frame_start = Instant::now();
+            let mut batch: u64 = 0;
+            loop {
+                state.ticktock();
+                cycle += 1;
+                interval_cycles += 1;
+                batch += 1;
 
-            if verbose {
                 let pc = state.get("pc") as u16;
-                let labels = symbols_by_addr.get(&pc).map(|v| format!(" [{}]", v.join(", "))).unwrap_or_default();
-                if !labels.is_empty() {
-                    print_state(pc, cycle);
+                if verbose {
+                    let labels = symbols_by_addr.get(&pc).map(|v| format!(" [{}]", v.join(", "))).unwrap_or_default();
+                    if !labels.is_empty() {
+                        print_state(pc, cycle);
+                    }
+                } else if trace {
+                    print_fn_entry(state.get("pc") as u16, cycle);
                 }
-            } else if trace {
-                print_fn_entry(state.get("pc") as u16, cycle);
+
+                if halt_addr == Some(pc) {
+                    println!("Halted at sys.halt (cycle {})", fmt_commas(cycle));
+                    halted = true;
+                    break;
+                }
+
+                // Check the clock every 256 cycles to avoid calling it every iteration.
+                if batch & 255 == 0 && frame_start.elapsed() >= FRAME_TIME {
+                    break;
+                }
             }
 
-            // Check the clock every 256 cycles to avoid calling it every iteration.
-            if batch & 255 == 0 && frame_start.elapsed() >= FRAME_TIME {
-                break;
+            keyboard.push(hack_keycode(&window));
+
+            render_screen(&screen, &mut pixels, scale);
+            window.update_with_buffer(&pixels, win_width, win_height).unwrap();
+
+            let elapsed = interval_start.elapsed();
+            if elapsed.as_secs() >= 1 {
+                let cps = interval_cycles as f64 / elapsed.as_secs_f64();
+                let (val, suffix) = if cps >= 1_000_000.0 {
+                    (cps / 1_000_000.0, "M")
+                } else if cps >= 1_000.0 {
+                    (cps / 1_000.0, "K")
+                } else {
+                    (cps, "")
+                };
+                let cycle_f = cycle as f64;
+                let (tval, tsuffix) = if cycle_f >= 1_000_000.0 {
+                    (cycle_f / 1_000_000.0, "M")
+                } else if cycle_f >= 1_000.0 {
+                    (cycle_f / 1_000.0, "K")
+                } else {
+                    (cycle_f, "")
+                };
+                println!("cycles/s: {val:.1}{suffix} (total: {tval:.1}{tsuffix})");
+                interval_start = Instant::now();
+                interval_cycles = 0;
             }
-        }
-
-        keyboard.push(hack_keycode(&window));
-
-        render_screen(&screen, &mut pixels, scale);
-        window.update_with_buffer(&pixels, win_width, win_height).unwrap();
-
-        let elapsed = interval_start.elapsed();
-        if elapsed.as_secs() >= 1 {
-            let cps = interval_cycles as f64 / elapsed.as_secs_f64();
-            let (val, suffix) = if cps >= 1_000_000.0 {
-                (cps / 1_000_000.0, "M")
-            } else if cps >= 1_000.0 {
-                (cps / 1_000.0, "K")
-            } else {
-                (cps, "")
-            };
-            let cycle_f = cycle as f64;
-            let (tval, tsuffix) = if cycle_f >= 1_000_000.0 {
-                (cycle_f / 1_000_000.0, "M")
-            } else if cycle_f >= 1_000.0 {
-                (cycle_f / 1_000.0, "K")
-            } else {
-                (cycle_f, "")
-            };
-            println!("cycles/s: {val:.1}{suffix} (total: {tval:.1}{tsuffix})");
-            interval_start = Instant::now();
-            interval_cycles = 0;
+        } else {
+            // Halted: just keep the window open and responsive.
+            window.update_with_buffer(&pixels, win_width, win_height).unwrap();
+            std::thread::sleep(FRAME_TIME);
         }
     }
 }
