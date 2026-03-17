@@ -5,6 +5,7 @@ pub mod device;
 pub mod eval;
 pub mod nat;
 pub mod simulate;
+pub mod word;
 
 #[cfg(test)]
 mod tests;
