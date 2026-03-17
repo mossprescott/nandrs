@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{Component, IC, Input, InputBus, Output, OutputBus, Reflect, AsConst, Chip, Interface};
-use crate::nat::{Nat, N1, N2, N16, IsGreater};
+use crate::nat::{Nat, N1, N16, IsGreater};
 
 /// No components; this is the type that primitive components expand into.
 pub enum Void {}
