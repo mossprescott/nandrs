@@ -247,13 +247,6 @@ pub struct Dmux {
 impl Component for Dmux {
     type Target = Project01Component;
 
-    /*
-      let not_sel = Not { a: inputs.sel }
-      let and_a   = And { a: inputs.input, b: not_sel.out }
-      let and_b   = And { a: inputs.input, b: inputs.sel  }
-      outputs.a = and_a.out
-      outputs.b = and_b.out
-     */
     expand! { |this| {
         not_sel: Not { a: this.sel,   out: Output::new() },
 
@@ -276,6 +269,7 @@ impl Component for Not16 {
         let not = Not { a: inputs.a[i] }
         outputs.out[i] = not.out
      */
+    // TODO: how to do these loops in expand!{}?
     fn expand(&self) -> Option<IC<Project01Component>> {
         Some(IC { name: self.name().to_string(), intf: self.reflect(), components: (0..16).map(|i| {
             Not { a: self.a.bit(i), out: self.out.bit(i) }.into()
@@ -298,6 +292,7 @@ impl Component for And16 {
         let and = And { a: inputs.a[i], b: inputs.b[i] }
         outputs.out[i] = and.out
      */
+    // TODO: how to do these loops in expand!{}?
     fn expand(&self) -> Option<IC<Project01Component>> {
         Some(IC { name: self.name().to_string(), intf: self.reflect(), components: (0..16).map(|i| {
             And { a: self.a.bit(i), b: self.b.bit(i), out: self.out.bit(i) }.into()
