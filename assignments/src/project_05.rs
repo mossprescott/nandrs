@@ -12,9 +12,14 @@ use crate::project_02::{Project02Component, ALU};
 use crate::project_03::{Project03Component, PC};
 
 pub enum Project05Component {
+    // Previous project:
     Project03(Project03Component),
+
+    // Memory primitives:
     ROM(ROM16),
     MemorySystem(MemorySystem16),
+
+    // New here:
     Decode(Decode),
     CPU(CPU),
     Computer(Computer),
@@ -203,10 +208,10 @@ pub struct Decode {
     pub f:  Output,
     pub no: Output,
 
-    /// If true, write ALU output to the A register.
+    /// If true, write ALU output to the A register (where it will appear in the next cycle).
     pub write_a: Output,
 
-    /// If true, write ALU output to memory at address A.
+    /// If true, write ALU output to memory at address A (the value as of this cycle).
     pub write_m: Output,
 
     /// If true, write ALU output to the D register.
@@ -239,7 +244,7 @@ impl Component for Decode {
             components: vec![
                 wrap(Buffer { a: self.instr.bit(15).clone(), out: self.is_c.clone() }),
 
-                // Note: CPU control signalss all gated with is_c so they're false on A-instructions and this
+                // Note: CPU control signals all gated with is_c so they're false on A-instructions and this
                 // simplifies the logic in CPU
 
                 wrap(And { a: self.instr.bit(12).clone(), b: self.is_c.clone().into(), out: self.read_m.clone() }),
