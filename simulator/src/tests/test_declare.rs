@@ -32,7 +32,11 @@ impl Component for TestNot {
     type Target = Combinational<N1>;
 
     expand! { |this| {
-        nand: Nand { a: this.a.clone(), b: this.a.clone(), out: this.out.clone() }
+        nand: Nand {
+            a: this.a,
+            b: this.a,  // also a
+            out: this.out
+        },
     }}
 }
 
