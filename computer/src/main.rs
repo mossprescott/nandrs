@@ -7,8 +7,9 @@ use minifb::{Key, Window, WindowOptions};
 
 use assignments::project_05::{Computer, flatten, find_ram, find_rom, find_screen, find_keyboard, memory_system};
 use assignments::project_06::{assemble, Program};
+use simulator::print_graph;
 use simulator::declare::Chip as _;
-use simulator::simulate::{simulate, synthesize, initialize, RAMHandle};
+use simulator::simulate::{synthesize, initialize, RAMHandle};
 use simulator::nat::N16;
 use simulator::word::Word16;
 
@@ -186,20 +187,18 @@ fn main() {
         symbols_by_addr.entry(addr).or_default().push(name.clone());
     }
 
-    println!("computer: loaded {} instructions from {path}", instructions.len());
+    println!("Loaded {} instructions from {path}", instructions.len());
 
-    eprint!("Synthesizing...");
-    let chip = flatten(Computer::chip());
-    let mut state = if print {
-        let wiring = synthesize(&chip, memory_system());
-        eprintln!(" done.");
+    let computer = Computer::chip();
+    if print {
+        println!("{}", print_graph(&computer));
+    }
+    let chip = flatten(computer);
+    let wiring = synthesize(&chip, memory_system());
+    if print {
         print!("{wiring}");
-        initialize(wiring)
-    } else {
-        let s = simulate(&chip, memory_system());
-        eprintln!(" done.");
-        s
-    };
+    }
+    let mut state = initialize(wiring);
 
     find_rom(&state).flash(instructions.iter().map(|&v| Word16::from(v)).collect());
 
@@ -216,8 +215,6 @@ fn main() {
 
     let mut window = Window::new(path, win_width, win_height, WindowOptions::default())
         .expect("failed to create window");
-
-    eprintln!("Running.");
 
     let mut cycle: u64 = 0;
     let mut interval_start = Instant::now();

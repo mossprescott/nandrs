@@ -127,7 +127,7 @@ where
                     } else {
                         ep_label(src_name, *src_w, n, lo)
                     };
-                    result.push(format!("{} <- {}",
+                    result.push(format!("  {} <- {}",
                         ep_label(sink_name, *sink_w, n, lo),
                         src_label));
                 }
