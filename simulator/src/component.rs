@@ -267,6 +267,17 @@ impl<Width: Nat + Clone> Reflect for Combinational<Width> {
     }
 }
 
+impl<Width: Nat> AsConst for Combinational<Width> {
+    fn as_const(&self) -> Option<u64> {
+        if let Self::Const(c) = self {
+            Some(c.value)
+        }
+        else {
+            None
+        }
+    }
+}
+
 // - Registers (Sequential)
 
 #[derive(Clone)]

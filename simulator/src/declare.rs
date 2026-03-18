@@ -100,6 +100,8 @@ pub trait Component {
 
 /// Enumerate the inputs and outputs of a component for reference from the outside.
 /// Needed for any component to be analyzed or simulated in a generic way.
+///
+/// Typically derived.
 pub trait Reflect {
     fn reflect(&self) -> Interface;
     fn name(&self) -> String;
@@ -112,6 +114,8 @@ pub trait AsConst {
 
 /// Construct a fresh instance of a chip struct with new Input/Output buses on every port.
 /// This is good for making stand-alone instances, when that's useful for testing.
+///
+/// Typically derived.
 pub trait Chip {
     fn chip() -> Self;
 }
@@ -169,3 +173,47 @@ impl<C> Reflect for IC<C> {
         self.name.clone()
     }
 }
+
+/// Generate a `fn expand` body from a record of `name: StructType { fields }` entries.
+///
+/// ```ignore
+/// expand! { |this| {
+///     nand: Nand { a: this.a.clone(), b: this.b.clone(), out: this.out.clone() }
+/// }}
+/// ```
+///
+/// Generates:
+/// ```ignore
+///    fn expand(&self) -> Option<IC<Self::Target>> {
+///        let this = self;
+///        let mut components: Vec<Self::Target> = vec![];
+///
+///        let nand = Nand { a: this.a.clone(), b: this.a.clone(), out: this.out.clone() };
+///        components.push(nand.into());
+///
+///        Some(IC {
+///            name: this.name(),
+///            intf: this.reflect(),
+///            components,
+///        })
+///    }
+/// ```
+#[macro_export]
+macro_rules! expand {
+    ( |$this:ident| { $( $var:ident : $T:ident { $($fields:tt)* } )* } ) => {
+        fn expand(&self) -> Option<$crate::IC<Self::Target>> {
+            let $this = self;
+            let mut components = vec![];
+            $(
+                let $var = $T { $($fields)* };
+                components.push($var.into());
+            )*
+            Some($crate::IC {
+                name: $crate::Reflect::name(self),
+                intf: $crate::Reflect::reflect(self),
+                components,
+            })
+        }
+    };
+}
+
