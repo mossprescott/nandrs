@@ -1,6 +1,6 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, Chip};
+use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, Chip, expand};
 use simulator::component::Combinational;
 use simulator::nat::{N1, N16};
 use simulator::AsConst;
@@ -144,18 +144,13 @@ pub struct Not {
 impl Component for Not {
     type Target = Project01Component;
 
-    /*
-      let nand = Nand { a: inputs.a, b: inputs.b }
-      outputs.out = nand.out
-     */
-    fn expand(&self) -> Option<IC<Project01Component>> {
-        let nand = Nand {
-            a: self.a.clone(),
-            b: self.a.clone(),
-            out: self.out.clone(),
-        };
-        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![nand.into()] })
-    }
+    expand! { |this| {
+        nand: Nand {
+            a: this.a.clone(),
+            b: this.a.clone(),  // also the "a" input
+            out: this.out.clone(),
+        }
+    }}
 }
 
 /// True only when both inputs are true.
