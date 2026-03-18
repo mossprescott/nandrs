@@ -146,9 +146,9 @@ impl Component for Not {
 
     expand! { |this| {
         nand: Nand {
-            a: this.a.clone(),
-            b: this.a.clone(),  // also the "a" input
-            out: this.out.clone(),
+            a: this.a,
+            b: this.a,  // also the "a" input
+            out: this.out,
         }
     }}
 }
@@ -165,13 +165,13 @@ impl Component for And {
 
     expand! { |this| {
         nand: Nand {
-            a: this.a.clone(),
-            b: this.b.clone(),
+            a: this.a,
+            b: this.b,
             out: Output::new(),
         },
         not: Not {
-            a: nand.out.clone().into(),
-            out: this.out.clone(),
+            a: nand.out.into(),
+            out: this.out,
         },
     }}
 }
