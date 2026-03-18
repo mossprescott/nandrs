@@ -25,7 +25,7 @@ fn memory_system_behavior() {
     // Now advance the clock:
     state.ticktock();
     assert_eq!(state.get("data_out"), 1234u16.into());
-    assert_eq!(ram.peek(0), 1234);
+    assert_eq!(ram.peek(0), 1234u16.into());
 
     // Now write to the screen buffer:
     state.set("addr", SCREEN_BASE.into());
@@ -34,8 +34,8 @@ fn memory_system_behavior() {
     state.ticktock();
 
     assert_eq!(state.get("data_out"), 0x5555u16.into());
-    assert_eq!(screen.peek(0), 0x5555);  // Address is mapped to the base of the screen ram
-    assert_eq!(ram.peek(0), 1234);  // Unaffected
+    assert_eq!(screen.peek(0), 0x5555u16.into());  // Address is mapped to the base of the screen ram
+    assert_eq!(ram.peek(0), 1234u16.into());  // Unaffected
 
     // Out-of-range address; reads 0:
     state.set("addr", 0x8000u16.into());
@@ -59,7 +59,7 @@ fn memory_system_behavior() {
 //     assert_eq!(rams,    2);
 // }
 
-fn simulate_loud(chip: &IC<Computational16>, mmap: MemoryMap) -> ChipState<N16> {
+fn simulate_loud(chip: &IC<Computational16>, mmap: MemoryMap) -> ChipState<N16, N16> {
     use simulator::simulate::{initialize, synthesize};
 
     let wiring = synthesize(&chip, mmap);
@@ -178,7 +178,7 @@ fn cpu_optimal() {
     assert_eq!(registers, 3);
 }
 
-fn add_program() -> Vec<u64> {
+fn add_program() -> Vec<Word16> {
     ["@2", "D=A", "@3", "D=D+A", "@1", "M=D"]
         .map(|op| instr(op).into())
         .to_vec()
@@ -204,11 +204,11 @@ fn computer_add_behavior() {
     for _ in 0..pgm.len() { state.ticktock(); }
 
     assert_eq!(state.get("pc"), 6u16.into());
-    assert_eq!(ram.peek(1), 5);
+    assert_eq!(ram.peek(1), 5u16.into());
 }
 
 
-fn max_program() -> Vec<u64> {
+fn max_program() -> Vec<Word16> {
     [
         "@1",
         "D=M",
@@ -249,8 +249,8 @@ fn computer_max_behavior() {
     rom.flash(pgm.clone());
 
     // Max in RAM[2]:
-    ram.poke(1, 3);
-    ram.poke(2, 5);
+    ram.poke(1, 3u16.into());
+    ram.poke(2, 5u16.into());
 
     // TODO: make the looping prologue automatic and factor this out
     for _ in 0..pgm.len() {
@@ -258,22 +258,22 @@ fn computer_max_behavior() {
         if state.get("pc").unsigned() > (pgm.len()-2).try_into().unwrap() { break; }
     }
 
-    assert_eq!(ram.peek(3), 5);
+    assert_eq!(ram.peek(3), 5u16.into());
 
     state.set("reset", true.into());
     state.ticktock();
     state.set("reset", false.into());
 
     // Max in RAM[1]:
-    ram.poke(1, 23456);
-    ram.poke(2, 12345);
+    ram.poke(1, 23456u16.into());
+    ram.poke(2, 12345u16.into());
 
     for _ in 0..pgm.len() {
         state.ticktock();
         if state.get("pc").unsigned() > (pgm.len()-2).try_into().unwrap() { break; }
     }
 
-    assert_eq!(ram.peek(3), 23456);
+    assert_eq!(ram.peek(3), 23456u16.into());
 }
 
 #[test]
@@ -286,9 +286,9 @@ fn computer_indirect_write() {
 
     // Store target address in R14, then write a value there
     let target: u64 = 100;
-    ram.poke(14, target);
+    ram.poke(14, (target as u16).into());
 
-    let pgm: Vec<u64> = ["@14", "A=M", "M=1"]
+    let pgm: Vec<Word16> = ["@14", "A=M", "M=1"]
         .map(|op| instr(op).into())
         .to_vec();
     rom.flash(pgm);
@@ -296,7 +296,7 @@ fn computer_indirect_write() {
     for _ in 0..3 { state.ticktock(); }
 
     // assert_eq!(ram.peek(0), 1);  // Bug: writes here
-    assert_eq!(ram.peek(target), 1);
+    assert_eq!(ram.peek(target), 1u16.into());
 }
 
 #[test]
@@ -309,9 +309,9 @@ fn computer_indirect_jump() {
 
     // Store target address in R14, then jump to it (as in a "call" or "return" sequence)
     let target: Word16 = 100u16.into();
-    ram.poke(14, target.unsigned());
+    ram.poke(14, target);
 
-    let pgm: Vec<u64> = ["@14", "A=M", "JMP"]
+    let pgm: Vec<Word16> = ["@14", "A=M", "JMP"]
         .map(|op| instr(op).into())
         .to_vec();
     rom.flash(pgm);
@@ -330,10 +330,10 @@ fn computer_stack_adjust() {
     let ram = find_ram(&state);
 
     // stack: [1234]
-    ram.poke(0, 257);
-    ram.poke(256, 1234); // Not used, just simulating a value on the stack
+    ram.poke(0, 257u16.into());
+    ram.poke(256, 1234u16.into()); // Not used, just simulating a value on the stack
 
-    let pgm: Vec<u64> = [
+    let pgm: Vec<Word16> = [
         "@0",
         "AM=M-1",  // adjust the stack pointer; A and R0 (aka SP) both = 256 now
         "D=A",     // now save A to R5
@@ -347,8 +347,8 @@ fn computer_stack_adjust() {
     for _ in 0..pgm.len() { state.ticktock(); }
 
     // stack: [] (SP = 256); R5 = 256
-    assert_eq!(ram.peek(0), 256);
-    assert_eq!(ram.peek(5), 256);
+    assert_eq!(ram.peek(0), 256u16.into());
+    assert_eq!(ram.peek(5), 256u16.into());
 }
 
 #[test]
@@ -360,7 +360,7 @@ fn computer_read_keyboard() {
     let ram = find_ram(&state);
     let keyboard = find_keyboard(&state);
 
-    let pgm: Vec<u64> = [
+    let pgm: Vec<Word16> = [
         "@24576", // KEYBOARD
         "D=M",
         "@5",
@@ -370,12 +370,12 @@ fn computer_read_keyboard() {
         .to_vec();
     rom.flash(pgm.clone());
 
-    keyboard.push(76);
+    keyboard.push(76u16.into());
 
     for _ in 0..pgm.len() { state.ticktock(); }
 
-    assert_eq!(ram.peek(5), 76);
-    assert_eq!(ram.peek(KEYBOARD.into()), 0);  // The actual RAM is unaffected (doesn't map this address anyway)
+    assert_eq!(ram.peek(5), 76u16.into());
+    assert_eq!(ram.peek(KEYBOARD.into()), 0u16.into());  // The actual RAM is unaffected (doesn't map this address anyway)
 }
 
 #[test]

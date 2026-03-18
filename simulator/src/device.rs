@@ -1,11 +1,11 @@
+use crate::nat::Nat;
+use crate::word::{Word, Storable};
+
 pub enum Error {
     AddressOutOfRange(usize),
     Unmapped,
     CannotWrite,
 }
-
-pub type Addr = usize;
-pub type Data = u64;
 
 /// Common interface for "bus-resident" devices that behave like memory.
 ///
@@ -14,43 +14,40 @@ pub type Data = u64;
 /// - read/write devices can handle both a read and a write in the same cycle.
 /// - each device determines how to handle latency.
 /// - valid addresses are always between 0 and size-1
-///
-/// All addresses are usize, and all data is u64. It's up to the user to figure out how to pack the
-/// actual simulated address and data word sizes into these.
-pub trait MemoryDevice {
+pub trait MemoryDevice<A: Nat + Storable, D: Nat + Storable> {
     /// Receive the address to be used for future reads and writes.
-    fn set_addr(&mut self, addr: Addr) -> Result<(), Error>;
+    fn set_addr(&mut self, addr: Word<A>) -> Result<(), Error>;
 
     /// Signals a chip/bus clock cycle boundary. Dependning on the device, the most-recently
     /// provided address might take effect at this moment.
     fn ticktock(&mut self);
 
     /// (Attempt to) read the current word.
-    fn read(&self) -> Result<Data, Error>;
+    fn read(&self) -> Result<Word<D>, Error>;
 
     /// (Attempt to) write the current word.
-    fn write(&mut self, word: Data) -> Result<(), Error>;
+    fn write(&mut self, word: Word<D>) -> Result<(), Error>;
 }
 
 /// Read-only storage with arbitrary size and no latency; just provide an address and get the data
 /// immediately (within the current cycle.)
-pub struct ROM {
+pub struct ROM<A: Nat + Storable, D: Nat + Storable> {
     pub size: usize,
 
-    data: Box<[Data]>,
+    data: Box<[Word<D>]>,
 
-    addr: Addr,
+    addr: Word<A>,
     valid: bool,
 }
 
-impl ROM {
+impl<A: Nat + Storable, D: Nat + Storable> ROM<A, D> {
     pub fn new(size: usize) -> Self {
-        ROM { size, data: vec![0u64; size].into_boxed_slice(), addr: 0, valid: true }
+        ROM { size, data: vec![Word::new(0); size].into_boxed_slice(), addr: Word::new(0), valid: true }
     }
 
     /// For "external" users (not the simulation); overwrite the contents of the ROM
     /// during configuration.
-    pub fn flash(&mut self, data: Box<[Data]>) -> Result<(), Error> {
+    pub fn flash(&mut self, data: Box<[Word<D>]>) -> Result<(), Error> {
         if data.len() > self.size {
             Err(Error::AddressOutOfRange(data.len()))
         } else {
@@ -60,11 +57,12 @@ impl ROM {
     }
 }
 
-impl MemoryDevice for ROM {
-    fn set_addr(&mut self, addr: Addr) -> Result<(), Error> {
-        if addr >= self.size {
+impl<A: Nat + Storable, D: Nat + Storable> MemoryDevice<A, D> for ROM<A, D> {
+    fn set_addr(&mut self, addr: Word<A>) -> Result<(), Error> {
+        let a = addr.unsigned() as usize;
+        if a >= self.size {
             self.valid = false;
-            Err(Error::AddressOutOfRange(addr))
+            Err(Error::AddressOutOfRange(a))
         } else {
             self.addr = addr;
             self.valid = true;
@@ -75,57 +73,60 @@ impl MemoryDevice for ROM {
     /// Yawn.
     fn ticktock(&mut self) {}
 
-    fn read(&self) -> Result<u64, Error> {
-        if self.valid { Ok(self.data[self.addr]) } else { Err(Error::AddressOutOfRange(0)) }
+    fn read(&self) -> Result<Word<D>, Error> {
+        if self.valid { Ok(self.data[self.addr.unsigned() as usize]) } else { Err(Error::AddressOutOfRange(0)) }
     }
 
-    fn write(&mut self, _word: Data) -> Result<(), Error> {
+    fn write(&mut self, _word: Word<D>) -> Result<(), Error> {
         Err(Error::CannotWrite)
     }
 }
 
 /// Read-write storage with arbitrary size and one-cycle latency. When a new address arrives, it is
 /// saved for use during the next cycle.
-pub struct RAM {
+pub struct RAM<A: Nat + Storable, D: Nat + Storable> {
     pub size: usize,
 
-    data: Box<[Data]>,
+    data: Box<[Word<D>]>,
 
-    addr: Addr,
-    next_addr: Addr,
+    addr: Word<A>,
+    next_addr: Word<A>,
     valid: bool,
 }
 
-impl RAM {
+impl<A: Nat + Storable, D: Nat + Storable> RAM<A, D> {
     pub fn new(size: usize) -> Self {
-        RAM { size, data: vec![0u64; size].into_boxed_slice(), addr: 0, next_addr: 0, valid: false }
+        RAM { size, data: vec![Word::new(0); size].into_boxed_slice(), addr: Word::new(0), next_addr: Word::new(0), valid: false }
     }
 
     /// For "external" users (not the simulation); modify the contents of a location immediately.
-    pub fn poke(&mut self, addr: Addr, word: Data) -> Result<(), Error> {
-        if addr >= self.size {
-            Err(Error::AddressOutOfRange(addr))
+    pub fn poke(&mut self, addr: Word<A>, word: Word<D>) -> Result<(), Error> {
+        let a = addr.unsigned() as usize;
+        if a >= self.size {
+            Err(Error::AddressOutOfRange(a))
         } else {
-            self.data[addr] = word;
+            self.data[a] = word;
             Ok(())
         }
     }
 
     /// For "external" users (not the simulation); inspect the contents of a location.
-    pub fn peek(&self, addr: Addr) -> Result<Data, Error> {
-        if addr >= self.size {
-            Err(Error::AddressOutOfRange(addr))
+    pub fn peek(&self, addr: Word<A>) -> Result<Word<D>, Error> {
+        let a = addr.unsigned() as usize;
+        if a >= self.size {
+            Err(Error::AddressOutOfRange(a))
         } else {
-            Ok(self.data[addr])
+            Ok(self.data[a])
         }
     }
 }
 
-impl MemoryDevice for RAM {
-    fn set_addr(&mut self, addr: Addr) -> Result<(), Error> {
-        if addr >= self.size {
+impl<A: Nat + Storable, D: Nat + Storable> MemoryDevice<A, D> for RAM<A, D> {
+    fn set_addr(&mut self, addr: Word<A>) -> Result<(), Error> {
+        let a = addr.unsigned() as usize;
+        if a >= self.size {
             self.valid = false;
-            Err(Error::AddressOutOfRange(addr))
+            Err(Error::AddressOutOfRange(a))
         } else {
             self.next_addr = addr;
             self.valid = true;
@@ -137,13 +138,13 @@ impl MemoryDevice for RAM {
         self.addr = self.next_addr;
     }
 
-    fn read(&self) -> Result<u64, Error> {
-        if self.valid { Ok(self.data[self.addr]) } else { Err(Error::AddressOutOfRange(0)) }
+    fn read(&self) -> Result<Word<D>, Error> {
+        if self.valid { Ok(self.data[self.addr.unsigned() as usize]) } else { Err(Error::AddressOutOfRange(0)) }
     }
 
-    fn write(&mut self, word: Data) -> Result<(), Error> {
+    fn write(&mut self, word: Word<D>) -> Result<(), Error> {
         if self.valid {
-            self.data[self.addr] = word;
+            self.data[self.addr.unsigned() as usize] = word;
             Ok(())
         } else {
             Err(Error::AddressOutOfRange(0))
@@ -151,8 +152,8 @@ impl MemoryDevice for RAM {
     }
 }
 
-pub struct Overlay<T> {
-    pub base: Addr,
+pub struct Overlay<A: Nat + Storable, T> {
+    pub base: Word<A>,
     pub device: T,
 }
 
@@ -165,15 +166,16 @@ pub struct Overlay<T> {
 /// Each device handles its own address latching. `set_addr` is forwarded to every device so each
 /// one can record whether the address falls within its range; `read`/`write` then return the first
 /// `Ok` result.
-pub struct MemorySystem<T> {
-    pub devices: Vec<Overlay<T>>,
+pub struct MemorySystem<A: Nat + Storable, T> {
+    pub devices: Vec<Overlay<A, T>>,
 }
 
-impl<T: MemoryDevice> MemoryDevice for MemorySystem<T> {
+impl<A: Nat + Storable, D: Nat + Storable, T: MemoryDevice<A, D>> MemoryDevice<A, D> for MemorySystem<A, T> {
     /// Forward the address to every device (base-adjusted). Each device records whether it's valid.
-    fn set_addr(&mut self, addr: Addr) -> Result<(), Error> {
+    fn set_addr(&mut self, addr: Word<A>) -> Result<(), Error> {
         for overlay in &mut self.devices {
-            let _ = overlay.device.set_addr(addr.checked_sub(overlay.base).unwrap_or(usize::MAX));
+            let offset = addr.unsigned().wrapping_sub(overlay.base.unsigned());
+            let _ = overlay.device.set_addr(Word::new(offset));
         }
         Ok(())
     }
@@ -185,7 +187,7 @@ impl<T: MemoryDevice> MemoryDevice for MemorySystem<T> {
     }
 
     /// Read from the first device that covers the current address.
-    fn read(&self) -> Result<Data, Error> {
+    fn read(&self) -> Result<Word<D>, Error> {
         for overlay in &self.devices {
             if let Ok(val) = overlay.device.read() {
                 return Ok(val);
@@ -195,7 +197,7 @@ impl<T: MemoryDevice> MemoryDevice for MemorySystem<T> {
     }
 
     /// Write to the first device that covers the current address.
-    fn write(&mut self, word: Data) -> Result<(), Error> {
+    fn write(&mut self, word: Word<D>) -> Result<(), Error> {
         for overlay in &mut self.devices {
             if overlay.device.write(word).is_ok() {
                 return Ok(());
@@ -209,25 +211,29 @@ impl<T: MemoryDevice> MemoryDevice for MemorySystem<T> {
 /// The chip can also write a value out.
 ///
 /// Unlike RAM/ROM, there is no address — it's a single register in each direction.
-pub struct Serial {
+pub struct Serial<D: Nat + Storable> {
     /// Value available for the chip to read (set by the harness/outside world).
-    read_val: Data,
+    read_val: Word<D>,
     /// Value written by the chip (readable by the harness/outside world).
-    write_val: Data,
+    write_val: Word<D>,
     /// Whether the chip wrote this cycle.
     written: bool,
 }
 
-impl Serial {
+impl<D: Nat + Storable> Serial<D> {
     pub fn new() -> Self {
-        Serial { read_val: 0, write_val: 0, written: false }
+        Serial {
+            read_val: Word::new(0),
+            write_val: Word::new(0),
+            written: false
+        }
     }
 
     /// Push a value from the outside world for the chip to read.
-    pub fn push(&mut self, val: Data) { self.read_val = val; }
+    pub fn push(&mut self, val: Word<D>) { self.read_val = val; }
 
     /// Pull the last value written by the chip (or 0 if nothing was written).
-    pub fn pull(&self) -> Data { self.write_val }
+    pub fn pull(&self) -> Word<D> { self.write_val }
 
     /// Check whether the chip wrote during the last cycle.
     pub fn was_written(&self) -> bool { self.written }
@@ -236,22 +242,20 @@ impl Serial {
     pub fn clear(&mut self) { self.written = false; }
 }
 
-impl MemoryDevice for Serial {
-    fn set_addr(&mut self, _addr: Addr) -> Result<(), Error> { Ok(()) }
+impl<A: Nat + Storable, D: Nat + Storable> MemoryDevice<A, D> for Serial<D> {
+    fn set_addr(&mut self, _addr: Word<A>) -> Result<(), Error> {
+        Ok(())
+    }
+
     fn ticktock(&mut self) {}
-    fn read(&self) -> Result<Data, Error> { Ok(self.read_val) }
-    fn write(&mut self, word: Data) -> Result<(), Error> {
+
+    fn read(&self) -> Result<Word<D>, Error> {
+        Ok(self.read_val)
+    }
+
+    fn write(&mut self, word: Word<D>) -> Result<(), Error> {
         self.write_val = word;
         self.written = true;
         Ok(())
     }
-}
-
-/// Allow `Rc<RefCell<RAM>>` to be used as a `MemoryDevice`, enabling shared ownership of a RAM
-/// region (e.g. between a `MemorySystem` overlay and an external handle).
-impl MemoryDevice for std::rc::Rc<std::cell::RefCell<RAM>> {
-    fn set_addr(&mut self, addr: Addr) -> Result<(), Error>   { self.borrow_mut().set_addr(addr) }
-    fn ticktock(&mut self)                                    { self.borrow_mut().ticktock(); }
-    fn read(&self)                     -> Result<Data, Error> { self.borrow().read() }
-    fn write(&mut self, word: Data)    -> Result<(), Error>   { self.borrow_mut().write(word) }
 }

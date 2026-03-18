@@ -103,7 +103,7 @@ fn serial_behavior() {
     assert_eq!(state.get("data_out"), 0u16.into());
 
     // Push a value from the outside world; chip sees it after ticktock.
-    handle.push(1234);
+    handle.push(1234u16.into());
     state.ticktock();
     assert_eq!(state.get("data_out"), 1234u16.into());
 
@@ -111,7 +111,7 @@ fn serial_behavior() {
     state.set("data_in", 5678u16.into());
     state.set("write", true.into());
     state.ticktock();
-    assert_eq!(handle.pull(), 5678);
+    assert_eq!(handle.pull(), 5678u16.into());
     assert!(handle.was_written());
 
     // Clear and verify.
@@ -119,7 +119,7 @@ fn serial_behavior() {
     assert!(!handle.was_written());
 
     // Push a new value; visible after ticktock.
-    handle.push(42);
+    handle.push(42u16.into());
     state.set("write", false.into());
     state.ticktock();
     assert_eq!(state.get("data_out"), 42u16.into());

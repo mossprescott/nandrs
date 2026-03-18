@@ -3,24 +3,25 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::device::MemoryDevice as _;
+use crate::nat::Nat;
 use crate::word::{Word, Storable};
 
 use super::{ChipWiring, wiring};
 use super::memory::RegionMap;
 
-type DeviceRAM    = Rc<RefCell<crate::device::RAM>>;
-type DeviceROM    = Rc<RefCell<crate::device::ROM>>;
-type DeviceSerial = Rc<RefCell<crate::device::Serial>>;
+type DeviceRAM<A, D>    = Rc<RefCell<crate::device::RAM<A, D>>>;
+type DeviceROM<A, D>    = Rc<RefCell<crate::device::ROM<A, D>>>;
+type DeviceSerial<D>    = Rc<RefCell<crate::device::Serial<D>>>;
 
 /// A device that can appear as a region within a MemorySystem's address space.
-enum MSRegion {
-    RAM(DeviceRAM),
-    ROM(DeviceROM),
-    Serial(DeviceSerial),
+enum MSRegion<A: Nat + Storable, D: Nat + Storable> {
+    RAM(DeviceRAM<A, D>),
+    ROM(DeviceROM<A, D>),
+    Serial(DeviceSerial<D>),
 }
 
-impl crate::device::MemoryDevice for MSRegion {
-    fn set_addr(&mut self, addr: crate::device::Addr) -> Result<(), crate::device::Error> {
+impl<A: Nat + Storable, D: Nat + Storable> crate::device::MemoryDevice<A, D> for MSRegion<A, D> {
+    fn set_addr(&mut self, addr: Word<A>) -> Result<(), crate::device::Error> {
         match self {
             MSRegion::RAM(d)    => d.borrow_mut().set_addr(addr),
             MSRegion::ROM(d)    => d.borrow_mut().set_addr(addr),
@@ -31,39 +32,40 @@ impl crate::device::MemoryDevice for MSRegion {
         match self {
             MSRegion::RAM(d)    => d.borrow_mut().ticktock(),
             MSRegion::ROM(d)    => d.borrow_mut().ticktock(),
-            MSRegion::Serial(d) => d.borrow_mut().ticktock(),
+            MSRegion::Serial(d) => <crate::device::Serial<D> as crate::device::MemoryDevice<A, D>>::ticktock(&mut *d.borrow_mut()),
         }
     }
-    fn read(&self) -> Result<crate::device::Data, crate::device::Error> {
+    fn read(&self) -> Result<Word<D>, crate::device::Error> {
         match self {
             MSRegion::RAM(d)    => d.borrow().read(),
             MSRegion::ROM(d)    => d.borrow().read(),
-            MSRegion::Serial(d) => d.borrow().read(),
+            MSRegion::Serial(d) => <crate::device::Serial<D> as crate::device::MemoryDevice<A, D>>::read(&*d.borrow()),
         }
     }
-    fn write(&mut self, word: crate::device::Data) -> Result<(), crate::device::Error> {
+    fn write(&mut self, word: Word<D>) -> Result<(), crate::device::Error> {
         match self {
             MSRegion::RAM(d)    => d.borrow_mut().write(word),
             MSRegion::ROM(d)    => d.borrow_mut().write(word),
-            MSRegion::Serial(d) => d.borrow_mut().write(word),
+            MSRegion::Serial(d) => <crate::device::Serial<D> as crate::device::MemoryDevice<A, D>>::write(&mut *d.borrow_mut(), word),
         }
     }
 }
 
-type MSDevice = crate::device::MemorySystem<MSRegion>;
+type MSDevice<A, D> = crate::device::MemorySystem<A, MSRegion<A, D>>;
 
 /// Runtime state of a simulated chip, and access to its inputs and outputs.
 ///
-/// Internal state is stored in u64 for efficiency.
-pub struct ChipState<Width: Storable> {
+/// Internal state is stored in u64 for efficiency; the raw bits are wrapped in the appropriate
+/// `Word<A>` (addresses) and `Word<D>` (data) when they are exchanged with the outside world.
+pub struct ChipState<A: Nat + Storable, D: Nat + Storable> {
     /// The graph of components, input, and outputs, and where state is to be stored.
-    wiring:       ChipWiring<Width>,
+    wiring:       ChipWiring<D>,
 
-    ram_devices:    Vec<DeviceRAM>,
-    rom_devices:    Vec<Rc<RefCell<crate::device::ROM>>>,
-    ms_devices:     Vec<Rc<RefCell<MSDevice>>>,
-    serial_devices: Vec<Rc<RefCell<crate::device::Serial>>>,
-    bus_residents:   Vec<BusResident>,
+    ram_devices:    Vec<DeviceRAM<A, D>>,
+    rom_devices:    Vec<DeviceROM<A, D>>,
+    ms_devices:     Vec<Rc<RefCell<MSDevice<A, D>>>>,
+    serial_devices: Vec<DeviceSerial<D>>,
+    bus_residents:   Vec<BusResident<A, D>>,
 
     /// State of register contents as of the last clock cycle, as well as any wires holding constant
     /// values.
@@ -82,47 +84,47 @@ pub struct ChipState<Width: Storable> {
 }
 
 /// Allocate simulation state (RAM/ROM buffers, registers) and run an initial evaluation.
-pub fn initialize<Width: Storable>(wiring: ChipWiring<Width>) -> ChipState<Width> {
+pub fn initialize<A: Nat + Storable, D: Nat + Storable>(wiring: ChipWiring<D>) -> ChipState<A, D> {
     let n_wires = wiring.n_wires;
 
-    let ram_devices: Vec<DeviceRAM> = wiring.ram_specs.iter()
+    let ram_devices: Vec<DeviceRAM<A, D>> = wiring.ram_specs.iter()
         .map(|s| Rc::new(RefCell::new(crate::device::RAM::new(s.size))))
         .collect();
 
-    let rom_devices: Vec<Rc<RefCell<crate::device::ROM>>> = wiring.rom_specs.iter()
+    let rom_devices: Vec<DeviceROM<A, D>> = wiring.rom_specs.iter()
         .map(|s| Rc::new(RefCell::new(crate::device::ROM::new(s.size))))
         .collect();
 
-    let mut ms_bus_residents: Vec<BusResident> = Vec::new();
-    let ms_devices: Vec<Rc<RefCell<MSDevice>>> = wiring.ms_specs.iter().map(|spec| {
-        let mut overlays: Vec<crate::device::Overlay<MSRegion>> = Vec::new();
+    let mut ms_bus_residents: Vec<BusResident<A, D>> = Vec::new();
+    let ms_devices: Vec<Rc<RefCell<MSDevice<A, D>>>> = wiring.ms_specs.iter().map(|spec| {
+        let mut overlays: Vec<crate::device::Overlay<A, MSRegion<A, D>>> = Vec::new();
         for region in &spec.regions {
             match region {
                 RegionMap::RAM(r) => {
-                    let ram: DeviceRAM = Rc::new(RefCell::new(crate::device::RAM::new(r.size)));
+                    let ram: DeviceRAM<A, D> = Rc::new(RefCell::new(crate::device::RAM::new(r.size)));
                     ms_bus_residents.push(BusResident::RAM(RAMHandle { base: r.base, inner: Rc::clone(&ram) }));
-                    overlays.push(crate::device::Overlay { base: r.base, device: MSRegion::RAM(ram) });
+                    overlays.push(crate::device::Overlay { base: Word::new(r.base as u64), device: MSRegion::RAM(ram) });
                 }
                 RegionMap::ROM(r) => {
-                    let rom: DeviceROM = Rc::new(RefCell::new(crate::device::ROM::new(r.size)));
+                    let rom: DeviceROM<A, D> = Rc::new(RefCell::new(crate::device::ROM::new(r.size)));
                     ms_bus_residents.push(BusResident::ROM(ROMHandle { inner: Rc::clone(&rom) }));
-                    overlays.push(crate::device::Overlay { base: r.base, device: MSRegion::ROM(rom) });
+                    overlays.push(crate::device::Overlay { base: Word::new(r.base as u64), device: MSRegion::ROM(rom) });
                 }
                 RegionMap::Serial(s) => {
-                    let serial: DeviceSerial = Rc::new(RefCell::new(crate::device::Serial::new()));
+                    let serial: DeviceSerial<D> = Rc::new(RefCell::new(crate::device::Serial::new()));
                     ms_bus_residents.push(BusResident::Serial(SerialHandle { inner: Rc::clone(&serial) }));
-                    overlays.push(crate::device::Overlay { base: s.base, device: MSRegion::Serial(serial) });
+                    overlays.push(crate::device::Overlay { base: Word::new(s.base as u64), device: MSRegion::Serial(serial) });
                 }
             }
         }
         Rc::new(RefCell::new(MSDevice { devices: overlays }))
     }).collect();
 
-    let serial_devices: Vec<Rc<RefCell<crate::device::Serial>>> = wiring.serial_specs.iter()
+    let serial_devices: Vec<DeviceSerial<D>> = wiring.serial_specs.iter()
         .map(|_| Rc::new(RefCell::new(crate::device::Serial::new())))
         .collect();
 
-    let mut bus_residents: Vec<BusResident> = Vec::new();
+    let mut bus_residents: Vec<BusResident<A, D>> = Vec::new();
     for ram in &ram_devices {
         bus_residents.push(BusResident::RAM(RAMHandle { base: 0, inner: Rc::clone(ram) }));
     }
@@ -155,7 +157,7 @@ pub fn initialize<Width: Storable>(wiring: ChipWiring<Width>) -> ChipState<Width
     state
 }
 
-impl<D: Storable> ChipState<D> {
+impl<A: Nat + Storable, D: Nat + Storable> ChipState<A, D> {
 
     /// Set the value of an input. Combinational outputs will reflect this on the next `get()`.
     pub fn set(&mut self, name: &str, value: Word<D>) {
@@ -177,12 +179,12 @@ impl<D: Storable> ChipState<D> {
     }
 
     /// RAM and ROM instances present in the simulated circuit.
-    pub fn bus_residents(&self) -> &[BusResident] {
+    pub fn bus_residents(&self) -> &[BusResident<A, D>] {
         &self.bus_residents
     }
 
     /// RAM and ROM instances present in the simulated circuit, mutably (e.g. to load a ROM).
-    pub fn bus_residents_mut(&mut self) -> &mut [BusResident] {
+    pub fn bus_residents_mut(&mut self) -> &mut [BusResident<A, D>] {
         &mut self.bus_residents
     }
 
@@ -201,17 +203,18 @@ impl<D: Storable> ChipState<D> {
                 }
                 wiring::ComponentWiring::RAM(ram) => {
                     if read_bit(&self.wire_state, ram.write) {
-                        let _ = self.ram_devices[ram.device_slot].borrow_mut().write(self.wire_state[ram.data_in.0 as usize]);
+                        let _ = self.ram_devices[ram.device_slot].borrow_mut().write(Word::new(self.wire_state[ram.data_in.0 as usize]));
                     }
                 }
                 wiring::ComponentWiring::MemorySystem(ms) => {
                     if read_bit(&self.wire_state, ms.write) {
-                        let _ = self.ms_devices[ms.device_slot].borrow_mut().write(self.wire_state[ms.data_in.0 as usize]);
+                        let _ = self.ms_devices[ms.device_slot].borrow_mut().write(Word::new(self.wire_state[ms.data_in.0 as usize]));
                     }
                 }
                 wiring::ComponentWiring::Serial(s) => {
                     if read_bit(&self.wire_state, s.write) {
-                        let _ = self.serial_devices[s.device_slot].borrow_mut().write(self.wire_state[s.data_in.0 as usize]);
+                        let word: Word<D> = Word::new(self.wire_state[s.data_in.0 as usize]);
+                        let _ = <crate::device::Serial<D> as crate::device::MemoryDevice<A, D>>::write(&mut *self.serial_devices[s.device_slot].borrow_mut(), word);
                     }
                 }
                 _ => {}
@@ -223,11 +226,11 @@ impl<D: Storable> ChipState<D> {
         for comp in &self.wiring.component_wiring {
             match comp {
                 wiring::ComponentWiring::RAM(ram) => {
-                    let _ = self.ram_devices[ram.device_slot].borrow_mut().set_addr(self.wire_state[ram.addr.0 as usize] as usize);
+                    let _ = self.ram_devices[ram.device_slot].borrow_mut().set_addr(Word::new(self.wire_state[ram.addr.0 as usize]));
                     self.ram_devices[ram.device_slot].borrow_mut().ticktock();
                 }
                 wiring::ComponentWiring::MemorySystem(ms) => {
-                    let _ = self.ms_devices[ms.device_slot].borrow_mut().set_addr(self.wire_state[ms.addr.0 as usize] as usize);
+                    let _ = self.ms_devices[ms.device_slot].borrow_mut().set_addr(Word::new(self.wire_state[ms.addr.0 as usize]));
                     self.ms_devices[ms.device_slot].borrow_mut().ticktock();
                 }
                 _ => {}
@@ -243,7 +246,7 @@ impl<D: Storable> ChipState<D> {
         // addr latch for the cycle after.
         for comp in &self.wiring.component_wiring {
             if let wiring::ComponentWiring::ROM(rom) = comp {
-                let _ = self.rom_devices[rom.device_slot].borrow_mut().set_addr(self.wire_state[rom.addr.0 as usize] as usize);
+                let _ = self.rom_devices[rom.device_slot].borrow_mut().set_addr(Word::new(self.wire_state[rom.addr.0 as usize]));
             }
         }
     }
@@ -263,16 +266,16 @@ impl<D: Storable> ChipState<D> {
         for comp in &self.wiring.component_wiring {
             match comp {
                 wiring::ComponentWiring::RAM(ram) => {
-                    self.wire_state[ram.out.0 as usize] = self.ram_devices[ram.device_slot].borrow().read().unwrap_or(0);
+                    self.wire_state[ram.out.0 as usize] = self.ram_devices[ram.device_slot].borrow().read().map(|w| w.unsigned()).unwrap_or(0);
                 }
                 wiring::ComponentWiring::ROM(rom) => {
-                    self.wire_state[rom.out.0 as usize] = self.rom_devices[rom.device_slot].borrow().read().unwrap_or(0);
+                    self.wire_state[rom.out.0 as usize] = self.rom_devices[rom.device_slot].borrow().read().map(|w| w.unsigned()).unwrap_or(0);
                 }
                 wiring::ComponentWiring::MemorySystem(ms) => {
-                    self.wire_state[ms.out.0 as usize] = self.ms_devices[ms.device_slot].borrow().read().unwrap_or(0);
+                    self.wire_state[ms.out.0 as usize] = self.ms_devices[ms.device_slot].borrow().read().map(|w| w.unsigned()).unwrap_or(0);
                 }
                 wiring::ComponentWiring::Serial(s) => {
-                    self.wire_state[s.out.0 as usize] = self.serial_devices[s.device_slot].borrow().read().unwrap_or(0);
+                    self.wire_state[s.out.0 as usize] = <crate::device::Serial<D> as crate::device::MemoryDevice<A, D>>::read(&*self.serial_devices[s.device_slot].borrow()).map(|w| w.unsigned()).unwrap_or(0);
                 }
                 _ => {}
             }
@@ -347,35 +350,35 @@ fn write_bit(ws: &mut [u64], b: wiring::BitRef, value: bool) {
 }
 
 /// Access to auxiliary devices "on the bus" which the harness needs to inspect.
-pub enum BusResident {
-    RAM(RAMHandle),
-    ROM(ROMHandle),
-    Serial(SerialHandle),
+pub enum BusResident<A: Nat + Storable, D: Nat + Storable> {
+    RAM(RAMHandle<A, D>),
+    ROM(ROMHandle<A, D>),
+    Serial(SerialHandle<D>),
 }
 
 /// A clonable handle to a RAM instance (standalone or a region within a MemorySystem).
 ///
 /// `base` is the region's base address in the memory map (0 for standalone RAM).
 #[derive(Clone)]
-pub struct RAMHandle {
+pub struct RAMHandle<A: Nat + Storable, D: Nat + Storable> {
     pub base: usize,
-    inner: Rc<RefCell<crate::device::RAM>>,
+    inner: Rc<RefCell<crate::device::RAM<A, D>>>,
 }
 
-impl RAMHandle {
-    pub fn peek(&self, addr: u64) -> u64    { self.inner.borrow().peek(addr as usize).unwrap_or(0) }
-    pub fn poke(&self, addr: u64, val: u64) { let _ = self.inner.borrow_mut().poke(addr as usize, val); }
-    pub fn size(&self) -> usize             { self.inner.borrow().size }
+impl<A: Nat + Storable, D: Nat + Storable> RAMHandle<A, D> {
+    pub fn peek(&self, addr: u64) -> Word<D>             { self.inner.borrow().peek(Word::new(addr)).unwrap_or(Word::new(0)) }
+    pub fn poke(&self, addr: u64, val: Word<D>)          { let _ = self.inner.borrow_mut().poke(Word::new(addr), val); }
+    pub fn size(&self) -> usize                           { self.inner.borrow().size }
 }
 
 /// A clonable handle to a ROM instance in the simulated circuit.
 #[derive(Clone)]
-pub struct ROMHandle {
-    inner: Rc<RefCell<crate::device::ROM>>,
+pub struct ROMHandle<A: Nat + Storable, D: Nat + Storable> {
+    inner: Rc<RefCell<crate::device::ROM<A, D>>>,
 }
 
-impl ROMHandle {
-    pub fn flash(&self, data: Vec<u64>) {
+impl<A: Nat + Storable, D: Nat + Storable> ROMHandle<A, D> {
+    pub fn flash(&self, data: Vec<Word<D>>) {
         let _ = self.inner.borrow_mut().flash(data.into_boxed_slice());
     }
     pub fn size(&self) -> usize { self.inner.borrow().size }
@@ -383,15 +386,15 @@ impl ROMHandle {
 
 /// A clonable handle to a Serial I/O device in the simulated circuit.
 #[derive(Clone)]
-pub struct SerialHandle {
-    inner: Rc<RefCell<crate::device::Serial>>,
+pub struct SerialHandle<D: Nat + Storable> {
+    inner: Rc<RefCell<crate::device::Serial<D>>>,
 }
 
-impl SerialHandle {
+impl<D: Nat + Storable> SerialHandle<D> {
     /// Push a value from the outside world for the chip to read.
-    pub fn push(&self, val: u64)   { self.inner.borrow_mut().push(val); }
+    pub fn push(&self, val: Word<D>)   { self.inner.borrow_mut().push(val); }
     /// Pull the last value written by the chip.
-    pub fn pull(&self) -> u64      { self.inner.borrow().pull() }
+    pub fn pull(&self) -> Word<D>      { self.inner.borrow().pull() }
     /// Check whether the chip wrote during the last cycle.
     pub fn was_written(&self) -> bool { self.inner.borrow().was_written() }
     /// Clear the written flag.

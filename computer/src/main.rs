@@ -9,18 +9,19 @@ use assignments::project_05::{Computer, flatten, find_ram, find_rom, find_screen
 use assignments::project_06::{assemble, Program};
 use simulator::declare::Chip as _;
 use simulator::simulate::{simulate, synthesize, initialize, RAMHandle};
+use simulator::nat::N16;
 use simulator::word::Word16;
 
 const WIDTH: usize = 512;
 const HEIGHT: usize = 256;
 const BEZEL: usize = 20;
-const FRAME_TIME: Duration = Duration::from_millis(16);
+const FRAME_TIME: Duration = Duration::from_millis(1000/60);
 const BEZEL_PNG: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/bezel.png");
 
-fn render_screen(screen: &RAMHandle, pixels: &mut [u32], scale: usize) {
+fn render_screen(screen: &RAMHandle<N16, N16>, pixels: &mut [u32], scale: usize) {
     let win_width = (WIDTH + 2 * BEZEL) * scale;
     for word_idx in 0..(WIDTH / 16 * HEIGHT) {
-        let word = screen.peek(word_idx as u64) as u16;
+        let word = screen.peek(word_idx as u64).unsigned() as u16;
         let row = word_idx / (WIDTH / 16);
         let col_word = word_idx % (WIDTH / 16);
         for bit in 0..16usize {
@@ -200,7 +201,7 @@ fn main() {
         s
     };
 
-    find_rom(&state).flash(instructions.iter().map(|&v| v as u64).collect());
+    find_rom(&state).flash(instructions.iter().map(|&v| Word16::from(v)).collect());
 
     if no_exec {
         return;
@@ -285,7 +286,7 @@ fn main() {
                 }
             }
 
-            keyboard.push(hack_keycode(&window));
+            keyboard.push((hack_keycode(&window) as u16).into());
 
             render_screen(&screen, &mut pixels, scale);
             window.update_with_buffer(&pixels, win_width, win_height).unwrap();

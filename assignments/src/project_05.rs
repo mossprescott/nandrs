@@ -149,14 +149,14 @@ pub fn memory_system() -> MemoryMap {
 }
 
 /// Access the main RAM region (base address 0) of the MemorySystem.
-pub fn find_ram(state: &ChipState<N16>) -> RAMHandle {
+pub fn find_ram(state: &ChipState<N16, N16>) -> RAMHandle<N16, N16> {
     state.bus_residents().iter()
         .find_map(|r| if let BusResident::RAM(h) = r { if h.base == 0 { Some(h.clone()) } else { None } } else { None })
         .expect("no RAM region at base 0")
 }
 
 /// Access the screen RAM region (base address 16384) of the MemorySystem.
-pub fn find_screen(state: &ChipState<N16>) -> RAMHandle {
+pub fn find_screen(state: &ChipState<N16, N16>) -> RAMHandle<N16, N16> {
     state.bus_residents().iter()
         .find_map(|r| if let BusResident::RAM(h) = r { if h.base == SCREEN_BASE as usize { Some(h.clone()) } else { None } } else { None })
         .expect("no RAM region at SCREEN_BASE")
@@ -164,14 +164,14 @@ pub fn find_screen(state: &ChipState<N16>) -> RAMHandle {
 
 /// Access the serial interface which is normally used to provide keyboard input to the CPU,
 /// assuming a normal MemorySystem is present. Otherwise panic.
-pub fn find_keyboard(state: &ChipState<N16>) -> SerialHandle {
+pub fn find_keyboard(state: &ChipState<N16, N16>) -> SerialHandle<N16> {
     state.bus_residents().iter()
         .find_map(|r| if let BusResident::Serial(h) = r { Some(h.clone()) } else { None })
         .expect("no Serial device found")
 }
 
 /// Access the ROM, assuming a normal MemorySystem is present. Otherwise panic.
-pub fn find_rom(state: &ChipState<N16>) -> ROMHandle {
+pub fn find_rom(state: &ChipState<N16, N16>) -> ROMHandle<N16, N16> {
     state.bus_residents().iter()
         .find_map(|r| if let BusResident::ROM(h) = r { Some(h.clone()) } else { None })
         .expect("no ROM found")
