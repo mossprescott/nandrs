@@ -12,7 +12,11 @@ pub enum Project03Component {
     Register16(Register16),
     PC(PC),
 }
-impl From<Project02Component> for Project03Component { fn from(c: Project02Component) -> Self { Project03Component::Project02(c) } }
+impl<C: Into<Project02Component>> From<C> for Project03Component {
+    fn from(c: C) -> Self {
+        Project03Component::Project02(c.into())
+    }
+}
 impl From<Register16> for Project03Component { fn from(c: Register16) -> Self { Project03Component::Register16(c) } }
 impl From<PC> for Project03Component { fn from(c: PC) -> Self { Project03Component::PC(c) } }
 
@@ -21,8 +25,7 @@ impl Component for Project03Component {
 
     fn expand(&self) -> Option<IC<Project03Component>> {
         match self {
-            Project03Component::Project02(c) => c.expand().map(|ic| IC { name: ic.name, intf: ic.intf, components: ic.components.into_iter().map(Into::into).collect() }),
-            Project03Component::Register16(c) => c.expand().map(|ic| unreachable!()),
+            Project03Component::Project02(c) => c.expand().map(|ic| IC { name: ic.name, intf: ic.intf, components: ic.components.into_iter().map(Into::into).collect() }),            Project03Component::Register16(c) => c.expand().map(|ic| unreachable!()),
             Project03Component::PC(c) => c.expand(),
         }
     }

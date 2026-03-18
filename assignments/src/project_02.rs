@@ -18,7 +18,11 @@ pub enum Project02Component {
     ALU(ALU),
 }
 
-impl From<Project01Component> for Project02Component { fn from(c: Project01Component) -> Self { Project02Component::Project01(c) } }
+impl<C: Into<Project01Component>> From<C> for Project02Component {
+    fn from(c: C) -> Self {
+        Project02Component::Project01(c.into())
+    }
+}
 impl From<FullAdder> for Project02Component { fn from(c: FullAdder) -> Self { Project02Component::FullAdder(c) } }
 impl From<Inc16>     for Project02Component { fn from(c: Inc16)     -> Self { Project02Component::Inc16(c)     } }
 impl From<Add16>     for Project02Component { fn from(c: Add16)     -> Self { Project02Component::Add16(c)     } }

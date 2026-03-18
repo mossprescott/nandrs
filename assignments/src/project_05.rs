@@ -25,7 +25,11 @@ pub enum Project05Component {
     Computer(Computer),
 }
 
-impl From<Project03Component> for Project05Component { fn from(c: Project03Component) -> Self { Project05Component::Project03(c)    } }
+impl<C: Into<Project03Component>> From<C> for Project05Component {
+    fn from(c: C) -> Self {
+        Project05Component::Project03(c.into())
+    }
+}
 impl From<ROM16>              for Project05Component { fn from(c: ROM16)              -> Self { Project05Component::ROM(c)           } }
 impl From<MemorySystem16>     for Project05Component { fn from(c: MemorySystem16)     -> Self { Project05Component::MemorySystem(c)  } }
 impl From<Decode>             for Project05Component { fn from(c: Decode)             -> Self { Project05Component::Decode(c)        } }
