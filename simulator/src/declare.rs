@@ -182,7 +182,7 @@ impl<C> Reflect for IC<C> {
 /// }}
 /// ```
 ///
-/// Generates:
+/// Generates (roughly):
 /// ```ignore
 ///    fn expand(&self) -> Option<IC<Self::Target>> {
 ///        let this = self;
@@ -200,14 +200,12 @@ impl<C> Reflect for IC<C> {
 /// ```
 #[macro_export]
 macro_rules! expand {
-    ( |$this:ident| { $( $var:ident : $T:ident { $($fields:tt)* } )* } ) => {
+    ( |$this:ident| { $( $var:ident : $T:ident { $($fields:tt)* } ),* $(,)? } ) => {
         fn expand(&self) -> Option<$crate::IC<Self::Target>> {
             let $this = self;
+            $( let $var = $T { $($fields)* }; )*
             let mut components = vec![];
-            $(
-                let $var = $T { $($fields)* };
-                components.push($var.into());
-            )*
+            $( components.push($var.into()); )*
             Some($crate::IC {
                 name: $crate::Reflect::name(self),
                 intf: $crate::Reflect::reflect(self),

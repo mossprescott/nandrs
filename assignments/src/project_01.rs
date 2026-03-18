@@ -163,16 +163,17 @@ pub struct And {
 impl Component for And {
     type Target = Project01Component;
 
-   /*
-      let nand = Nand { a: inputs.a, b: inputs.b }
-      let not = Not { a: nand.out }
-      outputs.out = not.out
-     */
-    fn expand(&self) -> Option<IC<Project01Component>> {
-        let nand = Nand { a: self.a.clone(), b: self.b.clone(), out: Output::new() };
-        let not  = Not  { a: nand.out.clone().into(),            out: self.out.clone() };
-        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![nand.into(), not.into()] })
-    }
+    expand! { |this| {
+        nand: Nand {
+            a: this.a.clone(),
+            b: this.b.clone(),
+            out: Output::new(),
+        },
+        not: Not {
+            a: nand.out.clone().into(),
+            out: this.out.clone(),
+        },
+    }}
 }
 
 /// True when at least one input is true.
