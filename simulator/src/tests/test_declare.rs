@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use crate::{Component, Input, Output, Reflect, expand};
 use crate::declare::{Chip, Interface, BusRef};
 use crate::component::{Nand, Combinational};
@@ -15,8 +14,8 @@ pub struct TestNot {
 impl Reflect for TestNot {
     fn reflect(&self) -> Interface {
         Interface {
-            inputs:  [("a".to_string(),   self.a.clone().into())].into(),
-            outputs: [("out".to_string(), self.out.clone().into())].into(),
+            inputs:  [("a".to_string(),   BusRef::from_input(self.a))].into(),
+            outputs: [("out".to_string(), BusRef::from_output(self.out))].into(),
         }
     }
     fn name(&self) -> String { "TestNot".to_string() }
@@ -45,19 +44,19 @@ fn test_expand_macro() {
     assert_eq!(ic.name(), "TestNot");
 
     assert_eq!(ic.intf.inputs.len(), 1);
-    let a = &ic.intf.inputs["a"];
+    let a = ic.intf.inputs["a"];
 
     assert_eq!(ic.intf.outputs.len(), 1);
-    let out = &ic.intf.outputs["out"];
+    let out = ic.intf.outputs["out"];
 
     assert_eq!(ic.components.len(), 1);
     let Combinational::Nand(ref nand) = ic.components[0] else { panic!("expected Nand") };
 
-    let nand_a:   BusRef = nand.a.clone().into();
-    let nand_b:   BusRef = nand.b.clone().into();
-    let nand_out: BusRef = nand.out.clone().into();
+    let nand_a   = BusRef::from_input(nand.a);
+    let nand_b   = BusRef::from_input(nand.b);
+    let nand_out = BusRef::from_output(nand.out);
 
-    assert!(Rc::ptr_eq(&nand_a.id,   &a.id));
-    assert!(Rc::ptr_eq(&nand_b.id,   &a.id));  // b is tied to a (it's a NOT: a NAND a)
-    assert!(Rc::ptr_eq(&nand_out.id, &out.id));
+    assert_eq!(nand_a.id,   a.id);
+    assert_eq!(nand_b.id,   a.id);  // b is tied to a (it's a NOT: a NAND a)
+    assert_eq!(nand_out.id, out.id);
 }

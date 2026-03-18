@@ -59,11 +59,11 @@ pub fn derive_reflect(input: TokenStream) -> TokenStream {
 
         if type_name_starts_with(field_ty, "Input") {
             inputs.push(quote! {
-                (#field_name_str.to_string(), self.#field_name.clone().into())
+                (#field_name_str.to_string(), ::simulator::BusRef::from_input(self.#field_name))
             });
         } else if type_name_starts_with(field_ty, "Output") {
             outputs.push(quote! {
-                (#field_name_str.to_string(), self.#field_name.clone().into())
+                (#field_name_str.to_string(), ::simulator::BusRef::from_output(self.#field_name))
             });
         }
     }

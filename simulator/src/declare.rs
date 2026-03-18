@@ -1,41 +1,56 @@
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::rc::Rc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::nat::{Nat, N1, N16};
+
+static NEXT_ID: AtomicUsize = AtomicUsize::new(1);
+
+/// Unique identity of a wire (bus). Two bus ends with the same `WireId` are connected.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct WireId(pub usize);
+
+impl WireId {
+    fn new() -> Self {
+        WireId(NEXT_ID.fetch_add(1, Ordering::Relaxed))
+    }
+}
 
 /// The end of a wire that connects to destination components as one of their inputs.
 ///
 /// Carries a shared bus identity (`id`) and a bit `offset` within that bus.
-/// Clones share the same identity, so any number of inputs can read the same wire.
-#[derive(Clone)]
+/// Copies share the same identity, so any number of inputs can read the same wire.
 pub struct InputBus<Width: Nat> {
     width: PhantomData<Width>,
     /// Override for the number of bits, when fewer than Width::as_int() are connected.
     /// 0 means "use the type-level width".
     effective_width: usize,
-    id: Rc<()>,
+    id: WireId,
     offset: usize,
 }
 impl<Width: Nat> InputBus<Width> {
     pub fn new() -> Self {
-        InputBus { width: PhantomData, effective_width: 0, id: Rc::new(()), offset: 0 }
+        InputBus { width: PhantomData, effective_width: 0, id: WireId::new(), offset: 0 }
     }
 
     /// Select a single bit from this bus, returning a 1-bit InputBus that shares
     /// the same underlying wire identity but refers only to bit `i`.
     pub fn bit(&self, i: usize) -> Input {
         assert!(i < Width::as_int(), "bit index {} out of range for {}-bit bus", i, Width::as_int());
-        InputBus { width: PhantomData, effective_width: 0, id: self.id.clone(), offset: self.offset + i }
+        InputBus { width: PhantomData, effective_width: 0, id: self.id, offset: self.offset + i }
     }
 
     /// Slice `len` bits starting at `offset` from this bus.
     /// The returned bus shares the same wire identity but its BusRef will have width = `len`.
     pub fn mask(&self, offset: usize, len: usize) -> InputBus<Width> {
         assert!(offset + len <= Width::as_int(), "mask({}, {}) out of range for {}-bit bus", offset, len, Width::as_int());
-        InputBus { width: PhantomData, effective_width: len, id: self.id.clone(), offset: self.offset + offset }
+        InputBus { width: PhantomData, effective_width: len, id: self.id, offset: self.offset + offset }
     }
 }
+
+/// Copy/Clone need manual impls to avoid requiring `Width: Copy/Clone` (phantom type).
+impl<Width: Nat> Copy  for InputBus<Width> {}
+impl<Width: Nat> Clone for InputBus<Width> { fn clone(&self) -> Self { *self } }
 
 /// A simple, single-valued input signal; that is, an incoming 1-bit wire.
 pub type Input = InputBus<N1>;
@@ -46,13 +61,17 @@ pub type Input16 = InputBus<N16>;
 /// The end of a wire that originates from a single component output.
 ///
 /// Carries a shared bus identity (`id`) and a bit `offset` within that bus.
-/// Clones share the same identity, enabling fan-out to multiple inputs.
-#[derive(Clone)]
+/// Copies share the same identity, enabling fan-out to multiple inputs.
 pub struct OutputBus<Width: Nat> {
     width: PhantomData<Width>,
-    id: Rc<()>,
+    id: WireId,
     offset: usize,
 }
+
+/// Copy/Clone need manual impls to avoid requiring `Width: Copy/Clone` (phantom type).
+impl<Width: Nat> Copy  for OutputBus<Width> {}
+impl<Width: Nat> Clone for OutputBus<Width> { fn clone(&self) -> Self { *self } }
+
 impl<Width: Nat> From<OutputBus<Width>> for InputBus<Width> {
     /// Any number of inputs can be fed by the same output.
     fn from(output: OutputBus<Width>) -> Self {
@@ -62,14 +81,14 @@ impl<Width: Nat> From<OutputBus<Width>> for InputBus<Width> {
 impl<Width: Nat> OutputBus<Width> {
     /// Make a new wire of any width.
     pub fn new<N: Nat>() -> OutputBus<N> {
-        OutputBus { width: PhantomData, id: Rc::new(()), offset: 0 }
+        OutputBus { width: PhantomData, id: WireId::new(), offset: 0 }
     }
 
     /// Select a single bit from this output bus, returning a 1-bit OutputBus that
     /// shares the same underlying wire identity but refers only to bit `i`.
     pub fn bit(&self, i: usize) -> Output {
         assert!(i < Width::as_int(), "bit index {} out of range for {}-bit bus", i, Width::as_int());
-        OutputBus { width: PhantomData, id: self.id.clone(), offset: self.offset + i }
+        OutputBus { width: PhantomData, id: self.id, offset: self.offset + i }
     }
 
     /// Slice `len` bits starting at `offset` from this bus, returning an `InputBus<Width>`
@@ -77,7 +96,7 @@ impl<Width: Nat> OutputBus<Width> {
     /// Useful for connecting a subset of a wide bus to a narrower address input.
     pub fn mask(&self, offset: usize, len: usize) -> InputBus<Width> {
         assert!(offset + len <= Width::as_int(), "mask({}, {}) out of range for {}-bit bus", offset, len, Width::as_int());
-        InputBus { width: PhantomData, effective_width: len, id: self.id.clone(), offset: self.offset + offset }
+        InputBus { width: PhantomData, effective_width: len, id: self.id, offset: self.offset + offset }
     }
 }
 
@@ -121,25 +140,23 @@ pub trait Chip {
 }
 
 /// Type-erased bus reference, for use in Interface where the width is only known at runtime.
-/// The `id` field carries the wire identity: two BusRefs with the same `id` pointer refer to
+/// The `id` field carries the wire identity: two BusRefs with the same `id` refer to
 /// the same bus. `offset` is the first bit index within the bus; `width` is the count of bits.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct BusRef {
-    pub id: Rc<()>,
+    pub id: WireId,
     pub offset: usize,
     pub width: usize,
 }
 
-impl<Width: Nat> From<InputBus<Width>> for BusRef {
-    fn from(input: InputBus<Width>) -> Self {
-        let width = if input.effective_width != 0 { input.effective_width } else { Width::as_int() };
+impl BusRef {
+    pub fn from_input<W: Nat>(input: InputBus<W>) -> Self {
+        let width = if input.effective_width != 0 { input.effective_width } else { W::as_int() };
         BusRef { id: input.id, offset: input.offset, width }
     }
-}
 
-impl<Width: Nat> From<OutputBus<Width>> for BusRef {
-    fn from(output: OutputBus<Width>) -> Self {
-        BusRef { id: output.id, offset: output.offset, width: Width::as_int() }
+    pub fn from_output<W: Nat>(output: OutputBus<W>) -> Self {
+        BusRef { id: output.id, offset: output.offset, width: W::as_int() }
     }
 }
 

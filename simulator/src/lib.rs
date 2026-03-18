@@ -77,9 +77,8 @@ where
     C: Reflect + AsConst,
 {
     use std::collections::HashMap;
-    use std::rc::Rc;
 
-    let wire_id = |b: &BusRef| Rc::as_ptr(&b.id) as usize;
+    let wire_id = |b: &BusRef| b.id.0;
 
     // wire_id -> Vec<(label, is_sink, offset, width, raw)>
     // raw=true: source label is printed as-is with no subscript (used for Const)

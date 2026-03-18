@@ -3,7 +3,6 @@
 /// There is no clock and no state.
 
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use crate::component::Combinational;
 use crate::declare::{BusRef, IC, Reflect};
@@ -105,7 +104,7 @@ where
 }
 
 fn wire_id(busref: &BusRef) -> usize {
-    Rc::as_ptr(&busref.id) as usize
+    busref.id.0
 }
 
 fn width_mask(width: usize) -> u64 {
