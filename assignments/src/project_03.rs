@@ -104,8 +104,16 @@ impl Component for PC {
 
     // Note: no special ceremony needed for back-references to the register's output, because
     // that wire is already declared as the output "out".
+    /*
+        inc = Inc16 { a: reg.out }
+        next_inc   = Mux16 { a0: reg.out,       a1: inc.out,   sel: self.inc }
+        next_load  = Mux16 { a0: next_inc.out,  a1: self.addr, sel: self.load }
+        next_reset = Mux16 { a0: next_load.out, a1: 0,         sel: self.reset }
+        reg = Register16 { data_in: next_reset, write: 1 }
+     */
     fn expand(&self) -> Option<IC<Project03Component>> {
         let zero = Const { value: 0, out: Output16::new() };
+        let one = Const { value: 1, out: Output16::new() };
 
         let inc = Inc16 { a: self.out.clone().into(), out: Output16::new() };
         let next0 = Mux16 { a0: self.out.clone().into(), a1: inc.out.clone().into(), sel: self.inc.clone(), out: Output16::new() };
@@ -114,23 +122,20 @@ impl Component for PC {
 
         let next2 = Mux16 { a0: next1.out.clone().into(), a1: zero.out.clone().into(), sel: self.reset.clone(), out: Output16::new() };
 
-        let any0 = Or { a: self.inc.clone(), b: self.load.clone(), out: Output::new() };
-        let any = Or { a: any0.out.clone().into(), b: self.reset.clone(), out: Output::new() };
-
         let reg = Register16 {
             data_in:  next2.out.clone().into(),
-            write:    any.out.clone().into(),
+            write:    one.out.bit(0).into(),
             data_out: self.out.clone(),
         };
 
         Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![
             // FIXME: horrific
+            Project02Component::from(Project01Component::from(zero)).into(),
+            Project02Component::from(Project01Component::from(one)).into(),
             Project02Component::from(inc).into(),
             Project02Component::from(Project01Component::from(next0)).into(),
             Project02Component::from(Project01Component::from(next1)).into(),
             Project02Component::from(Project01Component::from(next2)).into(),
-            Project02Component::from(Project01Component::from(any0)).into(),
-            Project02Component::from(Project01Component::from(any)).into(),
             reg.into(),
         ]})
     }
