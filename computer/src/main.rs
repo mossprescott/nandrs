@@ -5,9 +5,11 @@ use std::time::{Duration, Instant};
 
 use minifb::{Key, Window, WindowOptions};
 
-use assignments::project_05::{Computer, flatten, find_ram, find_rom, find_screen, find_keyboard, memory_system};
+use assignments::project_03::Project03Component;
+use assignments::project_05::{Computer, Project05Component, flatten, find_ram, find_rom, find_screen, find_keyboard, memory_system};
 use assignments::project_06::{assemble, Program};
-use simulator::print_graph;
+use simulator::{IC, Reflect, Component as _};
+use simulator::{print_graph, print_ic_graph};
 use simulator::declare::Chip as _;
 use simulator::simulate::{synthesize, initialize, RAMHandle};
 use simulator::nat::N16;
@@ -164,6 +166,28 @@ fn fmt_commas(n: u64) -> String {
     out.chars().rev().collect()
 }
 
+/// Recursively expand high-level components (projects 3 and 5), until only primitives and simple
+/// logic are left (projects 1 and 2).
+pub fn half_flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Project05Component> {
+    fn go(comp: Project05Component) -> Vec<Project05Component> {
+        // Stop at Project02: don't expand ALU, adders, etc. into Nands.
+        if let Project05Component::Project03(Project03Component::Project02(_)) = &comp {
+            vec![comp]
+        }
+        else {
+            match comp.expand() {
+                None => vec![comp],
+                Some(ic) => ic.components.into_iter().flat_map(go).collect(),
+            }
+        }
+    }
+    IC {
+        name: format!("{} (half-flat)", chip.name()),
+        intf: chip.reflect(),
+        components: go(chip.into()),
+    }
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let trace   = args.contains(&"--trace".to_string());
@@ -192,6 +216,9 @@ fn main() {
     let computer = Computer::chip();
     if print {
         println!("{}", print_graph(&computer));
+
+        let squashed = half_flatten(Computer::chip());
+        println!("{}", print_ic_graph(&squashed));
     }
     let chip = flatten(computer);
     let wiring = synthesize(&chip, memory_system());

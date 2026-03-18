@@ -57,14 +57,27 @@ where
     C: Component + Reflect,
     C::Target: Component<Target = C::Target> + Reflect + AsConst,
 {
-    use std::collections::HashMap;
-    use std::rc::Rc;
-
     let intf = chip.reflect();
     let subs = match chip.expand() {
-        None    => return format!("{}:\n(primitive)", chip.name()),
+        None    => return format!("{}:\n  (primitive)", chip.name()),
         Some(s) => s,
     };
+    print_ic_graph_named(&chip.name(), &intf, &subs.components)
+}
+
+pub fn print_ic_graph<C>(ic: &IC<C>) -> String
+where
+    C: Reflect + AsConst,
+{
+    print_ic_graph_named(&ic.name, &ic.intf, &ic.components)
+}
+
+fn print_ic_graph_named<C>(name: &str, intf: &Interface, components: &[C]) -> String
+where
+    C: Reflect + AsConst,
+{
+    use std::collections::HashMap;
+    use std::rc::Rc;
 
     let wire_id = |b: &BusRef| Rc::as_ptr(&b.id) as usize;
 
@@ -81,7 +94,7 @@ where
             .push((port.clone(), true, busref.offset, busref.width, false));
     }
     let mut index = 0usize;
-    for sub in subs.components.iter() {
+    for sub in components.iter() {
         let sub_intf = sub.reflect();
         if let Some(v) = sub.as_const() {
             let label = v.to_string();
@@ -154,5 +167,5 @@ where
         let (bi, bp) = sink_key(b);
         ai.cmp(&bi).then_with(|| natural_cmp(&ap, &bp))
     });
-    format!("{}:\n{}", chip.name(), lines.join("\n"))
+    format!("{}:\n{}", name, lines.join("\n"))
 }
