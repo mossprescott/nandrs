@@ -190,10 +190,10 @@ fn and_graph() {
     let chip = And::chip();
     assert_eq!(
         print_graph(&chip),
-        "And:\n\
-         nand_0.a <- a\n\
-         nand_0.b <- b\n\
-         not_1.a <- nand_0.out\n\
-         out <- not_1.out"
+        "And:
+  nand_0.a <- a
+  nand_0.b <- b
+  not_1.a <- nand_0.out
+  out <- not_1.out"
     );
 }
