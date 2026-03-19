@@ -264,17 +264,11 @@ pub struct Not16 {
 impl Component for Not16 {
     type Target = Project01Component;
 
-    /*
-      for i in 0..16:
-        let not = Not { a: inputs.a[i] }
-        outputs.out[i] = not.out
-     */
-    // TODO: how to do these loops in expand!{}?
-    fn expand(&self) -> Option<IC<Project01Component>> {
-        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: (0..16).map(|i| {
-            Not { a: self.a.bit(i), out: self.out.bit(i) }.into()
-        }).collect() })
-    }
+    expand! { |this| {
+        for i in 0..16 {
+            _not: Not { a: this.a.bit(i), out: this.out.bit(i) }
+        }
+    }}
 }
 
 /// Bitwise `And` across two 16-bit inputs.
@@ -287,40 +281,12 @@ pub struct And16 {
 impl Component for And16 {
     type Target = Project01Component;
 
-    /*
-      for i in 0..16:
-        let and = And { a: inputs.a[i], b: inputs.b[i] }
-        outputs.out[i] = and.out
-     */
-    // TODO: how to do these loops in expand!{}?
-    fn expand(&self) -> Option<IC<Project01Component>> {
-        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: (0..16).map(|i| {
-            And { a: self.a.bit(i), b: self.b.bit(i), out: self.out.bit(i) }.into()
-        }).collect() })
-    }
+    expand! { |this| {
+        for i in 0..16 {
+            _and: And { a: this.a.bit(i), b: this.b.bit(i), out: this.out.bit(i) }
+        }
+    }}
 }
-
-// /// Bitwise `Or` across two 16-bit inputs.
-// #[derive(Reflect, Chip)]
-// pub struct Or16 {
-//     pub a: Input16,
-//     pub b: Input16,
-//     pub out: Output16,
-// }
-// impl Component for Or16 {
-//     type Target = Project01Component;
-
-//     /*
-//       for i in 0..16:
-//         let or = Or { a: inputs.a[i], b: inputs.b[i] }
-//         outputs.out[i] = or.out
-//      */
-//     fn expand(&self) -> Option<Vec<Project01Component>> {
-//         Some((0..16).map(|i| {
-//             Or { a: self.a.bit(i), b: self.b.bit(i), out: self.out.bit(i) }.into()
-//         }).collect())
-//     }
-// }
 
 // /// Selects between two 16-bit inputs bit-by-bit, using a single sel bit.
 // #[derive(Reflect, Chip)]
