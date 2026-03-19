@@ -7,7 +7,8 @@ use minifb::{Window, WindowOptions};
 
 use assignments::project_05::{Computer, flatten, find_ram, find_rom, find_screen, find_keyboard, memory_system};
 use assignments::project_06::{assemble, Program};
-use simulator::{print_graph, print_ic_graph};
+use simulator::{IC, print_graph, print_ic_graph};
+use simulator::component::Computational16;
 use simulator::declare::Chip as _;
 use simulator::simulate::{synthesize, initialize};
 use simulator::word::Word16;
@@ -26,15 +27,8 @@ fn main() {
         std::process::exit(1);
     });
 
-    let Program { instructions, symbols } = assemble(&src);
-
-    let mut symbols_by_addr: HashMap<Word16, Vec<String>> = HashMap::new();
-    for (name, addr) in &symbols {
-        let addr: Word16 = (*addr).into();
-        symbols_by_addr.entry(addr).or_default().push(name.clone());
-    }
-
-    println!("Loaded {} instructions from {}", instructions.len(), args.path);
+    let program = assemble(&src);
+    println!("Loaded {} instructions from {}", program.instructions.len(), args.path);
 
     let computer = Computer::chip();
     if args.print {
@@ -44,6 +38,19 @@ fn main() {
         println!("{}", print_ic_graph(&squashed));
     }
     let chip = flatten(computer);
+
+    run(&args, chip, program);
+}
+
+fn run(args: &Args, chip: IC<Computational16>, program: Program) {
+    let Program { instructions, symbols } = program;
+
+    let mut symbols_by_addr: HashMap<Word16, Vec<String>> = HashMap::new();
+    for (name, addr) in &symbols {
+        let addr: Word16 = (*addr).into();
+        symbols_by_addr.entry(addr).or_default().push(name.clone());
+    }
+
     let wiring = synthesize(&chip, memory_system());
     if args.print {
         print!("{wiring}");
