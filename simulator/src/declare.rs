@@ -195,7 +195,7 @@ impl<C> Reflect for IC<C> {
 ///
 /// ```ignore
 /// expand! { |this| {
-///     nand: Nand { a: this.a.clone(), b: this.b.clone(), out: this.out.clone() }
+///     nand: Nand { a: this.a, b: this.b, out: this.out },
 /// }}
 /// ```
 ///
@@ -205,7 +205,7 @@ impl<C> Reflect for IC<C> {
 ///        let this = self;
 ///        let mut components: Vec<Self::Target> = vec![];
 ///
-///        let nand = Nand { a: this.a.clone(), b: this.a.clone(), out: this.out.clone() };
+///        let nand = Nand { a: this.a, b: this.a, out: this.out };
 ///        components.push(nand.into());
 ///
 ///        Some(IC {
