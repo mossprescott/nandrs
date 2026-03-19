@@ -1,6 +1,6 @@
 use crate::{Component, Input, Output, Reflect, expand};
 use crate::declare::{Chip, Interface, BusRef};
-use crate::component::{Nand, Combinational};
+use crate::component::{Buffer, Nand, Const, Register, Sequential, Combinational};
 use crate::nat::N1;
 
 
@@ -140,3 +140,55 @@ fn test_expand_and() {
     assert_eq!(not_out.id, out.id);
 }
 
+/// A circuit that needs to refer to an output before its component is declared.
+pub struct TestFlipFlop {
+    pub out: Output,
+}
+
+impl Reflect for TestFlipFlop {
+    fn reflect(&self) -> Interface {
+        Interface {
+            inputs:  [].into(),
+            outputs: [("out".to_string(), BusRef::from_output(self.out))].into(),
+        }
+    }
+    fn name(&self) -> String { "TestFlipFlop".to_string() }
+}
+
+impl Chip for TestFlipFlop {
+    fn chip() -> Self {
+        TestFlipFlop { out: Output::new() }
+    }
+}
+
+impl Component for TestFlipFlop {
+    type Target = Sequential<N1>;
+
+    expand! { |this| {
+        // Declare the register's output so we can refer to it circularly
+        reg_out: forward Output::new(),
+
+        not: Nand { a: reg_out.into(), b: this.out.into(), out: Output::new() },
+        one: Const { value: 1, out: Output::new() },
+        reg: Register { data_in: not.out.into(), write: one.out.bit(0).into(), data_out: reg_out },
+
+        // Now connect to the chip output also
+        _out: Buffer { a: reg_out.into(), out: this.out },
+    }}
+}
+
+#[test]
+fn test_expand_flip_flop() {
+    let chip = TestFlipFlop::chip();
+    let ic = chip.expand().unwrap();
+
+    assert_eq!(ic.name(), "TestFlipFlop");
+
+    assert_eq!(ic.intf.inputs.len(), 0);
+
+    assert_eq!(ic.intf.outputs.len(), 1);
+    let _out = ic.intf.outputs["out"];
+
+    assert_eq!(ic.components.len(), 4);
+    // TODO: verify wiring...
+}

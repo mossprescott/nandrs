@@ -199,30 +199,25 @@ impl<C> Reflect for IC<C> {
 /// }}
 /// ```
 ///
-/// Generates (roughly):
+/// Use `forward` to declare a wire that can be referenced before its source component:
 /// ```ignore
-///    fn expand(&self) -> Option<IC<Self::Target>> {
-///        let this = self;
-///        let mut components: Vec<Self::Target> = vec![];
-///
-///        let nand = Nand { a: this.a, b: this.a, out: this.out };
-///        components.push(nand.into());
-///
-///        Some(IC {
-///            name: this.name(),
-///            intf: this.reflect(),
-///            components,
-///        })
-///    }
+/// expand! { |this| {
+///     wire: forward Output::new(),
+///     user: Foo { a: wire.into(), out: Output::new() },
+///     source: Bar { out: wire },
+/// }}
 /// ```
+///
+/// Forward declarations produce a `let` binding but are not pushed as components.
 #[macro_export]
 macro_rules! expand {
-    ( |$this:ident| { $( $var:ident : $T:ident { $($fields:tt)* } ),* $(,)? } ) => {
+    // Entry point: two passes — all `let` bindings first, then all `push`es.
+    ( |$this:ident| { $($body:tt)* } ) => {
         fn expand(&self) -> Option<$crate::IC<Self::Target>> {
             let $this = self;
-            $( let $var = $T { $($fields)* }; )*
+            $crate::expand!(@lets; $($body)*);
             let mut components = vec![];
-            $( components.push($var.into()); )*
+            $crate::expand!(@pushes components; $($body)*);
             Some($crate::IC {
                 name: $crate::Reflect::name(self),
                 intf: $crate::Reflect::reflect(self),
@@ -230,5 +225,37 @@ macro_rules! expand {
             })
         }
     };
-}
 
+    // --- Phase 1: emit `let` bindings for all entries ---
+
+    (@lets;) => {};
+    (@lets; $var:ident : forward $expr:expr, $($rest:tt)*) => {
+        let $var = $expr;
+        $crate::expand!(@lets; $($rest)*);
+    };
+    (@lets; $var:ident : forward $expr:expr) => {
+        let $var = $expr;
+    };
+    (@lets; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+        let $var = $T { $($fields)* };
+        $crate::expand!(@lets; $($rest)*);
+    };
+    (@lets; $var:ident : $T:ident { $($fields:tt)* }) => {
+        let $var = $T { $($fields)* };
+    };
+
+    // --- Phase 2: emit `push` only for component entries (skip forwards) ---
+
+    (@pushes $components:ident;) => {};
+    (@pushes $components:ident; $var:ident : forward $expr:expr, $($rest:tt)*) => {
+        $crate::expand!(@pushes $components; $($rest)*);
+    };
+    (@pushes $components:ident; $var:ident : forward $expr:expr) => {};
+    (@pushes $components:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+        $components.push($var.into());
+        $crate::expand!(@pushes $components; $($rest)*);
+    };
+    (@pushes $components:ident; $var:ident : $T:ident { $($fields:tt)* }) => {
+        $components.push($var.into());
+    };
+}

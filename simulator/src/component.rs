@@ -332,6 +332,18 @@ pub enum Sequential<Width: Nat> {
     Register(Register<Width>),
 }
 
+impl<Width: Nat> From<Nand>            for Sequential<Width> { fn from(c: Nand)            -> Self { Sequential::Nand(c)     } }
+impl<Width: Nat> From<Const>           for Sequential<Width> { fn from(c: Const)           -> Self { Sequential::Const(c)    } }
+impl<Width: Nat> From<Buffer>          for Sequential<Width> { fn from(c: Buffer)          -> Self { Sequential::Buffer(c)   } }
+impl<Width: Nat> From<Mux<Width>>      for Sequential<Width>
+  where Width: IsGreater<N1>
+{
+    fn from(c: Mux<Width>) -> Self { Sequential::Mux(c) }
+}
+impl<Width: Nat> From<Mux<N1>>        for Sequential<Width> { fn from(c: Mux<N1>)        -> Self { Sequential::Mux1(c)    } }
+impl<Width: Nat> From<FullAdder>       for Sequential<Width> { fn from(c: FullAdder)       -> Self { Sequential::Adder(c)   } }
+impl<Width: Nat> From<Register<Width>> for Sequential<Width> { fn from(c: Register<Width>) -> Self { Sequential::Register(c) } }
+
 impl<Width: Nat + Clone> Reflect for Sequential<Width> {
     fn reflect(&self) -> Interface {
         match self {
