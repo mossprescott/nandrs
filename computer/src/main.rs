@@ -277,6 +277,12 @@ fn main() {
 
     let mut halted = false;
     let halt_addr: Option<Word16> = symbols.get("sys.halt").copied().map(Into::into);
+    let main_main_addr: Option<Word16> = symbols.get("main.main").copied().map(Into::into);
+    let mut main_main_hit = false;
+    let frame_addr: Option<Word16> = symbols.get("ponggame.moveball").copied().map(Into::into);
+    let mut frame_count: u64 = 0;
+    let mut last_frame_cycle: u64 = 0;
+    let mut interval_frames: u64 = 0;
 
     while window.is_open() {
         if !halted {
@@ -296,6 +302,20 @@ fn main() {
                     }
                 } else if trace {
                     print_fn_entry(state.get("pc"), cycle);
+                }
+
+                if !main_main_hit && main_main_addr == Some(pc) {
+                    println!("main.main reached at cycle {}", fmt_commas(cycle));
+                    main_main_hit = true;
+                }
+                if frame_addr == Some(pc) {
+                    frame_count += 1;
+                    if trace {
+                        let delta = cycle - last_frame_cycle;
+                        println!("frame {} at cycle {} (+{})", fmt_commas(frame_count), fmt_commas(cycle), fmt_commas(delta));
+                    }
+                    last_frame_cycle = cycle;
+                    interval_frames += 1;
                 }
 
                 if halt_addr == Some(pc) {
@@ -333,9 +353,11 @@ fn main() {
                 } else {
                     (cycle_f, "")
                 };
-                println!("cycles/s: {val:.1}{suffix} (total: {tval:.1}{tsuffix})");
+                let fps = interval_frames as f64 / elapsed.as_secs_f64();
+                println!("cycles/s: {val:.1}{suffix} (total: {tval:.1}{tsuffix}, {fps:.1} fps)");
                 interval_start = Instant::now();
                 interval_cycles = 0;
+                interval_frames = 0;
             }
         } else {
             // Halted: just keep the window open and responsive.
