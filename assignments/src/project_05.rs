@@ -405,7 +405,6 @@ pub struct Computer {
 
     /// Useful for debugging, but also acts as a root for traversing the graph
     pub pc: Output16,
-    // TODO: tty_ready?
 }
 
 impl Component for Computer {
@@ -422,24 +421,24 @@ impl Component for Computer {
 
         let rom = ROM16 {
             size: 32 * 1024,
-            addr: self.pc.clone().into(),
+            addr: self.pc.into(),
             out:  Output16::new(),
         };
 
         let cpu = CPU {
-            reset:     self.reset.clone(),
-            pc:        self.pc.clone(),
-            instr:     rom.out.clone().into(),
-            mem_data_out:   Output16::new(),
-            mem_write: Output::new(),
-            mem_addr: Output16::new(),
-            mem_data_in: mem_data_in_wire.clone().into(),
+            reset:        self.reset,
+            pc:           self.pc,
+            instr:        rom.out.into(),
+            mem_data_out: Output16::new(),
+            mem_write:    Output::new(),
+            mem_addr:     Output16::new(),
+            mem_data_in:  mem_data_in_wire.into(),
         };
 
         let memory = MemorySystem16 {
-            addr:     cpu.mem_addr.clone().into(),
-            write:    cpu.mem_write.clone().into(),
-            data_in:  cpu.mem_data_out.clone().into(),
+            addr:     cpu.mem_addr.into(),
+            write:    cpu.mem_write.into(),
+            data_in:  cpu.mem_data_out.into(),
             data_out: mem_data_in_wire,
         };
 
@@ -447,9 +446,9 @@ impl Component for Computer {
             name: self.name().to_string(),
             intf: self.reflect(),
             components: vec![
-                Project05Component::ROM(rom),
-                Project05Component::CPU(cpu),
-                Project05Component::MemorySystem(memory),
+                rom.into(),
+                cpu.into(),
+                memory.into(),
             ],
         })
     }
