@@ -1,6 +1,6 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, AsConst, Chip};
+use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, AsConst, Chip, expand};
 use simulator::Reflect as _;
 use simulator::Chip as _;
 use simulator::component::{Combinational, Const, Nand, Register16, Sequential, Sequential16};
@@ -114,32 +114,21 @@ impl Component for PC {
         next_reset = Mux16 { a0: next_load.out, a1: 0,         sel: self.reset }
         reg = Register16 { data_in: next_reset, write: 1 }
      */
-    fn expand(&self) -> Option<IC<Project03Component>> {
-        let zero = Const { value: 0, out: Output16::new() };
-        let one = Const { value: 1, out: Output16::new() };
+    expand! { |this| {
+        zero: Const { value: 0, out: Output16::new() },
+        one: Const { value: 1, out: Output16::new() },
 
-        let inc = Inc16 { a: self.out.clone().into(), out: Output16::new() };
-        let next0 = Mux16 { a0: self.out.clone().into(), a1: inc.out.clone().into(), sel: self.inc.clone(), out: Output16::new() };
+        inc: Inc16 { a: this.out.into(), out: Output16::new() },
+        next0: Mux16 { a0: this.out.into(), a1: inc.out.into(), sel: this.inc, out: Output16::new() },
 
-        let next1 = Mux16 { a0: next0.out.clone().into(), a1: self.addr.clone(), sel: self.load.clone(), out: Output16::new() };
+        next1: Mux16 { a0: next0.out.into(), a1: this.addr, sel: this.load, out: Output16::new() },
 
-        let next2 = Mux16 { a0: next1.out.clone().into(), a1: zero.out.clone().into(), sel: self.reset.clone(), out: Output16::new() };
+        next2: Mux16 { a0: next1.out.into(), a1: zero.out.into(), sel: this.reset, out: Output16::new() },
 
-        let reg = Register16 {
-            data_in:  next2.out.clone().into(),
+        reg: Register16 {
+            data_in:  next2.out.into(),
             write:    one.out.bit(0).into(),
-            data_out: self.out.clone(),
-        };
-
-        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![
-            // FIXME: horrific
-            Project02Component::from(Project01Component::from(zero)).into(),
-            Project02Component::from(Project01Component::from(one)).into(),
-            Project02Component::from(inc).into(),
-            Project02Component::from(Project01Component::from(next0)).into(),
-            Project02Component::from(Project01Component::from(next1)).into(),
-            Project02Component::from(Project01Component::from(next2)).into(),
-            reg.into(),
-        ]})
-    }
+            data_out: this.out,
+        },
+    }}
 }
