@@ -80,22 +80,6 @@ impl AsConst for Project05Component {
     }
 }
 
-fn p01<C: Into<Project01Component>>(c: C) -> Project05Component {
-    let p01: Project01Component = c.into();
-    let p02: Project02Component = p01.into();
-    let p03: Project03Component = p02.into();
-    p03.into()
-}
-fn p02<C: Into<Project02Component>>(c: C) -> Project05Component {
-    let p02: Project02Component = c.into();
-    let p03: Project03Component = p02.into();
-    p03.into()
-}
-fn p03<C: Into<Project03Component>>(c: C) -> Project05Component {
-    let p03: Project03Component = c.into();
-    p03.into()
-}
-
 /// Recursively expand until only Nands, Registers, RAMs, and ROMs are left.
 pub fn flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Computational16> {
     fn go(comp: Project05Component) -> Vec<Computational16> {
@@ -293,140 +277,124 @@ impl Component for CPU {
     type Target = Project05Component;
 
     fn expand(&self) -> Option<IC<Project05Component>> {
-        let mut components: Vec<Project05Component> = vec![];
-
         // === Decode ===
         let decode = Decode {
-            instr:   self.instr.clone(),
-            is_c:    Output::new(), read_m:  Output::new(),
-            zx:      Output::new(), nx:      Output::new(),
-            zy:      Output::new(), ny:      Output::new(),
-            f:       Output::new(), no:      Output::new(),
+            instr: self.instr,
+
+            is_c: Output::new(),
+            is_a: Output::new(),
+
+            read_m: Output::new(),
+
+            zx: Output::new(), nx: Output::new(),
+            zy: Output::new(), ny: Output::new(),
+            f:  Output::new(), no: Output::new(),
+
             write_a: Output::new(), write_m: Output::new(), write_d: Output::new(),
+
             jmp_lt:  Output::new(), jmp_eq:  Output::new(), jmp_gt:  Output::new(),
         };
-        let is_c        = decode.is_c.clone();        // instr[15]: 1 = C-instruction
-        let read_m_out  = decode.read_m.clone();
-        let zx          = decode.zx.clone();
-        let nx          = decode.nx.clone();
-        let zy          = decode.zy.clone();
-        let ny          = decode.ny.clone();
-        let f           = decode.f.clone();
-        let no          = decode.no.clone();
-        let dec_write_a = decode.write_a.clone();
-        let dec_write_m = decode.write_m.clone();
-        let dec_write_d = decode.write_d.clone();
-        let jmp_lt      = decode.jmp_lt.clone();
-        let jmp_eq      = decode.jmp_eq.clone();
-        let jmp_gt      = decode.jmp_gt.clone();
-        components.push(Project05Component::Decode(decode));
-
-        // === is_a = NOT(is_c) ===
-        let is_a_gate = Not { a: is_c.clone().into(), out: Output::new() };
-        let is_a = is_a_gate.out.clone();
-        components.push(p01(is_a_gate));
 
         // Declare a_data wire up-front; driven by a_data_mux placed AFTER the ALU so that
         // the second Nand pass sees the correct ALU output (fixes A=M indirect addressing).
-        let a_data = Output16::new();
-        let a_out  = Output16::new();  // A register output (internal wire)
+        let a_data_wire = Output16::new();
+        let a_out = Output16::new();  // A register output (internal wire)
 
         // === load_a = is_a OR write_a ===
-        let load_a_gate = Or { a: is_a.clone().into(), b: dec_write_a.into(), out: Output::new() };
-        let load_a = load_a_gate.out.clone();
-        components.push(p01(load_a_gate));
+        let load_a = Or { a: decode.is_a.into(), b: decode.write_a.into(), out: Output::new() };
 
         // === A register: out → mem_addr ===
-        let reg_a = Register16 { data_in: a_data.clone().into(), write: load_a.clone().into(), data_out: a_out.clone() };
-        components.push(p03(reg_a));
+        let reg_a = Register16 { data_in: a_data_wire.into(), write: load_a.out.into(), data_out: a_out };
 
         // === ALU Y mux: sel=read_m → a0=A (mem_addr), a1=mem_in ===
-        let y_mux = Mux16 {
-            sel: read_m_out.into(),
-            a0:  a_out.clone().into(),
-            a1:  self.mem_data_in.clone(),
+        let y_src = Mux16 {
+            sel: decode.read_m.into(),
+            a0:  a_out.into(),
+            a1:  self.mem_data_in,
             out: Output16::new(),
         };
-        let y_src = y_mux.out.clone();
-        components.push(p01(y_mux));
 
         // === ALU: x=D, y=y_src, enabled only on C-instructions ===
         let reg_d_out: Output16 = Output16::new();  // D register output wire (seeded from reg_state)
         let alu = ALU {
-            x:   reg_d_out.clone().into(),
-            y:   y_src.into(),
-            zx:  zx.into(), nx: nx.into(),
-            zy:  zy.into(), ny: ny.into(),
-            f:   f.into(),  no: no.into(),
-            disable: is_a.clone().into(),
-            out: self.mem_data_out.clone(),
+            x:   reg_d_out.into(),
+            y:   y_src.out.into(),
+            zx:  decode.zx.into(), nx: decode.nx.into(),
+            zy:  decode.zy.into(), ny: decode.ny.into(),
+            f:   decode.f.into(),  no: decode.no.into(),
+            disable: decode.is_a.into(),
+            out: self.mem_data_out,
             zr:  Output::new(),
             ng:  Output::new(),
         };
-        let alu_zr = alu.zr.clone();
-        let alu_ng = alu.ng.clone();
-        components.push(p02(alu));
 
         // === A register data mux: AFTER ALU ===
         // sel=is_a → a1=instr (A-instr), a0=ALU output (C-instr with dest=A)
-        let a_data_mux = Mux16 {
-            sel: is_a.into(),
-            a0:  self.mem_data_out.clone().into(),
-            a1:  self.instr.clone(),
-            out: a_data.clone(),
+        let a_data = Mux16 {
+            sel: decode.is_a.into(),
+            a0:  self.mem_data_out.into(),
+            a1:  self.instr,
+            out: a_data_wire,
         };
-        components.push(p01(a_data_mux));
 
         // === next_addr: if A is being written this cycle, expose the new A value as the
         // address for the memory system (so RAM latches the right read address); otherwise
         // expose the current A.out. Write address is always A.out (load_a=0 when write_m=1). ===
-        let next_addr_mux = Mux16 {
-            sel: load_a.clone().into(),
-            a0:  a_out.clone().into(),
-            a1:  a_data.into(),
-            out: self.mem_addr.clone(),
+        let next_addr = Mux16 {
+            sel: load_a.out.into(),
+            a0:  a_out.into(),
+            a1:  a_data.out.into(),
+            out: self.mem_addr,
         };
-        components.push(p01(next_addr_mux));
 
         // === D register (write_d already gated with is_c in Decode) ===
-        let reg_d = Register16 { data_in: self.mem_data_out.clone().into(), write: dec_write_d.into(), data_out: reg_d_out };
-        components.push(p03(reg_d));
+        let reg_d = Register16 { data_in: self.mem_data_out.into(), write: decode.write_d.into(), data_out: reg_d_out };
 
         // === mem_write (write_m already gated with is_c in Decode) ===
-        components.push(p01(Buffer { a: dec_write_m.into(), out: self.mem_write.clone() }));
+        let mem_write_buf = Buffer { a: decode.write_m.into(), out: self.mem_write };
 
         // === Jump logic ===
-        let not_ng  = Not { a: alu_ng.clone().into(), out: Output::new() };
-        let not_zr  = Not { a: alu_zr.clone().into(), out: Output::new() };
-        let is_pos  = And { a: not_ng.out.clone().into(), b: not_zr.out.clone().into(), out: Output::new() };
+        let not_ng  = Not { a: alu.ng.into(), out: Output::new() };
+        let not_zr  = Not { a: alu.zr.into(), out: Output::new() };
+        let is_pos  = And { a: not_ng.out.into(), b: not_zr.out.into(), out: Output::new() };
         // Jump signals already gated with is_c in Decode.
-        let jlt_and = And { a: jmp_lt.into(), b: alu_ng.into(), out: Output::new() };
-        let jeq_and = And { a: jmp_eq.into(), b: alu_zr.into(), out: Output::new() };
-        let jgt_and = And { a: jmp_gt.into(), b: is_pos.out.clone().into(), out: Output::new() };
-        let j_lt_eq = Or  { a: jlt_and.out.clone().into(), b: jeq_and.out.clone().into(), out: Output::new() };
-        let jump_any= Or  { a: j_lt_eq.out.clone().into(), b: jgt_and.out.clone().into(), out: Output::new() };
-        let do_jump_out = jump_any.out.clone();
-        for g in [p01(not_ng), p01(not_zr), p01(is_pos),
-                  p01(jlt_and), p01(jeq_and), p01(jgt_and),
-                  p01(j_lt_eq), p01(jump_any)] {
-            components.push(g);
-        }
+        let jlt_and  = And { a: decode.jmp_lt.into(), b: alu.ng.into(), out: Output::new() };
+        let jeq_and  = And { a: decode.jmp_eq.into(), b: alu.zr.into(), out: Output::new() };
+        let jgt_and  = And { a: decode.jmp_gt.into(), b: is_pos.out.into(), out: Output::new() };
+        let j_lt_eq  = Or  { a: jlt_and.out.into(), b: jeq_and.out.into(), out: Output::new() };
+        let jump_any = Or  { a: j_lt_eq.out.into(), b: jgt_and.out.into(), out: Output::new() };
 
         // === PC: inc always 1 ===
         let const_one = Const { value: 1, out: Output::new() };
-        let const_one_out = const_one.out.bit(0).into();
-        components.push(p01(const_one));
 
         let pc = PC {
-            addr:  a_out.clone().into(),
-            load:  do_jump_out.into(),
-            inc:   const_one_out,
-            reset: self.reset.clone().into(),
-            out:   self.pc.clone(),
+            addr:  a_out.into(),
+            load:  jump_any.out.into(),
+            inc:   const_one.out.bit(0).into(),
+            reset: self.reset.into(),
+            out:   self.pc,
         };
-        components.push(p03(pc));
 
-        Some(IC { name: self.name().to_string(), intf: self.reflect(), components })
+        Some(IC {
+            name: self.name().to_string(),
+            intf: self.reflect(),
+            components: vec![
+                decode.into(),
+                load_a.into(),
+                reg_a.into(),
+                y_src.into(),
+                alu.into(),
+                a_data.into(),
+                next_addr.into(),
+                reg_d.into(),
+                mem_write_buf.into(),
+                not_ng.into(), not_zr.into(), is_pos.into(),
+                jlt_and.into(), jeq_and.into(), jgt_and.into(),
+                j_lt_eq.into(), jump_any.into(),
+                const_one.into(),
+                pc.into(),
+            ]
+        })
     }
 }
 
