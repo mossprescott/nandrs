@@ -254,47 +254,29 @@ pub struct Zero16 {
 impl Component for Zero16 {
     type Target = Project02Component;
 
-    fn expand(&self) -> Option<IC<Project02Component>> {
+    expand! { |this| {
         // Level 1: OR adjacent pairs
-        let or_01   = Or { a: self.a.bit(0),               b: self.a.bit(1),               out: Output::new() };
-        let or_23   = Or { a: self.a.bit(2),               b: self.a.bit(3),               out: Output::new() };
-        let or_45   = Or { a: self.a.bit(4),               b: self.a.bit(5),               out: Output::new() };
-        let or_67   = Or { a: self.a.bit(6),               b: self.a.bit(7),               out: Output::new() };
-        let or_89   = Or { a: self.a.bit(8),               b: self.a.bit(9),               out: Output::new() };
-        let or_ab   = Or { a: self.a.bit(10),              b: self.a.bit(11),              out: Output::new() };
-        let or_cd   = Or { a: self.a.bit(12),              b: self.a.bit(13),              out: Output::new() };
-        let or_ef   = Or { a: self.a.bit(14),              b: self.a.bit(15),              out: Output::new() };
+        or_01:   Or { a: this.a.bit(0),  b: this.a.bit(1),  out: Output::new() },
+        or_23:   Or { a: this.a.bit(2),  b: this.a.bit(3),  out: Output::new() },
+        or_45:   Or { a: this.a.bit(4),  b: this.a.bit(5),  out: Output::new() },
+        or_67:   Or { a: this.a.bit(6),  b: this.a.bit(7),  out: Output::new() },
+        or_89:   Or { a: this.a.bit(8),  b: this.a.bit(9),  out: Output::new() },
+        or_ab:   Or { a: this.a.bit(10), b: this.a.bit(11), out: Output::new() },
+        or_cd:   Or { a: this.a.bit(12), b: this.a.bit(13), out: Output::new() },
+        or_ef:   Or { a: this.a.bit(14), b: this.a.bit(15), out: Output::new() },
         // Level 2
-        let or_0123 = Or { a: or_01.out.clone().into(),    b: or_23.out.clone().into(),    out: Output::new() };
-        let or_4567 = Or { a: or_45.out.clone().into(),    b: or_67.out.clone().into(),    out: Output::new() };
-        let or_89ab = Or { a: or_89.out.clone().into(),    b: or_ab.out.clone().into(),    out: Output::new() };
-        let or_cdef = Or { a: or_cd.out.clone().into(),    b: or_ef.out.clone().into(),    out: Output::new() };
+        or_0123: Or { a: or_01.out.into(),   b: or_23.out.into(),   out: Output::new() },
+        or_4567: Or { a: or_45.out.into(),   b: or_67.out.into(),   out: Output::new() },
+        or_89ab: Or { a: or_89.out.into(),   b: or_ab.out.into(),   out: Output::new() },
+        or_cdef: Or { a: or_cd.out.into(),   b: or_ef.out.into(),   out: Output::new() },
         // Level 3
-        let or_lo   = Or { a: or_0123.out.clone().into(),  b: or_4567.out.clone().into(),  out: Output::new() };
-        let or_hi   = Or { a: or_89ab.out.clone().into(),  b: or_cdef.out.clone().into(),  out: Output::new() };
+        or_lo:   Or { a: or_0123.out.into(), b: or_4567.out.into(), out: Output::new() },
+        or_hi:   Or { a: or_89ab.out.into(), b: or_cdef.out.into(), out: Output::new() },
         // Level 4
-        let or_all  = Or { a: or_lo.out.clone().into(),    b: or_hi.out.clone().into(),    out: Output::new() };
+        or_all:  Or { a: or_lo.out.into(),   b: or_hi.out.into(),   out: Output::new() },
         // Invert: out is 1 iff no bit was set
-        let not_all = Not { a: or_all.out.clone().into(), out: self.out.clone() };
-        Some(IC { name: self.name().to_string(), intf: self.reflect(), components: vec![
-            Project01Component::from(or_01).into(),
-            Project01Component::from(or_23).into(),
-            Project01Component::from(or_45).into(),
-            Project01Component::from(or_67).into(),
-            Project01Component::from(or_89).into(),
-            Project01Component::from(or_ab).into(),
-            Project01Component::from(or_cd).into(),
-            Project01Component::from(or_ef).into(),
-            Project01Component::from(or_0123).into(),
-            Project01Component::from(or_4567).into(),
-            Project01Component::from(or_89ab).into(),
-            Project01Component::from(or_cdef).into(),
-            Project01Component::from(or_lo).into(),
-            Project01Component::from(or_hi).into(),
-            Project01Component::from(or_all).into(),
-            Project01Component::from(not_all).into(),
-        ]})
-    }
+        _not_all: Not { a: or_all.out.into(), out: this.out },
+    }}
 }
 
 /// out = true if the most-significant bit of a is 1 (i.e., input is negative in two's complement).
