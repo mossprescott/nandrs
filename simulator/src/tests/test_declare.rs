@@ -1,7 +1,7 @@
 use crate::{Component, Input, Output, Reflect, expand};
-use crate::declare::{Chip, Interface, BusRef};
+use crate::declare::{Chip, Interface, BusRef, InputBus, OutputBus};
 use crate::component::{Buffer, Nand, Const, Register, Sequential, Combinational};
-use crate::nat::N1;
+use crate::nat::{N1, N8};
 
 
 /// Really just about trivial component for testing the expand! macro.
@@ -140,6 +140,55 @@ fn test_expand_and() {
     assert_eq!(not_out.id, out.id);
 }
 
+/// A simple, bit-parallel component
+pub struct TestNand8 {
+    pub a: InputBus<N8>,
+    pub b: InputBus<N8>,
+
+    pub out: OutputBus<N8>,
+}
+
+impl Reflect for TestNand8 {
+    fn reflect(&self) -> Interface {
+        Interface {
+            inputs:  [("a".to_string(), BusRef::from_input(self.a)),
+                      ("b".to_string(), BusRef::from_input(self.b))].into(),
+            outputs: [("out".to_string(), BusRef::from_output(self.out))].into(),
+        }
+    }
+    fn name(&self) -> String { "TestNand8".to_string() }
+}
+
+impl Chip for TestNand8 {
+    fn chip() -> Self {
+        TestNand8 { a: InputBus::<N8>::new(), b: InputBus::<N8>::new(), out: OutputBus::<N8>::new() }
+    }
+}
+
+impl Component for TestNand8 {
+    type Target = Combinational<N8>;
+
+    expand! { |this| {
+        for i in 0..8 {
+            _nand: Nand { a: this.a.bit(i).into(), b: this.b.bit(i).into(), out: this.out.bit(i) },
+        }
+    }}
+}
+
+#[test]
+fn test_expand_nand8() {
+    let chip = TestNand8::chip();
+    let ic = chip.expand().unwrap();
+
+    assert_eq!(ic.name(), "TestNand8");
+
+    assert_eq!(ic.intf.inputs.len(), 2);
+
+    assert_eq!(ic.intf.outputs.len(), 1);
+
+    assert_eq!(ic.components.len(), 8);
+}
+
 /// A circuit that needs to refer to an output before its component is declared.
 pub struct TestFlipFlop {
     pub out: Output,
@@ -192,3 +241,4 @@ fn test_expand_flip_flop() {
     assert_eq!(ic.components.len(), 4);
     // TODO: verify wiring...
 }
+

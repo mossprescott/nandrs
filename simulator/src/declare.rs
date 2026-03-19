@@ -209,6 +209,15 @@ impl<C> Reflect for IC<C> {
 /// ```
 ///
 /// Forward declarations produce a `let` binding but are not pushed as components.
+///
+/// Use `for` to generate components in a loop (range must use literals):
+/// ```ignore
+/// expand! { |this| {
+///     for i in 0..16 {
+///         _not: Nand { a: this.a.bit(i).into(), b: this.a.bit(i).into(), out: this.out.bit(i) },
+///     }
+/// }}
+/// ```
 #[macro_export]
 macro_rules! expand {
     // Entry point: two passes — all `let` bindings first, then all `push`es.
@@ -236,6 +245,10 @@ macro_rules! expand {
     (@lets; $var:ident : forward $expr:expr) => {
         let $var = $expr;
     };
+    // For loops: skip in @lets (handled entirely in @pushes)
+    (@lets; for $i:ident in $start:literal .. $end:literal { $($inner:tt)* } $($rest:tt)*) => {
+        $crate::expand!(@lets; $($rest)*);
+    };
     (@lets; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
         let $var = $T { $($fields)* };
         $crate::expand!(@lets; $($rest)*);
@@ -251,11 +264,31 @@ macro_rules! expand {
         $crate::expand!(@pushes $components; $($rest)*);
     };
     (@pushes $components:ident; $var:ident : forward $expr:expr) => {};
+    // For loops: construct and push each iteration
+    (@pushes $components:ident; for $i:ident in $start:literal .. $end:literal { $($inner:tt)* } $($rest:tt)*) => {
+        for $i in $start..$end {
+            $crate::expand!(@for_body $components; $($inner)*);
+        }
+        $crate::expand!(@pushes $components; $($rest)*);
+    };
     (@pushes $components:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
         $components.push($var.into());
         $crate::expand!(@pushes $components; $($rest)*);
     };
     (@pushes $components:ident; $var:ident : $T:ident { $($fields:tt)* }) => {
+        $components.push($var.into());
+    };
+
+    // --- For loop body: construct and push in one step (loop-scoped) ---
+
+    (@for_body $components:ident;) => {};
+    (@for_body $components:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+        let $var = $T { $($fields)* };
+        $components.push($var.into());
+        $crate::expand!(@for_body $components; $($rest)*);
+    };
+    (@for_body $components:ident; $var:ident : $T:ident { $($fields:tt)* }) => {
+        let $var = $T { $($fields)* };
         $components.push($var.into());
     };
 }
