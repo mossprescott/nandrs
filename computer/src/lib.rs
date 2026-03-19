@@ -1,3 +1,4 @@
+pub mod cli;
 pub mod disasm;
 pub mod display;
 pub mod keyboard;

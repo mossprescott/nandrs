@@ -1,8 +1,8 @@
 use std::collections::HashMap;
-use std::env;
 use std::fs;
 use std::time::Instant;
 
+use clap::Parser;
 use minifb::{Window, WindowOptions};
 
 use assignments::project_05::{Computer, flatten, find_ram, find_rom, find_screen, find_keyboard, memory_system};
@@ -12,23 +12,17 @@ use simulator::declare::Chip as _;
 use simulator::simulate::{synthesize, initialize};
 use simulator::word::Word16;
 
+use computer::cli::Args;
 use computer::disasm::disassemble;
 use computer::display::{self, WIDTH, HEIGHT, BEZEL, FRAME_TIME};
 use computer::keyboard::hack_keycode;
 use computer::{half_flatten, fmt_commas};
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    let trace   = args.contains(&"--trace".to_string());
-    let verbose = args.contains(&"--verbose".to_string());
-    let print   = args.contains(&"--print".to_string());
-    let no_exec = args.contains(&"--no-exec".to_string());
-    let scale   = if args.contains(&"--2x".to_string()) { 2 } else { 1 };
-    let path = args.iter().find(|a| !a.starts_with('-') && *a != &args[0])
-        .expect("usage: computer [--trace] [--verbose] [--print] [--no-exec] [--2x] <rom-file>");
+    let args = Args::parse();
 
-    let src = fs::read_to_string(path).unwrap_or_else(|e| {
-        eprintln!("error reading {path}: {e}");
+    let src = fs::read_to_string(&args.path).unwrap_or_else(|e| {
+        eprintln!("error reading {}: {e}", args.path);
         std::process::exit(1);
     });
 
@@ -40,10 +34,10 @@ fn main() {
         symbols_by_addr.entry(addr).or_default().push(name.clone());
     }
 
-    println!("Loaded {} instructions from {path}", instructions.len());
+    println!("Loaded {} instructions from {}", instructions.len(), args.path);
 
     let computer = Computer::chip();
-    if print {
+    if args.print {
         println!("{}", print_graph(&computer));
 
         let squashed = half_flatten(Computer::chip());
@@ -51,26 +45,26 @@ fn main() {
     }
     let chip = flatten(computer);
     let wiring = synthesize(&chip, memory_system());
-    if print {
+    if args.print {
         print!("{wiring}");
     }
     let mut state = initialize(wiring);
 
     find_rom(&state).flash(instructions.iter().map(|&v| Word16::from(v)).collect());
 
-    if no_exec {
+    if args.no_exec {
         return;
     }
 
     let ram = find_ram(&state);
     let screen = find_screen(&state);
     let keyboard = find_keyboard(&state);
-    let win_width  = (WIDTH  + 2 * BEZEL) * scale;
-    let win_height = (HEIGHT + 2 * BEZEL) * scale;
-    let bezel = display::load_bezel(scale);
+    let win_width  = (WIDTH  + 2 * BEZEL) * args.scale();
+    let win_height = (HEIGHT + 2 * BEZEL) * args.scale();
+    let bezel = display::load_bezel(args.scale());
     let mut pixels = bezel.clone();
 
-    let mut window = Window::new(path, win_width, win_height, WindowOptions::default())
+    let mut window = Window::new(&args.path, win_width, win_height, WindowOptions::default())
         .expect("failed to create window");
 
     let mut cycle: u64 = 0;
@@ -101,9 +95,9 @@ fn main() {
         }
     };
 
-    if verbose {
+    if args.verbose {
         print_state(state.get("pc"), cycle);
-    } else if trace {
+    } else if args.trace {
         print_fn_entry(state.get("pc"), cycle);
     }
 
@@ -127,12 +121,12 @@ fn main() {
                 batch += 1;
 
                 let pc = state.get("pc");
-                if verbose {
+                if args.verbose {
                     let labels = symbols_by_addr.get(&pc).map(|v| format!(" [{}]", v.join(", "))).unwrap_or_default();
                     if !labels.is_empty() {
                         print_state(pc, cycle);
                     }
-                } else if trace {
+                } else if args.trace {
                     print_fn_entry(state.get("pc"), cycle);
                 }
 
@@ -142,7 +136,7 @@ fn main() {
                 }
                 if frame_addr == Some(pc) {
                     frame_count += 1;
-                    if trace {
+                    if args.trace {
                         let delta = cycle - last_frame_cycle;
                         println!("frame {} at cycle {} (+{})", fmt_commas(frame_count), fmt_commas(cycle), fmt_commas(delta));
                     }
@@ -164,19 +158,19 @@ fn main() {
 
             keyboard.push((hack_keycode(&window) as u16).into());
 
-            display::render_screen(&screen, &mut pixels, scale);
+            display::render_screen(&screen, &mut pixels, args.scale());
 
-            let bezel_top = (BEZEL + HEIGHT) * scale;
+            let bezel_top = (BEZEL + HEIGHT) * args.scale();
             for row in bezel_top..win_height {
                 let start = row * win_width;
                 pixels[start..start + win_width].copy_from_slice(&bezel[start..start + win_width]);
             }
-            let text_y = bezel_top + (BEZEL - 9) * scale / 2;
+            let text_y = bezel_top + (BEZEL - 9) * args.scale() / 2;
             let text_color = 0x404040;
             if !display_speed.is_empty() {
-                display::draw_text(&mut pixels, win_width, BEZEL * scale, text_y, scale, &display_speed, text_color);
-                let fw = display::text_width(&display_fps, scale);
-                display::draw_text(&mut pixels, win_width, win_width - BEZEL * scale - fw, text_y, scale, &display_fps, text_color);
+                display::draw_text(&mut pixels, win_width, BEZEL * args.scale(), text_y, args.scale(), &display_speed, text_color);
+                let fw = display::text_width(&display_fps, args.scale());
+                display::draw_text(&mut pixels, win_width, win_width - BEZEL * args.scale() - fw, text_y, args.scale(), &display_fps, text_color);
             }
 
             window.update_with_buffer(&pixels, win_width, win_height).unwrap();

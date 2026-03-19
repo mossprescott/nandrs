@@ -8,6 +8,7 @@ simulator = { path = "../simulator" }
 assignments = { path = "../assignments" }
 minifb = "0.27"
 png = "0.17"
+clap = { version = "4.6.0", features = ["derive"] }
 
 [build-dependencies]
 png = "0.17"
