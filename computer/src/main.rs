@@ -156,6 +156,73 @@ fn hack_keycode(window: &Window) -> u64 {
     0
 }
 
+/// Monaco 9 bitmap font, 5 pixels wide, 9 pixels tall (7 body + 2 descender).
+/// See https://github.com/mossprescott/pynand/blob/master/alt/big/Monaco9.png
+const FONT: [([u8; 9], char); 17] = [
+    ([0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E, 0x00, 0x00], '0'),
+    ([0x02, 0x06, 0x02, 0x02, 0x02, 0x02, 0x02, 0x00, 0x00], '1'),
+    ([0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F, 0x00, 0x00], '2'),
+    ([0x0E, 0x11, 0x01, 0x06, 0x01, 0x11, 0x0E, 0x00, 0x00], '3'),
+    ([0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02, 0x00, 0x00], '4'),
+    ([0x1F, 0x10, 0x1E, 0x01, 0x01, 0x11, 0x0E, 0x00, 0x00], '5'),
+    ([0x0E, 0x10, 0x10, 0x1E, 0x11, 0x11, 0x0E, 0x00, 0x00], '6'),
+    ([0x1F, 0x01, 0x01, 0x02, 0x04, 0x04, 0x04, 0x00, 0x00], '7'),
+    ([0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E, 0x00, 0x00], '8'),
+    ([0x0E, 0x11, 0x11, 0x0F, 0x01, 0x01, 0x0E, 0x00, 0x00], '9'),
+    ([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00], '.'),
+    ([0x11, 0x1B, 0x15, 0x11, 0x11, 0x11, 0x11, 0x00, 0x00], 'M'),
+    ([0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11, 0x00, 0x00], 'H'),
+    ([0x00, 0x00, 0x1F, 0x02, 0x04, 0x08, 0x1F, 0x00, 0x00], 'z'),
+    ([0x03, 0x04, 0x0E, 0x04, 0x04, 0x04, 0x04, 0x00, 0x00], 'f'),
+    ([0x00, 0x00, 0x1E, 0x11, 0x11, 0x11, 0x1E, 0x10, 0x10], 'p'),
+    ([0x00, 0x00, 0x0F, 0x10, 0x0E, 0x01, 0x1E, 0x00, 0x00], 's'),
+];
+
+fn glyph(ch: char) -> [u8; 9] {
+    for &(bits, c) in &FONT {
+        if c == ch { return bits; }
+    }
+    [0; 9]
+}
+
+fn draw_text(pixels: &mut [u32], win_width: usize, x: usize, y: usize, scale: usize, text: &str, color: u32) {
+    let mut cx = x;
+    for ch in text.chars() {
+        let g = glyph(ch);
+        for row in 0..9 {
+            for col in 0..5 {
+                if g[row] & (0x10 >> col) != 0 {
+                    for dy in 0..scale {
+                        for dx in 0..scale {
+                            let px = cx + col * scale + dx;
+                            let py = y + row * scale + dy;
+                            if px < win_width {
+                                pixels[py * win_width + px] = color;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        cx += 6 * scale;
+    }
+}
+
+fn format_speed(cps: f64) -> String {
+    if cps >= 1_000_000.0 {
+        format!("{:.2} MHz", cps / 1_000_000.0)
+    } else if cps >= 1_000.0 {
+        format!("{:.0} KHz", cps / 1_000.0)
+    } else {
+        format!("{:.0} Hz", cps)
+    }
+}
+
+fn text_width(text: &str, scale: usize) -> usize {
+    let n = text.len();
+    if n == 0 { 0 } else { (n * 6 - 1) * scale }
+}
+
 fn fmt_commas(n: u64) -> String {
     let s = n.to_string();
     let mut out = String::new();
@@ -238,7 +305,8 @@ fn main() {
     let keyboard = find_keyboard(&state);
     let win_width  = (WIDTH  + 2 * BEZEL) * scale;
     let win_height = (HEIGHT + 2 * BEZEL) * scale;
-    let mut pixels = load_bezel(scale);
+    let bezel = load_bezel(scale);
+    let mut pixels = bezel.clone();
 
     let mut window = Window::new(path, win_width, win_height, WindowOptions::default())
         .expect("failed to create window");
@@ -246,6 +314,8 @@ fn main() {
     let mut cycle: u64 = 0;
     let mut interval_start = Instant::now();
     let mut interval_cycles: u64 = 0;
+    let mut display_speed = String::new();
+    let mut display_fps = String::new();
 
     let print_state = |pc: Word16, cycle: u64| {
         let labels = symbols_by_addr.get(&pc).map(|v| format!(" [{}]", v.join(", "))).unwrap_or_default();
@@ -333,11 +403,28 @@ fn main() {
             keyboard.push((hack_keycode(&window) as u16).into());
 
             render_screen(&screen, &mut pixels, scale);
+
+            let bezel_top = (BEZEL + HEIGHT) * scale;
+            for row in bezel_top..win_height {
+                let start = row * win_width;
+                pixels[start..start + win_width].copy_from_slice(&bezel[start..start + win_width]);
+            }
+            let text_y = bezel_top + (BEZEL - 9) * scale / 2;
+            let text_color = 0x404040;
+            if !display_speed.is_empty() {
+                draw_text(&mut pixels, win_width, BEZEL * scale, text_y, scale, &display_speed, text_color);
+                let fw = text_width(&display_fps, scale);
+                draw_text(&mut pixels, win_width, win_width - BEZEL * scale - fw, text_y, scale, &display_fps, text_color);
+            }
+
             window.update_with_buffer(&pixels, win_width, win_height).unwrap();
 
             let elapsed = interval_start.elapsed();
-            if elapsed.as_secs() >= 1 {
+            if elapsed.as_millis() >= 200 {
                 let cps = interval_cycles as f64 / elapsed.as_secs_f64();
+                let fps = interval_frames as f64 / elapsed.as_secs_f64();
+                display_speed = format_speed(cps);
+                display_fps = format!("{:.0} fps", fps);
                 let (val, suffix) = if cps >= 1_000_000.0 {
                     (cps / 1_000_000.0, "M")
                 } else if cps >= 1_000.0 {
@@ -353,7 +440,6 @@ fn main() {
                 } else {
                     (cycle_f, "")
                 };
-                let fps = interval_frames as f64 / elapsed.as_secs_f64();
                 println!("cycles/s: {val:.1}{suffix} (total: {tval:.1}{tsuffix}, {fps:.1} fps)");
                 interval_start = Instant::now();
                 interval_cycles = 0;
