@@ -127,7 +127,7 @@ fn decode_strict_truth_table() {
 fn decode_optimal() {
     let components = flatten(Decode::chip()).components;
     let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
-    assert_eq!(nands, 16);
+    assert_eq!(nands, 17);
 }
 
 #[test]

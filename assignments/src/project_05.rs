@@ -1,6 +1,6 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, AsConst, Chip};
+use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, AsConst, Chip, expand};
 use simulator::Reflect as _;
 use simulator::Chip as _;
 use simulator::component::{Buffer, Nand, Register16, RAM16, ROM16, MemorySystem16, Sequential, Computational, Computational16};
@@ -201,6 +201,9 @@ pub struct Decode {
     /// otherwise an A-instruction (load bits into A register).
     pub is_c: Output,
 
+    /// Inverse of is_c.
+    pub is_a: Output,
+
     /// If true, the "X" input to the ALU is the memory (M), otherwise register A.
     pub read_m: Output,
 
@@ -232,45 +235,36 @@ impl Component for Decode {
     // life simple if everything in this file flattens to the same type.
     type Target = Project05Component;
 
-    fn expand(&self) -> Option<IC<Project05Component>> {
-        fn wrap<C>(comp: C) -> Project05Component
-            where Project01Component: From<C>
-        {
-            let p01: Project01Component = comp.into();
-            let p02: Project02Component = p01.into();
-            let p03: Project03Component = p02.into();
-            p03.into()
-        }
+    expand! { |this| {
+        // TODO: buffers don't need to be named. Or declared in this way at all, maybe?
+        _15: Buffer { a: this.instr.bit(15), out: this.is_c },
 
-        Some(IC {
-            name: self.name().to_string(),
-            intf: self.reflect(),
-            components: vec![
-                wrap(Buffer { a: self.instr.bit(15).clone(), out: self.is_c.clone() }),
+        _is_a: Not { a: this.instr.bit(15), out: this.is_a },
 
-                // Note: CPU control signals all gated with is_c so they're false on A-instructions and this
-                // simplifies the logic in CPU
+        // _14: unused/reserved
+        // _13: unused/reserved
 
-                wrap(And { a: self.instr.bit(12).clone(), b: self.is_c.clone().into(), out: self.read_m.clone() }),
+        // Note: CPU control signals all gated with is_c so they're false on A-instructions and this
+        // simplifies the logic in CPU
 
-                // ALU control lines: mostly just buffer them through because the ALU is dealt with separately
-                wrap(Buffer { a: self.instr.bit(11).clone(), out: self.zx.clone() }),
-                wrap(Buffer { a: self.instr.bit(10).clone(), out: self.nx.clone() }),
-                wrap(Buffer { a: self.instr.bit( 9).clone(), out: self.zy.clone() }),
-                wrap(Buffer { a: self.instr.bit( 8).clone(), out: self.ny.clone() }),
-                // Special-case: prefer f = 0, to bias against evaluating Add16
-                wrap(And { a: self.instr.bit( 7).clone(), b: self.is_c.clone().into(), out: self.f.clone() }),
-                wrap(Buffer { a: self.instr.bit( 6).clone(), out: self.no.clone() }),
+        _12: And    { a: this.instr.bit(12), b: this.is_c.into(), out: this.read_m },
 
-                wrap(And { a: self.instr.bit( 5).clone(), b: self.is_c.clone().into(), out: self.write_a.clone() }),
-                wrap(And { a: self.instr.bit( 4).clone(), b: self.is_c.clone().into(), out: self.write_d.clone() }),
-                wrap(And { a: self.instr.bit( 3).clone(), b: self.is_c.clone().into(), out: self.write_m.clone() }),
-                wrap(And { a: self.instr.bit( 2).clone(), b: self.is_c.clone().into(), out: self.jmp_lt.clone() }),
-                wrap(And { a: self.instr.bit( 1).clone(), b: self.is_c.clone().into(), out: self.jmp_eq.clone() }),
-                wrap(And { a: self.instr.bit( 0).clone(), b: self.is_c.clone().into(), out: self.jmp_gt.clone() }),
-            ],
-        })
-    }
+        // ALU control lines: mostly just buffer them through because the ALU is dealt with separately
+        _11: Buffer { a: this.instr.bit(11), out: this.zx },
+        _10: Buffer { a: this.instr.bit(10), out: this.nx },
+        _9:  Buffer { a: this.instr.bit( 9), out: this.zy },
+        _8:  Buffer { a: this.instr.bit( 8), out: this.ny },
+        // Special-case: prefer f = 0, to bias against evaluating Add16
+        _7:  And    { a: this.instr.bit( 7), b: this.is_c.into(), out: this.f },
+        _6:  Buffer { a: this.instr.bit( 6), out: this.no },
+
+        _5:  And    { a: this.instr.bit( 5), b: this.is_c.into(), out: this.write_a },
+        _4:  And    { a: this.instr.bit( 4), b: this.is_c.into(), out: this.write_d },
+        _3:  And    { a: this.instr.bit( 3), b: this.is_c.into(), out: this.write_m },
+        _2:  And    { a: this.instr.bit( 2), b: this.is_c.into(), out: this.jmp_lt },
+        _1:  And    { a: this.instr.bit( 1), b: this.is_c.into(), out: this.jmp_eq },
+        _0:  And    { a: this.instr.bit( 0), b: this.is_c.into(), out: this.jmp_gt },
+    }}
 }
 
 #[derive(Reflect, Chip)]
