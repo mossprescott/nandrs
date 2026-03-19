@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use crate::declare::BusRef;
 
@@ -9,7 +8,7 @@ pub(super) struct WireID(usize);
 
 impl From<&BusRef> for WireID {
     fn from(busref: &BusRef) -> Self {
-        WireID(Rc::as_ptr(&busref.id) as usize)
+        WireID(busref.id.0)
     }
 }
 

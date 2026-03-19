@@ -1,4 +1,4 @@
-use simulator::{Component, print_graph, Chip as _};
+use simulator::{Component, print_graph, print_ic_graph, Chip as _};
 use simulator::component::Combinational;
 use simulator::eval::eval;
 use crate::project_01;
@@ -17,6 +17,9 @@ fn flatten_nands<C: simulator::Reflect + Component<Target = project_01::Project0
 #[test]
 fn half_adder_truth_table() {
     let chip = flatten_nands(MyHalfAdder::chip());
+
+    println!("{}", print_ic_graph(&chip));
+
     let r = eval(&chip, [("a", false.into()), ("b", false.into())]); assert_eq!(r["sum"].unsigned(), 0); assert_eq!(r["carry"].unsigned(), 0);
     let r = eval(&chip, [("a", false.into()), ("b", true.into())]); assert_eq!(r["sum"].unsigned(), 1); assert_eq!(r["carry"].unsigned(), 0);
     let r = eval(&chip, [("a", true.into()), ("b", false.into())]); assert_eq!(r["sum"].unsigned(), 1); assert_eq!(r["carry"].unsigned(), 0);
@@ -31,6 +34,9 @@ fn half_adder_optimal() {
 #[test]
 fn full_adder_truth_table() {
     let chip = flatten_nands(MyFullAdder::chip());
+
+    println!("{}", print_ic_graph(&chip));
+
     let r = eval(&chip, [("a", false.into()), ("b", false.into()), ("c", false.into())]); assert_eq!(r["sum"].unsigned(), 0); assert_eq!(r["carry"].unsigned(), 0);
     let r = eval(&chip, [("a", false.into()), ("b", false.into()), ("c", true.into())]); assert_eq!(r["sum"].unsigned(), 1); assert_eq!(r["carry"].unsigned(), 0);
     let r = eval(&chip, [("a", false.into()), ("b", true.into()), ("c", false.into())]); assert_eq!(r["sum"].unsigned(), 1); assert_eq!(r["carry"].unsigned(), 0);
@@ -48,7 +54,13 @@ fn full_adder_optimal() {
 
 #[test]
 fn inc16_truth_table() {
-    let chip = flatten(Inc16::chip());
+    let chip = Inc16::chip();
+
+    // When it breaks, it's nice to see what it tried to do
+    print!("{}", print_graph(&chip));
+
+    let chip = flatten(chip);
+
     assert_eq!(eval(&chip, [("a", 0u16.into())])["out"].unsigned(),     1);
     assert_eq!(eval(&chip, [("a", 1u16.into())])["out"].unsigned(),     2);
     assert_eq!(eval(&chip, [("a", 42u16.into())])["out"].unsigned(),    43);
@@ -67,7 +79,13 @@ fn inc16_optimal() {
 
 #[test]
 fn add16_truth_table() {
-    let chip = flatten(Add16::chip());
+    let chip = Add16::chip();
+
+    // When it breaks, it's nice to see what it tried to do
+    print!("{}", print_graph(&chip));
+
+    let chip = flatten(chip);
+
     assert_eq!(eval(&chip, [("a", 0u16.into()),    ("b", 0u16.into())])["out"].signed(),    0);
     assert_eq!(eval(&chip, [("a", 1u16.into()),    ("b", 1u16.into())])["out"].signed(),    2);
     assert_eq!(eval(&chip, [("a", 100u16.into()),  ("b", 200u16.into())])["out"].signed(),  300);
@@ -88,7 +106,13 @@ fn add16_optimal() {
 
 #[test]
 fn zero16_truth_table() {
-    let chip = flatten(Zero16::chip());
+    let chip = Zero16::chip();
+
+    // When it breaks, it's nice to see what it tried to do
+    print!("{}", print_graph(&chip));
+
+    let chip = flatten(chip);
+
     assert_eq!(eval(&chip, [("a", 0u16.into())])["out"].unsigned(),      1); // all zeros
     assert_eq!(eval(&chip, [("a", 1u16.into())])["out"].unsigned(),      0); // bit 0 set
     assert_eq!(eval(&chip, [("a", 0x8000u16.into())])["out"].unsigned(), 0); // only MSB set
@@ -103,7 +127,13 @@ fn zero16_optimal() {
 
 #[test]
 fn neg16_truth_table() {
-    let chip = flatten(Neg16::chip());
+    let chip = Neg16::chip();
+
+    // When it breaks, it's nice to see what it tried to do
+    print!("{}", print_graph(&chip));
+
+    let chip = flatten(chip);
+
     assert_eq!(eval(&chip, [("a", 0u16.into())])["out"].unsigned(),      0); // zero is not negative
     assert_eq!(eval(&chip, [("a", 1u16.into())])["out"].unsigned(),      0); // positive
     assert_eq!(eval(&chip, [("a", 0x7FFFu16.into())])["out"].unsigned(), 0); // max positive

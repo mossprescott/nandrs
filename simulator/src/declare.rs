@@ -1,41 +1,56 @@
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::rc::Rc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::nat::{Nat, N1, N16};
+
+static NEXT_ID: AtomicUsize = AtomicUsize::new(1);
+
+/// Unique identity of a wire (bus). Two bus ends with the same `WireId` are connected.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct WireId(pub usize);
+
+impl WireId {
+    fn new() -> Self {
+        WireId(NEXT_ID.fetch_add(1, Ordering::Relaxed))
+    }
+}
 
 /// The end of a wire that connects to destination components as one of their inputs.
 ///
 /// Carries a shared bus identity (`id`) and a bit `offset` within that bus.
-/// Clones share the same identity, so any number of inputs can read the same wire.
-#[derive(Clone)]
+/// Copies share the same identity, so any number of inputs can read the same wire.
 pub struct InputBus<Width: Nat> {
     width: PhantomData<Width>,
     /// Override for the number of bits, when fewer than Width::as_int() are connected.
     /// 0 means "use the type-level width".
     effective_width: usize,
-    id: Rc<()>,
+    id: WireId,
     offset: usize,
 }
 impl<Width: Nat> InputBus<Width> {
     pub fn new() -> Self {
-        InputBus { width: PhantomData, effective_width: 0, id: Rc::new(()), offset: 0 }
+        InputBus { width: PhantomData, effective_width: 0, id: WireId::new(), offset: 0 }
     }
 
     /// Select a single bit from this bus, returning a 1-bit InputBus that shares
     /// the same underlying wire identity but refers only to bit `i`.
     pub fn bit(&self, i: usize) -> Input {
         assert!(i < Width::as_int(), "bit index {} out of range for {}-bit bus", i, Width::as_int());
-        InputBus { width: PhantomData, effective_width: 0, id: self.id.clone(), offset: self.offset + i }
+        InputBus { width: PhantomData, effective_width: 0, id: self.id, offset: self.offset + i }
     }
 
     /// Slice `len` bits starting at `offset` from this bus.
     /// The returned bus shares the same wire identity but its BusRef will have width = `len`.
     pub fn mask(&self, offset: usize, len: usize) -> InputBus<Width> {
         assert!(offset + len <= Width::as_int(), "mask({}, {}) out of range for {}-bit bus", offset, len, Width::as_int());
-        InputBus { width: PhantomData, effective_width: len, id: self.id.clone(), offset: self.offset + offset }
+        InputBus { width: PhantomData, effective_width: len, id: self.id, offset: self.offset + offset }
     }
 }
+
+/// Copy/Clone need manual impls to avoid requiring `Width: Copy/Clone` (phantom type).
+impl<Width: Nat> Copy  for InputBus<Width> {}
+impl<Width: Nat> Clone for InputBus<Width> { fn clone(&self) -> Self { *self } }
 
 /// A simple, single-valued input signal; that is, an incoming 1-bit wire.
 pub type Input = InputBus<N1>;
@@ -46,13 +61,17 @@ pub type Input16 = InputBus<N16>;
 /// The end of a wire that originates from a single component output.
 ///
 /// Carries a shared bus identity (`id`) and a bit `offset` within that bus.
-/// Clones share the same identity, enabling fan-out to multiple inputs.
-#[derive(Clone)]
+/// Copies share the same identity, enabling fan-out to multiple inputs.
 pub struct OutputBus<Width: Nat> {
     width: PhantomData<Width>,
-    id: Rc<()>,
+    id: WireId,
     offset: usize,
 }
+
+/// Copy/Clone need manual impls to avoid requiring `Width: Copy/Clone` (phantom type).
+impl<Width: Nat> Copy  for OutputBus<Width> {}
+impl<Width: Nat> Clone for OutputBus<Width> { fn clone(&self) -> Self { *self } }
+
 impl<Width: Nat> From<OutputBus<Width>> for InputBus<Width> {
     /// Any number of inputs can be fed by the same output.
     fn from(output: OutputBus<Width>) -> Self {
@@ -62,14 +81,14 @@ impl<Width: Nat> From<OutputBus<Width>> for InputBus<Width> {
 impl<Width: Nat> OutputBus<Width> {
     /// Make a new wire of any width.
     pub fn new<N: Nat>() -> OutputBus<N> {
-        OutputBus { width: PhantomData, id: Rc::new(()), offset: 0 }
+        OutputBus { width: PhantomData, id: WireId::new(), offset: 0 }
     }
 
     /// Select a single bit from this output bus, returning a 1-bit OutputBus that
     /// shares the same underlying wire identity but refers only to bit `i`.
     pub fn bit(&self, i: usize) -> Output {
         assert!(i < Width::as_int(), "bit index {} out of range for {}-bit bus", i, Width::as_int());
-        OutputBus { width: PhantomData, id: self.id.clone(), offset: self.offset + i }
+        OutputBus { width: PhantomData, id: self.id, offset: self.offset + i }
     }
 
     /// Slice `len` bits starting at `offset` from this bus, returning an `InputBus<Width>`
@@ -77,7 +96,7 @@ impl<Width: Nat> OutputBus<Width> {
     /// Useful for connecting a subset of a wide bus to a narrower address input.
     pub fn mask(&self, offset: usize, len: usize) -> InputBus<Width> {
         assert!(offset + len <= Width::as_int(), "mask({}, {}) out of range for {}-bit bus", offset, len, Width::as_int());
-        InputBus { width: PhantomData, effective_width: len, id: self.id.clone(), offset: self.offset + offset }
+        InputBus { width: PhantomData, effective_width: len, id: self.id, offset: self.offset + offset }
     }
 }
 
@@ -121,25 +140,23 @@ pub trait Chip {
 }
 
 /// Type-erased bus reference, for use in Interface where the width is only known at runtime.
-/// The `id` field carries the wire identity: two BusRefs with the same `id` pointer refer to
+/// The `id` field carries the wire identity: two BusRefs with the same `id` refer to
 /// the same bus. `offset` is the first bit index within the bus; `width` is the count of bits.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct BusRef {
-    pub id: Rc<()>,
+    pub id: WireId,
     pub offset: usize,
     pub width: usize,
 }
 
-impl<Width: Nat> From<InputBus<Width>> for BusRef {
-    fn from(input: InputBus<Width>) -> Self {
-        let width = if input.effective_width != 0 { input.effective_width } else { Width::as_int() };
+impl BusRef {
+    pub fn from_input<W: Nat>(input: InputBus<W>) -> Self {
+        let width = if input.effective_width != 0 { input.effective_width } else { W::as_int() };
         BusRef { id: input.id, offset: input.offset, width }
     }
-}
 
-impl<Width: Nat> From<OutputBus<Width>> for BusRef {
-    fn from(output: OutputBus<Width>) -> Self {
-        BusRef { id: output.id, offset: output.offset, width: Width::as_int() }
+    pub fn from_output<W: Nat>(output: OutputBus<W>) -> Self {
+        BusRef { id: output.id, offset: output.offset, width: W::as_int() }
     }
 }
 
@@ -178,34 +195,39 @@ impl<C> Reflect for IC<C> {
 ///
 /// ```ignore
 /// expand! { |this| {
-///     nand: Nand { a: this.a.clone(), b: this.b.clone(), out: this.out.clone() }
+///     nand: Nand { a: this.a, b: this.b, out: this.out },
 /// }}
 /// ```
 ///
-/// Generates (roughly):
+/// Use `forward` to declare a wire that can be referenced before its source component:
 /// ```ignore
-///    fn expand(&self) -> Option<IC<Self::Target>> {
-///        let this = self;
-///        let mut components: Vec<Self::Target> = vec![];
+/// expand! { |this| {
+///     wire: forward Output::new(),
+///     user: Foo { a: wire.into(), out: Output::new() },
+///     source: Bar { out: wire },
+/// }}
+/// ```
 ///
-///        let nand = Nand { a: this.a.clone(), b: this.a.clone(), out: this.out.clone() };
-///        components.push(nand.into());
+/// Forward declarations produce a `let` binding but are not pushed as components.
 ///
-///        Some(IC {
-///            name: this.name(),
-///            intf: this.reflect(),
-///            components,
-///        })
-///    }
+/// Use `for` to generate components in a loop (range must use literals):
+/// ```ignore
+/// expand! { |this| {
+///     for i in 0..16 {
+///         _not: Nand { a: this.a.bit(i).into(), b: this.a.bit(i).into(), out: this.out.bit(i) },
+///     }
+/// }}
 /// ```
 #[macro_export]
 macro_rules! expand {
-    ( |$this:ident| { $( $var:ident : $T:ident { $($fields:tt)* } ),* $(,)? } ) => {
+    // Entry point: two passes — all `let` bindings first, then all `push`es.
+    // `components` is declared up front so that for-loops and folds can push during @lets.
+    ( |$this:ident| { $($body:tt)* } ) => {
         fn expand(&self) -> Option<$crate::IC<Self::Target>> {
             let $this = self;
-            $( let $var = $T { $($fields)* }; )*
             let mut components = vec![];
-            $( components.push($var.into()); )*
+            $crate::expand!(@lets components; $($body)*);
+            $crate::expand!(@pushes components; $($body)*);
             Some($crate::IC {
                 name: $crate::Reflect::name(self),
                 intf: $crate::Reflect::reflect(self),
@@ -213,5 +235,117 @@ macro_rules! expand {
             })
         }
     };
-}
 
+    // --- Phase 1: emit `let` bindings; for-loops and folds also push here ---
+
+    (@lets $components:ident;) => {};
+    (@lets $components:ident; $var:ident : forward $expr:expr, $($rest:tt)*) => {
+        let $var = $expr;
+        $crate::expand!(@lets $components; $($rest)*);
+    };
+    (@lets $components:ident; $var:ident : forward $expr:expr) => {
+        let $var = $expr;
+    };
+    // For loops: construct and push during @lets (while bindings are alive)
+    (@lets $components:ident; for $i:ident in $start:literal .. $end:literal { $($inner:tt)* } $($rest:tt)*) => {
+        for $i in $start..$end {
+            $crate::expand!(@for_body $components; $($inner)*);
+        }
+        $crate::expand!(@lets $components; $($rest)*);
+    };
+    // Fold: collect components into a saved vec during @lets; extend during @pushes.
+    (@lets $components:ident; $var:ident : ($start:literal .. $end:literal) . fold ($init:expr, | $acc:ident, $i:ident | { $($body:tt)* }) , $($rest:tt)*) => {
+        let $var = {
+            let mut __fold_tmp: Vec<_> = vec![];
+            let _ = ($start..$end).fold($init, |$acc, $i| {
+                $crate::expand!(@fold_bind $($body)*);
+                let __fold_next = { $crate::expand!(@fold_accum $($body)*) };
+                $crate::expand!(@fold_push __fold_tmp; $($body)*);
+                __fold_next
+            });
+            __fold_tmp
+        };
+        $crate::expand!(@lets $components; $($rest)*);
+    };
+    (@lets $components:ident; $var:ident : ($start:literal .. $end:literal) . fold ($init:expr, | $acc:ident, $i:ident | { $($body:tt)* })) => {
+        let $var = {
+            let mut __fold_tmp: Vec<_> = vec![];
+            let _ = ($start..$end).fold($init, |$acc, $i| {
+                $crate::expand!(@fold_bind $($body)*);
+                let __fold_next = { $crate::expand!(@fold_accum $($body)*) };
+                $crate::expand!(@fold_push __fold_tmp; $($body)*);
+                __fold_next
+            });
+            __fold_tmp
+        };
+    };
+    (@lets $components:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+        let $var = $T { $($fields)* };
+        $crate::expand!(@lets $components; $($rest)*);
+    };
+    (@lets $components:ident; $var:ident : $T:ident { $($fields:tt)* }) => {
+        let $var = $T { $($fields)* };
+    };
+
+    // --- Phase 2: emit `push` for component entries (skip forwards, for-loops, folds) ---
+
+    (@pushes $components:ident;) => {};
+    (@pushes $components:ident; $var:ident : forward $expr:expr, $($rest:tt)*) => {
+        $crate::expand!(@pushes $components; $($rest)*);
+    };
+    (@pushes $components:ident; $var:ident : forward $expr:expr) => {};
+    // For loops: already pushed during @lets
+    (@pushes $components:ident; for $i:ident in $start:literal .. $end:literal { $($inner:tt)* } $($rest:tt)*) => {
+        $crate::expand!(@pushes $components; $($rest)*);
+    };
+    // Folds: extend with saved vec (collected during @lets)
+    (@pushes $components:ident; $var:ident : ($start:literal .. $end:literal) . fold ($init:expr, | $acc:ident, $i:ident | { $($inner:tt)* }) , $($rest:tt)*) => {
+        $components.extend($var);
+        $crate::expand!(@pushes $components; $($rest)*);
+    };
+    (@pushes $components:ident; $var:ident : ($start:literal .. $end:literal) . fold ($init:expr, | $acc:ident, $i:ident | { $($inner:tt)* })) => {
+        $components.extend($var);
+    };
+    (@pushes $components:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+        $components.push($var.into());
+        $crate::expand!(@pushes $components; $($rest)*);
+    };
+    (@pushes $components:ident; $var:ident : $T:ident { $($fields:tt)* }) => {
+        $components.push($var.into());
+    };
+
+    // --- For loop body: construct and push in one step (loop-scoped) ---
+
+    (@for_body $components:ident;) => {};
+    (@for_body $components:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+        let $var = $T { $($fields)* };
+        $components.push($var.into());
+        $crate::expand!(@for_body $components; $($rest)*);
+    };
+    (@for_body $components:ident; $var:ident : $T:ident { $($fields:tt)* }) => {
+        let $var = $T { $($fields)* };
+        $components.push($var.into());
+    };
+
+    // --- Fold sub-phases: bind entries, extract accumulator, push entries ---
+
+    // @fold_bind: create let bindings for each entry, skip the final accumulator expression
+    (@fold_bind $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+        let $var = $T { $($fields)* };
+        $crate::expand!(@fold_bind $($rest)*);
+    };
+    (@fold_bind $next:expr) => {};
+
+    // @fold_accum: skip entries, return the final accumulator expression
+    (@fold_accum $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+        $crate::expand!(@fold_accum $($rest)*)
+    };
+    (@fold_accum $next:expr) => { $next };
+
+    // @fold_push: push each entry in order, skip the final accumulator expression
+    (@fold_push $components:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+        $components.push($var.into());
+        $crate::expand!(@fold_push $components; $($rest)*);
+    };
+    (@fold_push $components:ident; $next:expr) => {};
+}

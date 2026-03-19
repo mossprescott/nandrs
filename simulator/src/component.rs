@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{Component, IC, Input, InputBus, Output, OutputBus, Reflect, AsConst, Chip, Interface};
+use crate::{Component, IC, Input, InputBus, Output, OutputBus, Reflect, AsConst, Chip, Interface, BusRef};
 use crate::nat::{Nat, N1, N16, IsGreater};
 
 /// No components; this is the type that primitive components expand into.
@@ -20,11 +20,11 @@ impl Reflect for Nand {
     fn reflect(&self) -> Interface {
         Interface {
             inputs:  HashMap::from([
-                ("a".to_string(),   self.a.clone().into()),
-                ("b".to_string(),   self.b.clone().into()),
+                ("a".to_string(),   BusRef::from_input(self.a)),
+                ("b".to_string(),   BusRef::from_input(self.b)),
             ]),
             outputs: HashMap::from([
-                ("out".to_string(), self.out.clone().into()),
+                ("out".to_string(), BusRef::from_output(self.out)),
             ]),
         }
     }
@@ -68,7 +68,7 @@ impl Reflect for Const {
         Interface {
             inputs:  HashMap::new(),
             outputs: HashMap::from([
-                ("out".to_string(), self.out.clone().into()),
+                ("out".to_string(), BusRef::from_output(self.out)),
             ]),
         }
     }
@@ -100,10 +100,10 @@ impl Reflect for Buffer {
     fn reflect(&self) -> Interface {
         Interface {
             inputs:  HashMap::from([
-                ("a".to_string(),   self.a.clone().into()),
+                ("a".to_string(),   BusRef::from_input(self.a)),
             ]),
             outputs: HashMap::from([
-                ("out".to_string(), self.out.clone().into()),
+                ("out".to_string(), BusRef::from_output(self.out)),
             ]),
         }
     }
@@ -135,12 +135,12 @@ impl<Width: Nat + Clone> Reflect for Mux<Width> {
     fn reflect(&self) -> Interface {
         Interface {
             inputs: HashMap::from([
-                ("a0".to_string(),  self.a0.clone().into()),
-                ("a1".to_string(),  self.a1.clone().into()),
-                ("sel".to_string(), self.sel.clone().into()),
+                ("a0".to_string(),  BusRef::from_input(self.a0)),
+                ("a1".to_string(),  BusRef::from_input(self.a1)),
+                ("sel".to_string(), BusRef::from_input(self.sel)),
             ]),
             outputs: HashMap::from([
-                ("out".to_string(), self.out.clone().into()),
+                ("out".to_string(), BusRef::from_output(self.out)),
             ]),
         }
     }
@@ -187,13 +187,13 @@ impl Reflect for FullAdder {
     fn reflect(&self) -> Interface {
         Interface {
             inputs: HashMap::from([
-                ("a".to_string(), self.a.clone().into()),
-                ("b".to_string(), self.b.clone().into()),
-                ("c".to_string(), self.c.clone().into()),
+                ("a".to_string(), BusRef::from_input(self.a)),
+                ("b".to_string(), BusRef::from_input(self.b)),
+                ("c".to_string(), BusRef::from_input(self.c)),
             ]),
             outputs: HashMap::from([
-                ("sum".to_string(), self.sum.clone().into()),
-                ("carry".to_string(), self.carry.clone().into()),
+                ("sum".to_string(), BusRef::from_output(self.sum)),
+                ("carry".to_string(), BusRef::from_output(self.carry)),
             ]),
         }
     }
@@ -291,11 +291,11 @@ impl<Width: Nat + Clone> Reflect for Register<Width> {
     fn reflect(&self) -> Interface {
         Interface {
             inputs:  HashMap::from([
-                ("data_in".to_string(), self.data_in.clone().into()),
-                ("write".to_string(),   self.write.clone().into()),
+                ("data_in".to_string(), BusRef::from_input(self.data_in)),
+                ("write".to_string(),   BusRef::from_input(self.write)),
             ]),
             outputs: HashMap::from([
-                ("data_out".to_string(), self.data_out.clone().into()),
+                ("data_out".to_string(), BusRef::from_output(self.data_out)),
             ]),
         }
     }
@@ -331,6 +331,18 @@ pub enum Sequential<Width: Nat> {
     Adder(FullAdder),
     Register(Register<Width>),
 }
+
+impl<Width: Nat> From<Nand>            for Sequential<Width> { fn from(c: Nand)            -> Self { Sequential::Nand(c)     } }
+impl<Width: Nat> From<Const>           for Sequential<Width> { fn from(c: Const)           -> Self { Sequential::Const(c)    } }
+impl<Width: Nat> From<Buffer>          for Sequential<Width> { fn from(c: Buffer)          -> Self { Sequential::Buffer(c)   } }
+impl<Width: Nat> From<Mux<Width>>      for Sequential<Width>
+  where Width: IsGreater<N1>
+{
+    fn from(c: Mux<Width>) -> Self { Sequential::Mux(c) }
+}
+impl<Width: Nat> From<Mux<N1>>        for Sequential<Width> { fn from(c: Mux<N1>)        -> Self { Sequential::Mux1(c)    } }
+impl<Width: Nat> From<FullAdder>       for Sequential<Width> { fn from(c: FullAdder)       -> Self { Sequential::Adder(c)   } }
+impl<Width: Nat> From<Register<Width>> for Sequential<Width> { fn from(c: Register<Width>) -> Self { Sequential::Register(c) } }
 
 impl<Width: Nat + Clone> Reflect for Sequential<Width> {
     fn reflect(&self) -> Interface {
@@ -388,12 +400,12 @@ impl<A: Nat + Clone, D: Nat + Clone> Reflect for RAM<A, D> {
     fn reflect(&self) -> Interface {
         Interface {
             inputs: HashMap::from([
-                ("addr".to_string(),    self.addr.clone().into()),
-                ("data_in".to_string(), self.data_in.clone().into()),
-                ("write".to_string(),   self.write.clone().into()),
+                ("addr".to_string(),    BusRef::from_input(self.addr)),
+                ("data_in".to_string(), BusRef::from_input(self.data_in)),
+                ("write".to_string(),   BusRef::from_input(self.write)),
             ]),
             outputs: HashMap::from([
-                ("data_out".to_string(), self.data_out.clone().into()),
+                ("data_out".to_string(), BusRef::from_output(self.data_out)),
             ]),
         }
     }
@@ -430,10 +442,10 @@ impl<A: Nat + Clone, D: Nat + Clone> Reflect for ROM<A, D> {
     fn reflect(&self) -> Interface {
         Interface {
             inputs: HashMap::from([
-                ("addr".to_string(), self.addr.clone().into()),
+                ("addr".to_string(), BusRef::from_input(self.addr)),
             ]),
             outputs: HashMap::from([
-                ("out".to_string(), self.out.clone().into()),
+                ("out".to_string(), BusRef::from_output(self.out)),
             ]),
         }
     }
@@ -478,11 +490,11 @@ impl<W: Nat + Clone> Reflect for Serial<W> {
     fn reflect(&self) -> Interface {
         Interface {
             inputs: HashMap::from([
-                ("data_in".to_string(), self.data_in.clone().into()),
-                ("write".to_string(),   self.write.clone().into()),
+                ("data_in".to_string(), BusRef::from_input(self.data_in)),
+                ("write".to_string(),   BusRef::from_input(self.write)),
             ]),
             outputs: HashMap::from([
-                ("data_out".to_string(), self.data_out.clone().into()),
+                ("data_out".to_string(), BusRef::from_output(self.data_out)),
             ]),
         }
     }
@@ -521,12 +533,12 @@ impl<A: Nat + Clone, D: Nat + Clone> Reflect for MemorySystem<A, D> {
     fn reflect(&self) -> Interface {
         Interface {
             inputs: HashMap::from([
-                ("addr".to_string(),    self.addr.clone().into()),
-                ("data_in".to_string(), self.data_in.clone().into()),
-                ("write".to_string(),   self.write.clone().into()),
+                ("addr".to_string(),    BusRef::from_input(self.addr)),
+                ("data_in".to_string(), BusRef::from_input(self.data_in)),
+                ("write".to_string(),   BusRef::from_input(self.write)),
             ]),
             outputs: HashMap::from([
-                ("data_out".to_string(), self.data_out.clone().into()),
+                ("data_out".to_string(), BusRef::from_output(self.data_out)),
             ]),
         }
     }
