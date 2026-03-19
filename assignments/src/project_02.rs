@@ -175,28 +175,30 @@ pub struct Inc16 {
 impl Component for Inc16 {
     type Target = Project02Component;
 
+    // Note: this carry-ripple isn't currently expressible in the macro syntax
     fn expand(&self) -> Option<IC<Project02Component>> {
         let zero = Const { value: 0, out: Output16::new() };
-        let zero_bit: Input = zero.out.bit(0).into();
+
         // bit 0: out[0] = NOT(a[0]); carry = a[0] (the carry-in is implicitly 1)
-        let a0   = self.a.bit(0);
-        let not0 = Not { a: a0.clone(), out: self.out.bit(0) };
-        let mut carry: Input = a0;
+        let not0 = Not { a: self.a.bit(0), out: self.out.bit(0) };
+
         let mut components: Vec<Project02Component> = vec![
-            Project01Component::from(zero).into(),
+            Project01Component::from(zero.clone()).into(),
             Project01Component::from(not0).into(),
         ];
-        for i in 1..16 {
+
+        // Carry-ripple: fold threads the carry across iterations
+        (1..16).fold(self.a.bit(0), |carry, i| {
             let add = FullAdder {
                 a: self.a.bit(i),
-                b: zero_bit.clone(),
+                b: zero.out.bit(0).into(),
                 c: carry,
                 sum: self.out.bit(i),
                 carry: Output::new(),
             };
-            carry = add.carry.clone().into();
-            components.push(add.into());
-        }
+            components.push(add.clone().into());
+            add.carry.into()
+        });
         Some(IC { name: self.name().to_string(), intf: self.reflect(), components })
     }
 }
