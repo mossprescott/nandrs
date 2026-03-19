@@ -1,259 +1,21 @@
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
-use minifb::{Key, Window, WindowOptions};
+use minifb::{Window, WindowOptions};
 
-use assignments::project_03::Project03Component;
-use assignments::project_05::{Computer, Project05Component, flatten, find_ram, find_rom, find_screen, find_keyboard, memory_system};
+use assignments::project_05::{Computer, flatten, find_ram, find_rom, find_screen, find_keyboard, memory_system};
 use assignments::project_06::{assemble, Program};
-use simulator::{IC, Reflect, Component as _};
 use simulator::{print_graph, print_ic_graph};
 use simulator::declare::Chip as _;
-use simulator::simulate::{synthesize, initialize, RAMHandle};
-use simulator::nat::N16;
+use simulator::simulate::{synthesize, initialize};
 use simulator::word::Word16;
 
-const WIDTH: usize = 512;
-const HEIGHT: usize = 256;
-const BEZEL: usize = 20;
-const FRAME_TIME: Duration = Duration::from_millis(1000/60);
-const BEZEL_PNG: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/bezel.png");
-
-fn render_screen(screen: &RAMHandle<N16, N16>, pixels: &mut [u32], scale: usize) {
-    let win_width = (WIDTH + 2 * BEZEL) * scale;
-    for word_idx in 0..(WIDTH / 16 * HEIGHT) {
-        let word = screen.peek(word_idx as u64).unsigned() as u16;
-        let row = word_idx / (WIDTH / 16);
-        let col_word = word_idx % (WIDTH / 16);
-        for bit in 0..16usize {
-            let color = if (word >> bit) & 1 == 1 { 0x000000 } else { 0xFFFFFF };
-            let px_x = BEZEL + col_word * 16 + bit;
-            let px_y = BEZEL + row;
-            for dy in 0..scale {
-                for dx in 0..scale {
-                    pixels[(px_y * scale + dy) * win_width + px_x * scale + dx] = color;
-                }
-            }
-        }
-    }
-}
-
-fn load_bezel(scale: usize) -> Vec<u32> {
-    let file = std::fs::File::open(BEZEL_PNG)
-        .unwrap_or_else(|e| panic!("cannot open {BEZEL_PNG}: {e}"));
-    let decoder = png::Decoder::new(file);
-    let mut reader = decoder.read_info().expect("png read_info");
-    let mut buf = vec![0u8; reader.output_buffer_size()];
-    let info = reader.next_frame(&mut buf).expect("png next_frame");
-    let bytes = &buf[..info.buffer_size()];
-    let src_w = info.width as usize;
-    let src_h = info.height as usize;
-    let bpp = match info.color_type {
-        png::ColorType::Rgb  => 3,
-        png::ColorType::Rgba => 4,
-        _ => panic!("unsupported bezel PNG color type"),
-    };
-    let dst_w = src_w * scale;
-    let dst_h = src_h * scale;
-    let mut out = vec![0u32; dst_w * dst_h];
-    for sy in 0..src_h {
-        for sx in 0..src_w {
-            let i = (sy * src_w + sx) * bpp;
-            let c = ((bytes[i] as u32) << 16) | ((bytes[i+1] as u32) << 8) | (bytes[i+2] as u32);
-            for dy in 0..scale {
-                for dx in 0..scale {
-                    out[(sy * scale + dy) * dst_w + sx * scale + dx] = c;
-                }
-            }
-        }
-    }
-    out
-}
-
-fn disassemble(instr: u16) -> String {
-    if instr & 0x8000 == 0 {
-        return format!("@{}", instr & 0x7fff);
-    }
-    let a    = (instr >> 12) & 1;
-    let comp = (instr >>  6) & 0x3f;
-    let dest = (instr >>  3) & 0x7;
-    let jump =  instr        & 0x7;
-
-    let comp_str = match (a, comp) {
-        (0, 0b101010) => "0",    (0, 0b111111) => "1",    (0, 0b111010) => "-1",
-        (0, 0b001100) => "D",    (0, 0b110000) => "A",
-        (0, 0b001101) => "!D",   (0, 0b110001) => "!A",
-        (0, 0b001111) => "-D",   (0, 0b110011) => "-A",
-        (0, 0b011111) => "D+1",  (0, 0b110111) => "A+1",
-        (0, 0b001110) => "D-1",  (0, 0b110010) => "A-1",
-        (0, 0b000010) => "D+A",  (0, 0b010011) => "D-A",
-        (0, 0b000111) => "A-D",  (0, 0b000000) => "D&A",  (0, 0b010101) => "D|A",
-        (1, 0b110000) => "M",    (1, 0b110001) => "!M",   (1, 0b110011) => "-M",
-        (1, 0b110111) => "M+1",  (1, 0b110010) => "M-1",
-        (1, 0b000010) => "D+M",  (1, 0b010011) => "D-M",
-        (1, 0b000111) => "M-D",  (1, 0b000000) => "D&M",  (1, 0b010101) => "D|M",
-        _ => "?",
-    };
-    let dest_str = match dest {
-        0b000 => "",     0b001 => "M=",   0b010 => "D=",   0b011 => "DM=",
-        0b100 => "A=",   0b101 => "AM=",  0b110 => "AD=",  0b111 => "ADM=",
-        _ => unreachable!(),
-    };
-    let jump_str = match jump {
-        0b000 => "",      0b001 => ";JGT", 0b010 => ";JEQ", 0b011 => ";JGE",
-        0b100 => ";JLT",  0b101 => ";JNE", 0b110 => ";JLE", 0b111 => ";JMP",
-        _ => unreachable!(),
-    };
-    format!("{}{}{}", dest_str, comp_str, jump_str)
-}
-
-/// Translate the currently held key to a Hack keycode (0 = no key).
-fn hack_keycode(window: &Window) -> u64 {
-    let shift = window.is_key_down(Key::LeftShift) || window.is_key_down(Key::RightShift);
-
-    let specials: &[(Key, u64)] = &[
-        (Key::Enter,    128), (Key::Backspace, 129),
-        (Key::Left,     130), (Key::Up,        131),
-        (Key::Right,    132), (Key::Down,      133),
-        (Key::Home,     134), (Key::End,       135),
-        (Key::PageUp,   136), (Key::PageDown,  137),
-        (Key::Insert,   138), (Key::Delete,    139),
-        (Key::Escape,   140),
-        (Key::F1,  141), (Key::F2,  142), (Key::F3,  143), (Key::F4,  144),
-        (Key::F5,  145), (Key::F6,  146), (Key::F7,  147), (Key::F8,  148),
-        (Key::F9,  149), (Key::F10, 150), (Key::F11, 151), (Key::F12, 152),
-    ];
-    for &(key, code) in specials {
-        if window.is_key_down(key) { return code; }
-    }
-
-    if window.is_key_down(Key::Space) { return b' ' as u64; }
-
-    let letters = [
-        Key::A, Key::B, Key::C, Key::D, Key::E, Key::F, Key::G, Key::H,
-        Key::I, Key::J, Key::K, Key::L, Key::M, Key::N, Key::O, Key::P,
-        Key::Q, Key::R, Key::S, Key::T, Key::U, Key::V, Key::W, Key::X,
-        Key::Y, Key::Z,
-    ];
-    for (i, &key) in letters.iter().enumerate() {
-        if window.is_key_down(key) {
-            return (if shift { b'A' } else { b'a' } as usize + i) as u64;
-        }
-    }
-
-    let digits = [
-        Key::Key0, Key::Key1, Key::Key2, Key::Key3, Key::Key4,
-        Key::Key5, Key::Key6, Key::Key7, Key::Key8, Key::Key9,
-    ];
-    for (i, &key) in digits.iter().enumerate() {
-        if window.is_key_down(key) {
-            return (b'0' as usize + i) as u64;
-        }
-    }
-
-    0
-}
-
-/// Monaco 9 bitmap font, 5 pixels wide, 9 pixels tall (7 body + 2 descender).
-/// See https://github.com/mossprescott/pynand/blob/master/alt/big/Monaco9.png
-const FONT: [([u8; 9], char); 17] = [
-    ([0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E, 0x00, 0x00], '0'),
-    ([0x02, 0x06, 0x02, 0x02, 0x02, 0x02, 0x02, 0x00, 0x00], '1'),
-    ([0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F, 0x00, 0x00], '2'),
-    ([0x0E, 0x11, 0x01, 0x06, 0x01, 0x11, 0x0E, 0x00, 0x00], '3'),
-    ([0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02, 0x00, 0x00], '4'),
-    ([0x1F, 0x10, 0x1E, 0x01, 0x01, 0x11, 0x0E, 0x00, 0x00], '5'),
-    ([0x0E, 0x10, 0x10, 0x1E, 0x11, 0x11, 0x0E, 0x00, 0x00], '6'),
-    ([0x1F, 0x01, 0x01, 0x02, 0x04, 0x04, 0x04, 0x00, 0x00], '7'),
-    ([0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E, 0x00, 0x00], '8'),
-    ([0x0E, 0x11, 0x11, 0x0F, 0x01, 0x01, 0x0E, 0x00, 0x00], '9'),
-    ([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00], '.'),
-    ([0x11, 0x1B, 0x15, 0x11, 0x11, 0x11, 0x11, 0x00, 0x00], 'M'),
-    ([0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11, 0x00, 0x00], 'H'),
-    ([0x00, 0x00, 0x1F, 0x02, 0x04, 0x08, 0x1F, 0x00, 0x00], 'z'),
-    ([0x03, 0x04, 0x0E, 0x04, 0x04, 0x04, 0x04, 0x00, 0x00], 'f'),
-    ([0x00, 0x00, 0x1E, 0x11, 0x11, 0x11, 0x1E, 0x10, 0x10], 'p'),
-    ([0x00, 0x00, 0x0F, 0x10, 0x0E, 0x01, 0x1E, 0x00, 0x00], 's'),
-];
-
-fn glyph(ch: char) -> [u8; 9] {
-    for &(bits, c) in &FONT {
-        if c == ch { return bits; }
-    }
-    [0; 9]
-}
-
-fn draw_text(pixels: &mut [u32], win_width: usize, x: usize, y: usize, scale: usize, text: &str, color: u32) {
-    let mut cx = x;
-    for ch in text.chars() {
-        let g = glyph(ch);
-        for row in 0..9 {
-            for col in 0..5 {
-                if g[row] & (0x10 >> col) != 0 {
-                    for dy in 0..scale {
-                        for dx in 0..scale {
-                            let px = cx + col * scale + dx;
-                            let py = y + row * scale + dy;
-                            if px < win_width {
-                                pixels[py * win_width + px] = color;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        cx += 6 * scale;
-    }
-}
-
-fn format_speed(cps: f64) -> String {
-    if cps >= 1_000_000.0 {
-        format!("{:.2} MHz", cps / 1_000_000.0)
-    } else if cps >= 1_000.0 {
-        format!("{:.0} KHz", cps / 1_000.0)
-    } else {
-        format!("{:.0} Hz", cps)
-    }
-}
-
-fn text_width(text: &str, scale: usize) -> usize {
-    let n = text.len();
-    if n == 0 { 0 } else { (n * 6 - 1) * scale }
-}
-
-fn fmt_commas(n: u64) -> String {
-    let s = n.to_string();
-    let mut out = String::new();
-    for (i, c) in s.chars().rev().enumerate() {
-        if i > 0 && i % 3 == 0 { out.push(','); }
-        out.push(c);
-    }
-    out.chars().rev().collect()
-}
-
-/// Recursively expand high-level components (projects 3 and 5), until only primitives and simple
-/// logic are left (projects 1 and 2).
-pub fn half_flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Project05Component> {
-    fn go(comp: Project05Component) -> Vec<Project05Component> {
-        // Stop at Project02: don't expand ALU, adders, etc. into Nands.
-        if let Project05Component::Project03(Project03Component::Project02(_)) = &comp {
-            vec![comp]
-        }
-        else {
-            match comp.expand() {
-                None => vec![comp],
-                Some(ic) => ic.components.into_iter().flat_map(go).collect(),
-            }
-        }
-    }
-    IC {
-        name: format!("{} (half-flat)", chip.name()),
-        intf: chip.reflect(),
-        components: go(chip.into()),
-    }
-}
+use computer::disasm::disassemble;
+use computer::display::{self, WIDTH, HEIGHT, BEZEL, FRAME_TIME};
+use computer::keyboard::hack_keycode;
+use computer::{half_flatten, fmt_commas};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -305,7 +67,7 @@ fn main() {
     let keyboard = find_keyboard(&state);
     let win_width  = (WIDTH  + 2 * BEZEL) * scale;
     let win_height = (HEIGHT + 2 * BEZEL) * scale;
-    let bezel = load_bezel(scale);
+    let bezel = display::load_bezel(scale);
     let mut pixels = bezel.clone();
 
     let mut window = Window::new(path, win_width, win_height, WindowOptions::default())
@@ -402,7 +164,7 @@ fn main() {
 
             keyboard.push((hack_keycode(&window) as u16).into());
 
-            render_screen(&screen, &mut pixels, scale);
+            display::render_screen(&screen, &mut pixels, scale);
 
             let bezel_top = (BEZEL + HEIGHT) * scale;
             for row in bezel_top..win_height {
@@ -412,9 +174,9 @@ fn main() {
             let text_y = bezel_top + (BEZEL - 9) * scale / 2;
             let text_color = 0x404040;
             if !display_speed.is_empty() {
-                draw_text(&mut pixels, win_width, BEZEL * scale, text_y, scale, &display_speed, text_color);
-                let fw = text_width(&display_fps, scale);
-                draw_text(&mut pixels, win_width, win_width - BEZEL * scale - fw, text_y, scale, &display_fps, text_color);
+                display::draw_text(&mut pixels, win_width, BEZEL * scale, text_y, scale, &display_speed, text_color);
+                let fw = display::text_width(&display_fps, scale);
+                display::draw_text(&mut pixels, win_width, win_width - BEZEL * scale - fw, text_y, scale, &display_fps, text_color);
             }
 
             window.update_with_buffer(&pixels, win_width, win_height).unwrap();
@@ -423,7 +185,7 @@ fn main() {
             if elapsed.as_millis() >= 200 {
                 let cps = interval_cycles as f64 / elapsed.as_secs_f64();
                 let fps = interval_frames as f64 / elapsed.as_secs_f64();
-                display_speed = format_speed(cps);
+                display_speed = display::format_speed(cps);
                 display_fps = format!("{:.0} fps", fps);
                 let (val, suffix) = if cps >= 1_000_000.0 {
                     (cps / 1_000_000.0, "M")
