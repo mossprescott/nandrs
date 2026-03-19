@@ -221,11 +221,12 @@ impl<C> Reflect for IC<C> {
 #[macro_export]
 macro_rules! expand {
     // Entry point: two passes — all `let` bindings first, then all `push`es.
+    // `components` is declared up front so that for-loops and folds can push during @lets.
     ( |$this:ident| { $($body:tt)* } ) => {
         fn expand(&self) -> Option<$crate::IC<Self::Target>> {
             let $this = self;
-            $crate::expand!(@lets; $($body)*);
             let mut components = vec![];
+            $crate::expand!(@lets components; $($body)*);
             $crate::expand!(@pushes components; $($body)*);
             Some($crate::IC {
                 name: $crate::Reflect::name(self),
@@ -235,41 +236,75 @@ macro_rules! expand {
         }
     };
 
-    // --- Phase 1: emit `let` bindings for all entries ---
+    // --- Phase 1: emit `let` bindings; for-loops and folds also push here ---
 
-    (@lets;) => {};
-    (@lets; $var:ident : forward $expr:expr, $($rest:tt)*) => {
+    (@lets $components:ident;) => {};
+    (@lets $components:ident; $var:ident : forward $expr:expr, $($rest:tt)*) => {
         let $var = $expr;
-        $crate::expand!(@lets; $($rest)*);
+        $crate::expand!(@lets $components; $($rest)*);
     };
-    (@lets; $var:ident : forward $expr:expr) => {
+    (@lets $components:ident; $var:ident : forward $expr:expr) => {
         let $var = $expr;
     };
-    // For loops: skip in @lets (handled entirely in @pushes)
-    (@lets; for $i:ident in $start:literal .. $end:literal { $($inner:tt)* } $($rest:tt)*) => {
-        $crate::expand!(@lets; $($rest)*);
+    // For loops: construct and push during @lets (while bindings are alive)
+    (@lets $components:ident; for $i:ident in $start:literal .. $end:literal { $($inner:tt)* } $($rest:tt)*) => {
+        for $i in $start..$end {
+            $crate::expand!(@for_body $components; $($inner)*);
+        }
+        $crate::expand!(@lets $components; $($rest)*);
     };
-    (@lets; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+    // Fold: collect components into a saved vec during @lets; extend during @pushes.
+    (@lets $components:ident; $var:ident : ($start:literal .. $end:literal) . fold ($init:expr, | $acc:ident, $i:ident | { $($body:tt)* }) , $($rest:tt)*) => {
+        let $var = {
+            let mut __fold_tmp: Vec<_> = vec![];
+            let _ = ($start..$end).fold($init, |$acc, $i| {
+                $crate::expand!(@fold_bind $($body)*);
+                let __fold_next = { $crate::expand!(@fold_accum $($body)*) };
+                $crate::expand!(@fold_push __fold_tmp; $($body)*);
+                __fold_next
+            });
+            __fold_tmp
+        };
+        $crate::expand!(@lets $components; $($rest)*);
+    };
+    (@lets $components:ident; $var:ident : ($start:literal .. $end:literal) . fold ($init:expr, | $acc:ident, $i:ident | { $($body:tt)* })) => {
+        let $var = {
+            let mut __fold_tmp: Vec<_> = vec![];
+            let _ = ($start..$end).fold($init, |$acc, $i| {
+                $crate::expand!(@fold_bind $($body)*);
+                let __fold_next = { $crate::expand!(@fold_accum $($body)*) };
+                $crate::expand!(@fold_push __fold_tmp; $($body)*);
+                __fold_next
+            });
+            __fold_tmp
+        };
+    };
+    (@lets $components:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
         let $var = $T { $($fields)* };
-        $crate::expand!(@lets; $($rest)*);
+        $crate::expand!(@lets $components; $($rest)*);
     };
-    (@lets; $var:ident : $T:ident { $($fields:tt)* }) => {
+    (@lets $components:ident; $var:ident : $T:ident { $($fields:tt)* }) => {
         let $var = $T { $($fields)* };
     };
 
-    // --- Phase 2: emit `push` only for component entries (skip forwards) ---
+    // --- Phase 2: emit `push` for component entries (skip forwards, for-loops, folds) ---
 
     (@pushes $components:ident;) => {};
     (@pushes $components:ident; $var:ident : forward $expr:expr, $($rest:tt)*) => {
         $crate::expand!(@pushes $components; $($rest)*);
     };
     (@pushes $components:ident; $var:ident : forward $expr:expr) => {};
-    // For loops: construct and push each iteration
+    // For loops: already pushed during @lets
     (@pushes $components:ident; for $i:ident in $start:literal .. $end:literal { $($inner:tt)* } $($rest:tt)*) => {
-        for $i in $start..$end {
-            $crate::expand!(@for_body $components; $($inner)*);
-        }
         $crate::expand!(@pushes $components; $($rest)*);
+    };
+    // Folds: extend with saved vec (collected during @lets)
+    (@pushes $components:ident; $var:ident : ($start:literal .. $end:literal) . fold ($init:expr, | $acc:ident, $i:ident | { $($inner:tt)* }) , $($rest:tt)*) => {
+        $components.extend($var);
+        $crate::expand!(@pushes $components; $($rest)*);
+    };
+    (@pushes $components:ident; $var:ident : ($start:literal .. $end:literal) . fold ($init:expr, | $acc:ident, $i:ident | { $($inner:tt)* })) => {
+        $components.extend($var);
     };
     (@pushes $components:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
         $components.push($var.into());
@@ -291,4 +326,26 @@ macro_rules! expand {
         let $var = $T { $($fields)* };
         $components.push($var.into());
     };
+
+    // --- Fold sub-phases: bind entries, extract accumulator, push entries ---
+
+    // @fold_bind: create let bindings for each entry, skip the final accumulator expression
+    (@fold_bind $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+        let $var = $T { $($fields)* };
+        $crate::expand!(@fold_bind $($rest)*);
+    };
+    (@fold_bind $next:expr) => {};
+
+    // @fold_accum: skip entries, return the final accumulator expression
+    (@fold_accum $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+        $crate::expand!(@fold_accum $($rest)*)
+    };
+    (@fold_accum $next:expr) => { $next };
+
+    // @fold_push: push each entry in order, skip the final accumulator expression
+    (@fold_push $components:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+        $components.push($var.into());
+        $crate::expand!(@fold_push $components; $($rest)*);
+    };
+    (@fold_push $components:ident; $next:expr) => {};
 }

@@ -175,32 +175,23 @@ pub struct Inc16 {
 impl Component for Inc16 {
     type Target = Project02Component;
 
-    // Note: this carry-ripple isn't currently expressible in the macro syntax
-    fn expand(&self) -> Option<IC<Project02Component>> {
-        let zero = Const { value: 0, out: Output16::new() };
-
+    expand! { |this| {
         // bit 0: out[0] = NOT(a[0]); carry = a[0] (the carry-in is implicitly 1)
-        let not0 = Not { a: self.a.bit(0), out: self.out.bit(0) };
-
-        let mut components: Vec<Project02Component> = vec![
-            Project01Component::from(zero.clone()).into(),
-            Project01Component::from(not0).into(),
-        ];
+        not0: Not { a: this.a.bit(0), out: this.out.bit(0) },
 
         // Carry-ripple: fold threads the carry across iterations
-        (1..16).fold(self.a.bit(0), |carry, i| {
-            let add = FullAdder {
-                a: self.a.bit(i),
+        _carry_out: (1..16).fold(this.a.bit(0), |carry, i| {
+            zero: Const { value: 0, out: Output16::new() },
+            add: FullAdder {
+                a: this.a.bit(i),
                 b: zero.out.bit(0).into(),
                 c: carry,
-                sum: self.out.bit(i),
+                sum: this.out.bit(i),
                 carry: Output::new(),
-            };
-            components.push(add.clone().into());
+            },
             add.carry.into()
-        });
-        Some(IC { name: self.name().to_string(), intf: self.reflect(), components })
-    }
+        }),
+    }}
 }
 
 /// out = a + b (16-bit, overflow ignored)
@@ -214,36 +205,28 @@ pub struct Add16 {
 impl Component for Add16 {
     type Target = Project02Component;
 
-    fn expand(&self) -> Option<IC<Project02Component>> {
-        let zero = Const { value: 0, out: Output16::new() };
-
+    expand! { |this| {
         // bit 0: half-add (carry-in is 0)
-        let add0 = FullAdder {
-            a: self.a.bit(0),
-            b: self.b.bit(0),
-            c: zero.out.bit(0).into(),
-            sum: self.out.bit(0),
+        zero0: Const { value: 0, out: Output16::new() },
+        add0: FullAdder {
+            a: this.a.bit(0),
+            b: this.b.bit(0),
+            c: zero0.out.bit(0).into(),
+            sum: this.out.bit(0),
             carry: Output::new(),
-        };
-        let mut carry: Input = add0.carry.clone().into();
-        let mut components: Vec<Project02Component> = vec![
-            Project01Component::from(zero).into(),
-            add0.into(),
-        ];
-
-        for i in 1..16 {
-            let add = FullAdder {
-                a: self.a.bit(i),
-                b: self.b.bit(i),
+        },
+        // Carry-ripple: fold threads the carry across remaining bits
+        _carry_out: (1..16).fold(add0.carry.into(), |carry, i| {
+            add: FullAdder {
+                a: this.a.bit(i),
+                b: this.b.bit(i),
                 c: carry,
-                sum: self.out.bit(i),
+                sum: this.out.bit(i),
                 carry: Output::new(),
-            };
-            carry = add.carry.clone().into();
-            components.push(add.into());
-        }
-        Some(IC { name: self.name().to_string(), intf: self.reflect(), components })
-    }
+            },
+            add.carry.into()
+        }),
+    }}
 }
 
 /// Returns 1 if all bits of input are 0.
