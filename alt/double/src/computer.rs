@@ -156,18 +156,18 @@ impl Component for CPU {
             out: Output16::new(),
         },
 
-        // === next_addr: if A is being written this cycle, expose the new A value as the
-        // address for the memory system (so RAM latches the right read address); otherwise
-        // expose the current A.out. Write address is always A.out (load_a=0 when write_m=1). ===
-        next_addr: Mux16 {
-            sel: load_a.out.into(),
-            a0:  reg_a_out.into(),
-            a1:  a_data_skip.out.into(),
-            out: this.mem_addr,
-        },
-
         // === A register: when skipping, load instr1 into A instead ===
         load_a_skip: Or { a: load_a.out.into(), b: do_skip.out.into(), out: Output::new() },
+
+        // === next_addr: if A is being written this cycle (including via skip), expose the
+        // new A value as the address for the memory system (so RAM latches the right read
+        // address); otherwise expose the current A.out. ===
+        next_addr: Mux16 {
+            a0:  reg_a_out.into(),
+            a1:  a_data_skip.out.into(),
+            sel: load_a_skip.out.into(),
+            out: this.mem_addr,
+        },
         reg_a: Register16 { data_in: a_data_skip.out.into(), write: load_a_skip.out.into(), data_out: reg_a_out },
 
         // === D register (write_d already gated with is_c in Decode) ===
