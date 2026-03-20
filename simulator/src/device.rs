@@ -131,7 +131,7 @@ impl<A: Nat + Storable, D: Nat + Storable> MemoryDevice<A, D> for RAM<A, D> {
             self.valid = false;
             Err(Error::AddressOutOfRange(a))
         } else {
-            eprintln!("RAM set_addr({})", a);
+            // eprintln!("RAM set_addr({})", a);
             self.next_addr = addr;
             self.valid = true;
             Ok(())
@@ -147,7 +147,7 @@ impl<A: Nat + Storable, D: Nat + Storable> MemoryDevice<A, D> for RAM<A, D> {
     }
 
     fn write(&mut self, word: Word<D>) -> Result<(), Error> {
-        eprintln!("RAM write({}) @ addr={}", word, self.addr);
+        // eprintln!("RAM write({}) @ addr={}", word, self.addr);
         if self.valid {
             self.data[self.addr.unsigned() as usize] = word;
             Ok(())
