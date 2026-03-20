@@ -34,7 +34,6 @@
 
 use assignments::project_01::{And, Or, Not};
 use assignments::project_02::{ALU, Add16, Inc16};
-use assignments::project_03::PC;
 use assignments::project_05::{self, Decode, Project05Component};
 use simulator::{self, AsConst, Component, IC, Input, Input16, Output, Output16, Reflect, Chip, expand};
 use simulator::component::{Buffer, Computational16, Const, Mux16, MemorySystem16, Register16, ROM16};
@@ -47,8 +46,9 @@ pub struct CPU {
     /// Return to a known state (i.e. jump to address 0)
     pub reset: Input,
 
-    /// Address of the next instruction to load
-    pub pc: Output16,
+    /// Address of the next instructions to load
+    pub pc0: Output16,
+    pub pc1: Output16,
 
     /// The bits of the current instruction
     pub instr0: Input16,
@@ -156,24 +156,18 @@ impl Component for CPU {
         jgt_and:  And { a: decode.jmp_gt.into(), b: is_pos.out.into(), out: Output::new() },
         j_lt_eq:  Or  { a: jlt_and.out.into(), b: jeq_and.out.into(), out: Output::new() },
         do_jmp:   Or  { a: j_lt_eq.out.into(), b: jgt_and.out.into(), out: Output::new() },
+        not_jmp:  Not { a: do_jmp.out.into(), out: Output::new() },
 
-        // Next PC if we're dispatching a second instr
-        skip_pc: Inc2 { a: this.pc.into(), out: Output16::new() },
+        // Skip the following A-instr when not jumping:
+        do_skip: And { a: decode1_is_a.out.into(), b: not_jmp.out.into(), out: Output::new() },
 
-        load_pc_addr: Mux16 { a0: skip_pc.out.into(), a1: reg_a_out.into(), sel: do_jmp.out.into(), out: Output16::new() },
-
-        // Either we jump or we dispatch the following A-instr:
-        load_pc: Or  { a: do_jmp.out.into(), b: decode1_is_a.out.into(), out: Output::new() },
-
-        // === PC: inc always 1 ===
-        const_one: Const { value: 1, out: Output::new() },
-        // TODO: implement custom PC with a "skip" input?
-        pc: PC {
+        pc: DoublePC {
             reset: this.reset.into(),
-            addr:  load_pc_addr.out.into(),
-            load:  load_pc.out.into(),
-            inc:   const_one.out.bit(0).into(),
-            out:   this.pc,
+            addr:  reg_a_out.into(),
+            load:  do_jmp.out.into(),
+            skip:  do_skip.out.into(),
+            out0:  this.pc0,
+            out1:  this.pc1,
         },
     }}
 }
@@ -193,6 +187,7 @@ impl Component for Computer {
 
     expand! { |this| {
         mem_out: forward Output16::new(),
+        pc1_out: forward Output16::new(),
 
         rom0: ROM16 {
             size: 32 * 1024,
@@ -200,19 +195,16 @@ impl Component for Computer {
             out:  Output16::new(),
         },
 
-        next_pc: Inc16 {
-            a: this.pc.into(),
-            out: Output16::new(),
-        },
         rom1: ROM16 {
             size: 32 * 1024,
-            addr: next_pc.out.into(),
+            addr: pc1_out.into(),
             out:  Output16::new(),
         },
 
         cpu: CPU {
             reset:        this.reset,
-            pc:           this.pc,
+            pc0:          this.pc,
+            pc1:          pc1_out,
             instr0:       rom0.out.into(),
             instr1:       rom1.out.into(),
             mem_data_out: Output16::new(),
@@ -230,6 +222,57 @@ impl Component for Computer {
     }}
 }
 
+/// PC with a "skip" input: when asserted, increment by 2 instead of 1.
+/// load and reset take priority over skip (same precedence rules as project_03::PC).
+/// in
+#[derive(Reflect, Chip)]
+pub struct DoublePC {
+    pub reset: Input,
+    pub addr: Input16,
+    pub load: Input,
+    /// When asserted (and not load/reset), increment by 2 instead of 1.
+    pub skip: Input,
+
+    /// Address of the current instruction (latched)
+    pub out0: Output16,
+    /// Address of the next instruction; always equal to out0 + 1; also latched
+    pub out1: Output16,
+}
+
+impl Component for DoublePC {
+    type Target = DoubleComponent;
+
+    expand! { |this| {
+        zero: Const { value: 0, out: Output16::new() },
+        one: Const { value: 1, out: Output::new() },
+
+        inc1: Inc16 { a: this.out0.into(), out: Output16::new() },
+        inc2: Inc2 { a: this.out0.into(), out: Output16::new() },
+
+        // skip=0 → inc by 1; skip=1 → inc by 2
+        next0: Mux16 { a0: inc1.out.into(), a1: inc2.out.into(), sel: this.skip, out: Output16::new() },
+
+        // load overrides inc/skip
+        next1: Mux16 { a0: next0.out.into(), a1: this.addr, sel: this.load, out: Output16::new() },
+
+        // reset overrides everything
+        next2: Mux16 { a0: next1.out.into(), a1: zero.out.into(), sel: this.reset, out: Output16::new() },
+
+        reg0: Register16 {
+            data_in:  next2.out.into(),
+            write:    one.out.bit(0).into(),
+            data_out: this.out0,
+        },
+
+        inc3: Inc16 { a: next2.out.into(), out: Output16::new() },
+        reg1: Register16 {
+            data_in:  inc3.out.into(),
+            write:    one.out.bit(0).into(),
+            data_out: this.out1,
+        },
+    }}
+}
+
 /// Add with the constant 2.
 #[derive(Reflect, Chip)]
 pub struct Inc2 {
@@ -241,9 +284,6 @@ impl Component for Inc2 {
     type Target = DoubleComponent;
 
     expand! { |this| {
-        // TODO: construct from 14 half-adders; for minimal gate count
-        // _: Buffer { a: this.a.bit(0), out: this.out.bit(0).into() },
-
         // Adding a constant value is just as efficient in simulation:
         two: Const { value: 2, out: Output16::new() },
         _add: Add16 { a: this.a, b: two.out.into(), out: this.out },
@@ -255,6 +295,7 @@ pub enum DoubleComponent {
     Project05(Project05Component),
     CPU(CPU),
     Computer(Computer),
+    DoublePC(DoublePC),
     Inc2(Inc2),
 }
 
@@ -265,6 +306,7 @@ impl<C: Into<Project05Component>> From<C> for DoubleComponent {
 }
 impl From<CPU>      for DoubleComponent { fn from(c: CPU)      -> Self { DoubleComponent::CPU(c)      } }
 impl From<Computer> for DoubleComponent { fn from(c: Computer) -> Self { DoubleComponent::Computer(c) } }
+impl From<DoublePC> for DoubleComponent { fn from(c: DoublePC) -> Self { DoubleComponent::DoublePC(c) } }
 impl From<Inc2>     for DoubleComponent { fn from(c: Inc2)     -> Self { DoubleComponent::Inc2(c) } }
 
 impl Component for DoubleComponent {
@@ -275,6 +317,7 @@ impl Component for DoubleComponent {
             DoubleComponent::Project05(c) => c.expand().map(|ic| IC { name: ic.name, intf: ic.intf, components: ic.components.into_iter().map(Into::into).collect() }),
             DoubleComponent::CPU(c)       => c.expand(),
             DoubleComponent::Computer(c)  => c.expand(),
+            DoubleComponent::DoublePC(c)  => c.expand(),
             DoubleComponent::Inc2(c)      => c.expand(),
         }
     }
@@ -286,6 +329,7 @@ impl Reflect for DoubleComponent {
             DoubleComponent::Project05(c) => c.reflect(),
             DoubleComponent::CPU(c)       => c.reflect(),
             DoubleComponent::Computer(c)  => c.reflect(),
+            DoubleComponent::DoublePC(c)  => c.reflect(),
             DoubleComponent::Inc2(c)      => c.reflect(),
         }
     }
@@ -294,9 +338,18 @@ impl Reflect for DoubleComponent {
             DoubleComponent::Project05(c) => c.name(),
             DoubleComponent::CPU(c)       => c.name(),
             DoubleComponent::Computer(c)  => c.name(),
+            DoubleComponent::DoublePC(c)  => c.name(),
             DoubleComponent::Inc2(c)      => c.name(),
         }
     }
+}
+
+/// Reset the CPU so that DoublePC's registers are properly initialized (out0=0, out1=1).
+/// Must be called before the first ticktock; also needed in main() after loading ROMs.
+pub fn start(state: &mut ChipState<N16, N16>) {
+    state.set("reset", true.into());
+    state.ticktock();
+    state.set("reset", false.into());
 }
 
 /// Find the two ROMs (rom0 at pc, rom1 at pc+1) in the chip state.
@@ -343,7 +396,7 @@ mod test {
     use simulator::print_graph;
     use simulator::simulate::simulate;
 
-    use crate::computer::{Computer, find_roms, flatten};
+    use crate::computer::{Computer, find_roms, flatten, start};
 
     #[test]
     fn computer_max_behavior() {
@@ -353,13 +406,15 @@ mod test {
         println!("{}", print_graph(&chip));
 
         let flat = flatten(chip);
-        let state = simulate(&flat, memory_system());
+        let mut state = simulate(&flat, memory_system());
 
         let (rom0, rom1) = find_roms(&state);
 
         let pgm = test_05::max_program();
         rom0.flash(pgm.clone());
         rom1.flash(pgm.clone());
+
+        start(&mut state);
 
         test_05::test_computer_max_behavior(state, pgm.len() as u64);
     }
