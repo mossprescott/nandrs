@@ -51,7 +51,10 @@ impl<A: Nat + Storable, D: Nat + Storable> ROM<A, D> {
         if data.len() > self.size {
             Err(Error::AddressOutOfRange(data.len()))
         } else {
-            self.data = data;
+            // Pad to full size; unflashed locations read as 0.
+            let mut buf = vec![Word::new(0); self.size].into_boxed_slice();
+            buf[..data.len()].copy_from_slice(&data);
+            self.data = buf;
             Ok(())
         }
     }
