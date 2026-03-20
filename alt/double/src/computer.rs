@@ -441,8 +441,8 @@ mod test {
         let muxes  = components.iter().filter(|c| matches!(c, Computational::Mux(_))).count();
         assert_eq!(memsys,  1);
         assert_eq!(roms,    2);    // Compare to 1
-        assert_eq!(nands, 171);    // Compare to 166
+        assert_eq!(nands, 174);    // Compare to 166
         assert_eq!(adders, 62);    // Compare to 31
-        assert_eq!(muxes,  16);    // Compare to 15
+        assert_eq!(muxes,  18);    // Compare to 15
     }
 }
