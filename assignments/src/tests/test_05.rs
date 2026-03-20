@@ -389,6 +389,6 @@ fn computer_optimal() {
     assert_eq!(memsys,  1);
     assert_eq!(roms,    1);
     assert_eq!(nands, 166);
-    assert_eq!(adders,  31);
+    assert_eq!(adders, 31);
     assert_eq!(muxes,  15);
 }

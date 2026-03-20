@@ -278,8 +278,8 @@ impl Component for CPU {
 
     expand! { |this| {
         // Forward-declare register outputs:
-        reg_a_out:       forward Output16::new(),
-        reg_d_out:   forward Output16::new(),
+        reg_a_out: forward Output16::new(),
+        reg_d_out: forward Output16::new(),
 
         // === Decode ===
         decode: Decode {
