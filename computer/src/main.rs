@@ -2,16 +2,16 @@ use std::fs;
 
 use clap::Parser;
 
-use assignments::project_05::{Computer, flatten, find_rom, memory_system};
+use assignments::project_05::{self, Computer, Project05Component, find_rom, memory_system};
 use assignments::project_06::{assemble, Program};
-use simulator::{print_graph, print_ic_graph};
+use simulator::{IC, flatten, print_graph, print_ic_graph};
 use simulator::declare::Chip as _;
 use simulator::simulate::{synthesize, initialize};
 use simulator::word::Word16;
 
 use computer::cli::Args;
 use computer::disasm::disassemble;
-use computer::{half_flatten, run};
+use computer::run;
 
 fn main() {
     let args = Args::parse();
@@ -28,10 +28,10 @@ fn main() {
     if args.print {
         println!("{}", print_graph(&computer));
 
-        let squashed = half_flatten(Computer::chip());
-        println!("{}", print_ic_graph(&squashed));
+        // let squashed = half_flatten(Computer::chip().into());
+        // println!("{}", print_ic_graph(&squashed));
     }
-    let chip = flatten(computer);
+    let chip = project_05::flatten(computer);
 
     let Program { instructions, symbols } = program;
 
@@ -55,4 +55,13 @@ fn main() {
     };
 
     run(&args, state, &symbols, &fmt_instr);
+}
+
+/// Recursively expand high-level components (projects 3 and 5, for example), until only primitives
+/// and simple logic are left (projects 1 and 2). Note that the result remains in the "project"
+/// type, because it conveniently embeds the project 1 and 2 components, as well as the
+/// Computational primitives.
+fn half_flatten(chip: Project05Component) -> IC<Project05Component> {
+    todo!()
+    // flatten(chip, "simple", |c| None)
 }
