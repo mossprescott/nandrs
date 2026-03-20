@@ -8,3 +8,6 @@ simulator = { path = "../../simulator" }
 assignments = { path = "../../assignments" }
 computer = { path = "../../computer" }
 clap = { version = "4.6.0", features = ["derive"] }
+
+[dev-dependencies]
+assignments = { path = "../../assignments", features = ["test-support"] }

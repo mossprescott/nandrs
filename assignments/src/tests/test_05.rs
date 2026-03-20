@@ -208,7 +208,7 @@ fn computer_add_behavior() {
 }
 
 
-fn max_program() -> Vec<Word16> {
+pub fn max_program() -> Vec<Word16> {
     [
         "@1",
         "D=M",
@@ -227,35 +227,42 @@ fn max_program() -> Vec<Word16> {
         "@14",  // 14
         "JMP",  //   infinite loop
     ]
-       .map(|op| instr(op).into())
+        .map(|op| instr(op).into())
         .to_vec()
 }
 
 #[test]
-fn computer_max_behavior() {
+pub fn computer_max_behavior() {
     let chip = Computer::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    print!("{}", print_graph(&chip));
+    println!("{}", print_graph(&chip));
 
-    let chip = flatten(chip);
-
-    let mut state = simulate(&chip, memory_system());
+    let flat = flatten(chip);
+    let state = simulate(&flat, memory_system());
 
     let rom = find_rom(&state);
-    let ram = find_ram(&state);
 
     let pgm = max_program();
     rom.flash(pgm.clone());
+
+    test_computer_max_behavior(state, pgm.len() as u64);
+}
+
+/// Run the simulation in the presence of "max_program" (assumed to be in ROM already) and verify
+/// the result.
+pub fn test_computer_max_behavior(mut state: ChipState<N16, N16>, max_iter: u64) {
+    let ram = find_ram(&state);
 
     // Max in RAM[2]:
     ram.poke(1, 3u16.into());
     ram.poke(2, 5u16.into());
 
     // TODO: make the looping prologue automatic and factor this out
-    for _ in 0..pgm.len() {
+    for _ in 0..max_iter {
+        println!("PC: {}", state.get("pc"));
         state.ticktock();
-        if state.get("pc").unsigned() > (pgm.len()-2).try_into().unwrap() { break; }
+        if state.get("pc").unsigned() > max_iter { break; }
     }
 
     assert_eq!(ram.peek(3), 5u16.into());
@@ -268,9 +275,9 @@ fn computer_max_behavior() {
     ram.poke(1, 23456u16.into());
     ram.poke(2, 12345u16.into());
 
-    for _ in 0..pgm.len() {
+    for _ in 0..max_iter {
         state.ticktock();
-        if state.get("pc").unsigned() > (pgm.len()-2).try_into().unwrap() { break; }
+        if state.get("pc").unsigned() > max_iter { break; }
     }
 
     assert_eq!(ram.peek(3), 23456u16.into());

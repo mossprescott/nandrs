@@ -207,3 +207,39 @@ impl AsConst for DoubleComponent {
         if let DoubleComponent::Project05(c) = self { c.as_const() } else { None }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use assignments::tests::test_05;
+    use simulator::Chip;
+    use simulator::component::Computational;
+    use simulator::print_graph;
+
+    use crate::computer::{Computer, flatten};
+
+    #[test]
+    fn computer_max_behavior() {
+
+        let chip = Computer::chip();
+
+        // When it breaks, it's nice to see what it tried to do
+        print!("{}", print_graph(&chip));
+
+        test_05::test_computer_max_behavior(flatten(chip));
+    }
+
+    #[test]
+    fn computer_optimal() {
+        let components = flatten(Computer::chip()).components;
+        let memsys = components.iter().filter(|c| matches!(c, Computational::MemorySystem(_))).count();
+        let roms   = components.iter().filter(|c| matches!(c, Computational::ROM(_))).count();
+        let nands  = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
+        let adders = components.iter().filter(|c| matches!(c, Computational::Adder(_))).count();
+        let muxes  = components.iter().filter(|c| matches!(c, Computational::Mux(_))).count();
+        assert_eq!(memsys,  1);
+        assert_eq!(roms,    2);    // Compare to 1
+        assert_eq!(nands, 171);    // Compare to 166
+        assert_eq!(adders, 62);    // Compare to 31
+        assert_eq!(muxes,  16);    // Compare to 15
+    }
+}

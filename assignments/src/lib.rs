@@ -3,5 +3,5 @@ pub mod project_02;
 pub mod project_03;
 pub mod project_05;
 pub mod project_06;
-#[cfg(test)]
-mod tests;
+#[cfg(any(test, feature = "test-support"))]
+pub mod tests;

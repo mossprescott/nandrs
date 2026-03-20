@@ -1,5 +1,5 @@
 mod test_01;
 mod test_02;
 mod test_03;
-mod test_05;
+pub mod test_05;
 mod test_06;
