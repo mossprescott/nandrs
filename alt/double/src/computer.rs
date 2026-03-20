@@ -68,6 +68,9 @@ impl Component for CPU {
     type Target = DoubleComponent;
 
     expand! { |this| {
+        // TODO: when the chip is powered on, DoublePC is in an invalid state (both out0 and out1 are 0).
+        // A clever implementation here would detect that and assert "pc.reset" for one cycle automatically.
+
         // Forward-declare register outputs:
         reg_a_out: forward Output16::new(),
         reg_d_out: forward Output16::new(),
@@ -118,31 +121,6 @@ impl Component for CPU {
             ng:  Output::new(),
         },
 
-        // === A register data mux: AFTER ALU ===
-        // sel=is_a → a1=instr (A-instr), a0=ALU output (C-instr with dest=A)
-        a_data: Mux16 {
-            sel: decode.is_a.into(),
-            a0:  this.mem_data_out.into(),
-            a1:  this.instr0,
-            out: Output16::new(),
-        },
-
-        // === next_addr: if A is being written this cycle, expose the new A value as the
-        // address for the memory system (so RAM latches the right read address); otherwise
-        // expose the current A.out. Write address is always A.out (load_a=0 when write_m=1). ===
-        next_addr: Mux16 {
-            sel: load_a.out.into(),
-            a0:  reg_a_out.into(),
-            a1:  a_data.out.into(),
-            out: this.mem_addr,
-        },
-
-        // === A register ===
-        reg_a: Register16 { data_in: a_data.out.into(), write: load_a.out.into(), data_out: reg_a_out },
-
-        // === D register (write_d already gated with is_c in Decode) ===
-        reg_d: Register16 { data_in: this.mem_data_out.into(), write: decode.write_d.into(), data_out: reg_d_out },
-
         // === mem_write (write_m already gated with is_c in Decode) ===
         mem_write_buf: Buffer { a: decode.write_m.into(), out: this.mem_write },
 
@@ -160,6 +138,40 @@ impl Component for CPU {
 
         // Skip the following A-instr when not jumping:
         do_skip: And { a: decode1_is_a.out.into(), b: not_jmp.out.into(), out: Output::new() },
+
+        // === A register data mux: AFTER ALU ===
+        // sel=is_a → a1=instr (A-instr), a0=ALU output (C-instr with dest=A)
+        a_data: Mux16 {
+            a0:  this.mem_data_out.into(),
+            a1:  this.instr0,
+            sel: decode.is_a.into(),
+            out: Output16::new(),
+        },
+
+        // Substitute the value of the *following* A-instr when we are able to "skip" that cycle:
+        a_data_skip: Mux16 {
+            a0: a_data.out.into(),
+            a1: this.instr1,
+            sel: do_skip.out.into(),
+            out: Output16::new(),
+        },
+
+        // === next_addr: if A is being written this cycle, expose the new A value as the
+        // address for the memory system (so RAM latches the right read address); otherwise
+        // expose the current A.out. Write address is always A.out (load_a=0 when write_m=1). ===
+        next_addr: Mux16 {
+            sel: load_a.out.into(),
+            a0:  reg_a_out.into(),
+            a1:  a_data_skip.out.into(),
+            out: this.mem_addr,
+        },
+
+        // === A register: when skipping, load instr1 into A instead ===
+        load_a_skip: Or { a: load_a.out.into(), b: do_skip.out.into(), out: Output::new() },
+        reg_a: Register16 { data_in: a_data_skip.out.into(), write: load_a_skip.out.into(), data_out: reg_a_out },
+
+        // === D register (write_d already gated with is_c in Decode) ===
+        reg_d: Register16 { data_in: this.mem_data_out.into(), write: decode.write_d.into(), data_out: reg_d_out },
 
         pc: DoublePC {
             reset: this.reset.into(),
