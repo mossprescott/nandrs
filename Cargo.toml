@@ -1,3 +1,3 @@
 [workspace]
-members = ["simulator", "simulator-derive", "assignments", "computer"]
+members = ["simulator", "simulator-derive", "assignments", "computer", "alt/double"]
 resolver = "2"
