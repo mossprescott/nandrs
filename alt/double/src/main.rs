@@ -5,7 +5,7 @@ use assignments::project_05::memory_system;
 use assignments::project_06::{assemble, Program};
 use computer::cli::Args;
 use computer::disasm::disassemble;
-use double::computer::{Computer, DoubleComponent, find_roms, flatten as flatten_double};
+use double::computer::{Computer, DoubleComponent, find_roms, flatten as flatten_double, start};
 use simulator::{Chip, IC, flatten, print_graph, print_ic_graph};
 use simulator::simulate::{synthesize, initialize};
 use simulator::word::Word16;
@@ -44,13 +44,16 @@ fn main() {
         return;
     }
 
-    let state = initialize(wiring);
+    let mut state = initialize(wiring);
 
     // Each ROM gets its own copy of the same contents:
     let words: Vec<Word16> = instructions.iter().map(|&v| v.into()).collect();
     let (rom0, rom1) = find_roms(&state);
     rom0.flash(words.clone());
     rom1.flash(words);
+
+    // Extra, mandatory init for the double-barreled PC:
+    start(&mut state);
 
     let fmt_instr = |pc: Word16| -> String {
         instructions.get(pc.unsigned() as usize)
