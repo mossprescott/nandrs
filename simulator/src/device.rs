@@ -128,6 +128,7 @@ impl<A: Nat + Storable, D: Nat + Storable> MemoryDevice<A, D> for RAM<A, D> {
             self.valid = false;
             Err(Error::AddressOutOfRange(a))
         } else {
+            eprintln!("RAM set_addr({})", a);
             self.next_addr = addr;
             self.valid = true;
             Ok(())
@@ -143,6 +144,7 @@ impl<A: Nat + Storable, D: Nat + Storable> MemoryDevice<A, D> for RAM<A, D> {
     }
 
     fn write(&mut self, word: Word<D>) -> Result<(), Error> {
+        eprintln!("RAM write({}) @ addr={}", word, self.addr);
         if self.valid {
             self.data[self.addr.unsigned() as usize] = word;
             Ok(())
@@ -174,8 +176,13 @@ impl<A: Nat + Storable, D: Nat + Storable, T: MemoryDevice<A, D>> MemoryDevice<A
     /// Forward the address to every device (base-adjusted). Each device records whether it's valid.
     fn set_addr(&mut self, addr: Word<A>) -> Result<(), Error> {
         for overlay in &mut self.devices {
-            let offset = addr.unsigned().wrapping_sub(overlay.base.unsigned());
-            let _ = overlay.device.set_addr(Word::new(offset));
+            if addr.unsigned() >= overlay.base.unsigned() {
+                let offset = addr.unsigned() - overlay.base.unsigned();
+                let _ = overlay.device.set_addr(Word::new(offset));
+            } else {
+                // Address is below this region; invalidate without latching a bogus address.
+                let _ = overlay.device.set_addr(Word::new(u64::MAX));
+            }
         }
         Ok(())
     }
