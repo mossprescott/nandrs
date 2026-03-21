@@ -17,6 +17,28 @@ pub use declare::*;
 
 pub use simulator_derive::{Reflect, Chip};
 
+/// Expand a sub-set of components, recursively.
+///
+/// Note: this is essentially flatten() as seen in each project, but:
+/// - instead of using Component::expand, you supply the fn (and therefore, can decide what gets
+///   expanded)
+/// - the resulting IC contains components in the original type (because in principle any component
+///   might be left as is)
+/// - and therefore, this result can't be handled by the generic simulator/evaluator.
+pub fn flatten<C: Reflect + Clone>(chip: C, label: &str, f: &dyn Fn(C) -> Option<IC<C>>) -> IC<C> {
+    fn go<C: Clone>(comp: C, f: &dyn Fn(C) -> Option<IC<C>>) -> Vec<C> {
+        match f(comp.clone()) {
+            None => vec![comp],
+            Some(ic) => ic.components.into_iter().flat_map(|c| go(c, f)).collect(),
+        }
+    }
+    IC {
+        name: format!("{} ({})", chip.name(), label),
+        intf: chip.reflect(),
+        components: go(chip.into(), f),
+    }
+}
+
 fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
     let mut ai = a.chars().peekable();
     let mut bi = b.chars().peekable();
