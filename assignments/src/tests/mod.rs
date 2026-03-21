@@ -1,3 +1,5 @@
+#![allow(unused_imports, dead_code)]
+
 mod test_01;
 mod test_02;
 mod test_03;
