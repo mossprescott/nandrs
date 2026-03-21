@@ -52,11 +52,26 @@ impl<Width: Nat> InputBus<Width> {
 impl<Width: Nat> Copy  for InputBus<Width> {}
 impl<Width: Nat> Clone for InputBus<Width> { fn clone(&self) -> Self { *self } }
 
+pub enum Inputs<Width: Nat> {
+    Fixed(u64),
+    Bus(InputBus<Width>),
+}
+
+/// An input providing fixed bit values.
+pub fn fixed<Width: Nat>(value: u64) -> Inputs<Width> {
+    // Better to crash than find out much later that some of your 1 bits got dropped on the floor.
+    assert!(value < (1u64 << Width::as_int()));
+
+    Inputs::Fixed(value)
+}
+
+
 /// A simple, single-valued input signal; that is, an incoming 1-bit wire.
-pub type Input = InputBus<N1>;
+pub type Input = Inputs<N1>;
+
 
 /// A multi-bit input signal; that is, an incoming 16-bit bus.
-pub type Input16 = InputBus<N16>;
+pub type Input16 = Inputs<N16>;
 
 /// The end of a wire that originates from a single component output.
 ///
@@ -124,11 +139,6 @@ pub trait Component {
 pub trait Reflect {
     fn reflect(&self) -> Interface;
     fn name(&self) -> String;
-}
-
-/// Implemented by components (or wrappers) that may be a Const source.
-pub trait AsConst {
-    fn as_const(&self) -> Option<u64> { None }
 }
 
 /// Construct a fresh instance of a chip struct with new Input/Output buses on every port.

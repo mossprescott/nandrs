@@ -1,4 +1,4 @@
-use crate::{Component, IC, Input, InputBus, Output, OutputBus, Reflect, AsConst, Chip, Interface};
+use crate::{Component, IC, Input, InputBus, Output, OutputBus, Reflect, Chip, Interface};
 use crate::declare::BusRef;
 use crate::nat::{Nat, N1, N16, IsGreater};
 
@@ -12,46 +12,12 @@ pub struct Nand {
     pub out: Output,
 }
 
-/// No-cost "component" that just supplies some fixed zero/one bits.
-///
-/// Morally equivalent to a single-word ROM.
-#[derive(Clone, Reflect)]
-pub struct Const {
-    pub value: u64,
-
-    // HACK: no particular reason this should be 16 bits.
-    pub out: OutputBus<N16>,
-}
-
-impl Const {
-    pub fn chip(value: u64) -> Self {
-        Const { value, out: OutputBus::<N16>::new() }
-    }
-}
-
-impl AsConst for Const {
-    fn as_const(&self) -> Option<u64> { Some(self.value) }
-}
-
-/// Nothing to expand; Const is primitive.
-impl Component for Const {
-    type Target = Const;
-
-    fn expand(&self) -> Option<IC<Const>> {
-        None
-    }
-}
-
 /// "Gate" that just connects its input to its output without modifying it. For our purposes,
 /// this is useful for connecting an input directly to an ouput in an IC.
 #[derive(Clone, Reflect)]
 pub struct Buffer {
     pub a: Input,
     pub out: Output,
-}
-
-impl AsConst for Buffer {
-    fn as_const(&self) -> Option<u64> { None }
 }
 
 /// Nothing to expand; Buffer is primitive.
@@ -111,11 +77,10 @@ impl Component for FullAdder {
 
 /// Type of components that participate in "combinational" circuits:
 /// - most importantly Nand
-/// - pseudo-components Const and Buffer
-/// - finally Mux, included because it makes simulation significantly more efficient
+/// - Buffer for pass-through connections
+/// - Mux, included because it makes simulation significantly more efficient
 pub enum Combinational<Width: Nat> {
     Nand(Nand),
-    Const(Const),
     Buffer(Buffer),
     Mux(Mux<Width>),
     /// For conditionalizing chains of logic, we need a single-bit Mux as well.
@@ -124,7 +89,6 @@ pub enum Combinational<Width: Nat> {
 }
 
 impl<Width: Nat> From<Nand>  for Combinational<Width> { fn from(c: Nand)  -> Self { Combinational::Nand(c)  } }
-impl<Width: Nat> From<Const> for Combinational<Width> { fn from(c: Const) -> Self { Combinational::Const(c) } }
 impl<Width: Nat> From<Buffer> for Combinational<Width> { fn from(c: Buffer) -> Self { Combinational::Buffer(c) } }
 impl<Width: Nat> From<Mux<Width>> for Combinational<Width>
   where Width: IsGreater<N1>
@@ -138,7 +102,6 @@ impl<Width: Nat + Clone> Reflect for Combinational<Width> {
     fn reflect(&self) -> Interface {
         match self {
             Self::Nand(c)   => c.reflect(),
-            Self::Const(c)  => c.reflect(),
             Self::Buffer(c) => c.reflect(),
             Self::Mux(c)    => c.reflect(),
             Self::Mux1(c)   => c.reflect(),
@@ -148,22 +111,10 @@ impl<Width: Nat + Clone> Reflect for Combinational<Width> {
     fn name(&self) -> String {
         match self {
             Self::Nand(c)   => c.name(),
-            Self::Const(c)  => c.name(),
             Self::Buffer(c) => c.name(),
             Self::Mux(c)    => c.name(),
             Self::Mux1(c)   => c.name(),
             Self::Adder(c)  => c.name(),
-        }
-    }
-}
-
-impl<Width: Nat> AsConst for Combinational<Width> {
-    fn as_const(&self) -> Option<u64> {
-        if let Self::Const(c) = self {
-            Some(c.value)
-        }
-        else {
-            None
         }
     }
 }
@@ -193,7 +144,6 @@ pub type Register16 = Register<N16>;
 #[derive(Clone)]
 pub enum Sequential<Width: Nat> {
     Nand(Nand),
-    Const(Const),
     Buffer(Buffer),
     Mux(Mux<Width>),
     Mux1(Mux1),
@@ -202,7 +152,6 @@ pub enum Sequential<Width: Nat> {
 }
 
 impl<Width: Nat> From<Nand>            for Sequential<Width> { fn from(c: Nand)            -> Self { Sequential::Nand(c)     } }
-impl<Width: Nat> From<Const>           for Sequential<Width> { fn from(c: Const)           -> Self { Sequential::Const(c)    } }
 impl<Width: Nat> From<Buffer>          for Sequential<Width> { fn from(c: Buffer)          -> Self { Sequential::Buffer(c)   } }
 impl<Width: Nat> From<Mux<Width>>      for Sequential<Width>
   where Width: IsGreater<N1>
@@ -217,7 +166,6 @@ impl<Width: Nat + Clone> Reflect for Sequential<Width> {
     fn reflect(&self) -> Interface {
         match self {
             Self::Nand(c)     => c.reflect(),
-            Self::Const(c)    => c.reflect(),
             Self::Buffer(c)   => c.reflect(),
             Self::Mux(c)      => c.reflect(),
             Self::Mux1(c)     => c.reflect(),
@@ -228,7 +176,6 @@ impl<Width: Nat + Clone> Reflect for Sequential<Width> {
     fn name(&self) -> String {
         match self {
             Self::Nand(c)     => c.name(),
-            Self::Const(c)    => c.name(),
             Self::Buffer(c)   => c.name(),
             Self::Mux(c)      => c.name(),
             Self::Mux1(c)     => c.name(),
@@ -332,10 +279,6 @@ impl<W: Nat> Component for Serial<W> {
     fn expand(&self) -> Option<IC<Serial<W>>> { None }
 }
 
-impl<W: Nat> AsConst for Serial<W> {
-    fn as_const(&self) -> Option<u64> { None }
-}
-
 /// Abstracted writable memory system; presents the same interface as a RAM, but the simulator
 /// allows an arbitrary implementation to be supplied. This is analogous to dropping a CPU into
 /// a new system where some other chip is in charge of managing the bus.
@@ -358,10 +301,6 @@ impl<A: Nat, D: Nat> Component for MemorySystem<A, D> {
     }
 }
 
-impl<A: Nat, D: Nat> AsConst for MemorySystem<A, D> {
-    fn as_const(&self) -> Option<u64> { None }
-}
-
 // - Computational
 
 /// Type of components that participate in computers, including logic, registers, memory, and I/O.
@@ -369,7 +308,6 @@ impl<A: Nat, D: Nat> AsConst for MemorySystem<A, D> {
 pub enum Computational<A: Nat, D: Nat> {
     // combinational:
     Nand(Nand),
-    Const(Const),
     Buffer(Buffer),
     Mux(Mux<D>),
     Mux1(Mux1),
@@ -388,7 +326,6 @@ impl<A: Nat + Clone, D: Nat + Clone> Reflect for Computational<A, D> {
         match self {
             // combinational:
             Self::Nand(c)         => c.reflect(),
-            Self::Const(c)        => c.reflect(),
             Self::Buffer(c)       => c.reflect(),
             Self::Mux(c)          => c.reflect(),
             Self::Mux1(c)         => c.reflect(),
@@ -406,7 +343,6 @@ impl<A: Nat + Clone, D: Nat + Clone> Reflect for Computational<A, D> {
         match self {
             // combinational:
             Self::Nand(c)         => c.name(),
-            Self::Const(c)        => c.name(),
             Self::Buffer(c)       => c.name(),
             Self::Mux(c)          => c.name(),
             Self::Mux1(c)         => c.name(),
@@ -440,7 +376,6 @@ impl<A: Nat, D: Nat> From<Sequential<D>> for Computational<A, D> {
     fn from(s: Sequential<D>) -> Self {
         match s {
             Sequential::Nand(n)     => Computational::Nand(n),
-            Sequential::Const(n)    => Computational::Const(n),
             Sequential::Buffer(n)   => Computational::Buffer(n),
             Sequential::Mux(m)      => Computational::Mux(m),
             Sequential::Mux1(m)     => Computational::Mux1(m),

@@ -13,7 +13,7 @@ mod tests;
 pub use eval::eval;
 
 pub use declare::{
-    Reflect, Interface, Component, Chip, AsConst,
+    Reflect, Interface, Component, Chip,
     Input, Input16, InputBus,
     Output, Output16, OutputBus,
     IC,
@@ -81,7 +81,7 @@ fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
 pub fn print_graph<C>(chip: &C) -> String
 where
     C: Component + Reflect,
-    C::Target: Component<Target = C::Target> + Reflect + AsConst,
+    C::Target: Component<Target = C::Target> + Reflect,
 {
     let intf = chip.reflect();
     let subs = match chip.expand() {
@@ -93,14 +93,14 @@ where
 
 pub fn print_ic_graph<C>(ic: &IC<C>) -> String
 where
-    C: Reflect + AsConst,
+    C: Reflect,
 {
     print_ic_graph_named(&ic.name, &ic.intf, &ic.components)
 }
 
 fn print_ic_graph_named<C>(name: &str, intf: &Interface, components: &[C]) -> String
 where
-    C: Reflect + AsConst,
+    C: Reflect,
 {
     use std::collections::HashMap;
     use crate::declare::BusRef;
@@ -122,24 +122,16 @@ where
     let mut index = 0usize;
     for sub in components.iter() {
         let sub_intf = sub.reflect();
-        if let Some(v) = sub.as_const() {
-            let label = v.to_string();
-            for (_, busref) in &sub_intf.outputs {
-                wires.entry(wire_id(busref)).or_default()
-                    .push((label.clone(), false, busref.offset, busref.width, true));
-            }
-        } else {
-            let label = format!("{}_{}", sub.name().to_lowercase(), index);
-            for (port, busref) in &sub_intf.inputs {
-                wires.entry(wire_id(busref)).or_default()
-                    .push((format!("{}.{}", label, port), true, busref.offset, busref.width, false));
-            }
-            for (port, busref) in &sub_intf.outputs {
-                wires.entry(wire_id(busref)).or_default()
-                    .push((format!("{}.{}", label, port), false, busref.offset, busref.width, false));
-            }
-            index += 1;
+        let label = format!("{}_{}", sub.name().to_lowercase(), index);
+        for (port, busref) in &sub_intf.inputs {
+            wires.entry(wire_id(busref)).or_default()
+                .push((format!("{}.{}", label, port), true, busref.offset, busref.width, false));
         }
+        for (port, busref) in &sub_intf.outputs {
+            wires.entry(wire_id(busref)).or_default()
+                .push((format!("{}.{}", label, port), false, busref.offset, busref.width, false));
+        }
+        index += 1;
     }
 
     // Label for an endpoint: no subscript if the endpoint itself is 1-bit;
