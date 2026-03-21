@@ -1,4 +1,5 @@
-use crate::{Component, IC, Input, InputBus, Output, OutputBus, Reflect, AsConst, Chip, Interface, BusRef};
+use crate::{Component, IC, Input, InputBus, Output, OutputBus, Reflect, AsConst, Chip, Interface};
+use crate::declare::BusRef;
 use crate::nat::{Nat, N1, N16, IsGreater};
 
 // - Nand (Combinational)

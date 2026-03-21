@@ -12,8 +12,12 @@ mod tests;
 
 pub use eval::eval;
 
-// TODO: re-export little if anything
-pub use declare::*;
+pub use declare::{
+    Reflect, Interface, Component, Chip, AsConst,
+    Input, Input16, InputBus,
+    Output, Output16, OutputBus,
+    IC,
+};
 
 pub use simulator_derive::{Reflect, Chip};
 
@@ -99,6 +103,7 @@ where
     C: Reflect + AsConst,
 {
     use std::collections::HashMap;
+    use crate::declare::BusRef;
 
     let wire_id = |b: &BusRef| b.id.0;
 
