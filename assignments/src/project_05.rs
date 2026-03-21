@@ -1,6 +1,7 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
 use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, AsConst, Chip, expand};
+use simulator::declare::{Interface, BusRef};
 use simulator::Reflect as _;
 use simulator::Chip as _;
 use simulator::component::{Buffer, Nand, Register16, RAM16, ROM16, MemorySystem16, Sequential, Computational, Computational16};

@@ -1,55 +1,20 @@
-use std::collections::HashMap;
-
 use crate::{Component, IC, Input, InputBus, Output, OutputBus, Reflect, AsConst, Chip, Interface, BusRef};
 use crate::nat::{Nat, N1, N16, IsGreater};
-
-/// No components; this is the type that primitive components expand into.
-pub enum Void {}
 
 // - Nand (Combinational)
 
 /// The single primitive: true if either input is false.
-#[derive(Clone)]
+#[derive(Clone, Reflect, Chip)]
 pub struct Nand {
     pub a: Input,
     pub b: Input,
     pub out: Output,
 }
 
-impl Reflect for Nand {
-    fn reflect(&self) -> Interface {
-        Interface {
-            inputs:  HashMap::from([
-                ("a".to_string(),   BusRef::from_input(self.a)),
-                ("b".to_string(),   BusRef::from_input(self.b)),
-            ]),
-            outputs: HashMap::from([
-                ("out".to_string(), BusRef::from_output(self.out)),
-            ]),
-        }
-    }
-    fn name(&self) -> String { "Nand".into() }
-}
-
-impl Chip for Nand {
-    fn chip() -> Self {
-        Nand { a: Input::new(), b: Input::new(), out: Output::new() }
-    }
-}
-
-// /// Nothing to expand; Nand is Nand.
-// impl Component for Nand {
-//     type Target = Void;
-
-//     fn expand(&self) -> Option<IC<Void>> {
-//         None
-//     }
-// }
-
 /// No-cost "component" that just supplies some fixed zero/one bits.
 ///
 /// Morally equivalent to a single-word ROM.
-#[derive(Clone)]
+#[derive(Clone, Reflect)]
 pub struct Const {
     pub value: u64,
 
@@ -61,18 +26,6 @@ impl Const {
     pub fn chip(value: u64) -> Self {
         Const { value, out: OutputBus::<N16>::new() }
     }
-}
-
-impl Reflect for Const {
-    fn reflect(&self) -> Interface {
-        Interface {
-            inputs:  HashMap::new(),
-            outputs: HashMap::from([
-                ("out".to_string(), BusRef::from_output(self.out)),
-            ]),
-        }
-    }
-    fn name(&self) -> String { format!("Const({})", self.value) }
 }
 
 impl AsConst for Const {
@@ -90,24 +43,10 @@ impl Component for Const {
 
 /// "Gate" that just connects its input to its output without modifying it. For our purposes,
 /// this is useful for connecting an input directly to an ouput in an IC.
-#[derive(Clone)]
+#[derive(Clone, Reflect)]
 pub struct Buffer {
     pub a: Input,
     pub out: Output,
-}
-
-impl Reflect for Buffer {
-    fn reflect(&self) -> Interface {
-        Interface {
-            inputs:  HashMap::from([
-                ("a".to_string(),   BusRef::from_input(self.a)),
-            ]),
-            outputs: HashMap::from([
-                ("out".to_string(), BusRef::from_output(self.out)),
-            ]),
-        }
-    }
-    fn name(&self) -> String { "Buffer".into() }
 }
 
 impl AsConst for Buffer {
@@ -122,35 +61,14 @@ impl Component for Buffer {
         None
     }
 }
+
 /// The Mux primitive: out = if sel { a1 } else { a0 }, applied bitwise across Width bits.
-#[derive(Clone)]
+#[derive(Clone, Reflect, Chip)]
 pub struct Mux<Width: Nat> {
     pub a0: InputBus<Width>,
     pub a1: InputBus<Width>,
     pub sel: Input,
     pub out: OutputBus<Width>,
-}
-
-impl<Width: Nat + Clone> Reflect for Mux<Width> {
-    fn reflect(&self) -> Interface {
-        Interface {
-            inputs: HashMap::from([
-                ("a0".to_string(),  BusRef::from_input(self.a0)),
-                ("a1".to_string(),  BusRef::from_input(self.a1)),
-                ("sel".to_string(), BusRef::from_input(self.sel)),
-            ]),
-            outputs: HashMap::from([
-                ("out".to_string(), BusRef::from_output(self.out)),
-            ]),
-        }
-    }
-    fn name(&self) -> String { "Mux".into() }
-}
-
-impl<Width: Nat> Chip for Mux<Width> {
-    fn chip() -> Self {
-        Mux { a0: InputBus::new(), a1: InputBus::new(), sel: Input::new(), out: OutputBus::<Width>::new() }
-    }
 }
 
 /// Nothing to expand; Mux is primitive.
@@ -168,7 +86,7 @@ pub type Mux16 = Mux<N16>;
 /// Single-bit slice off a multi-bit adder: adds three bits, producing a two-bit result
 ///
 /// sum = 1s-digit of three-bit sum, carry = 2s-digit
-#[derive(Clone)]
+#[derive(Clone, Reflect, Chip)]
 pub struct FullAdder {
     /// "Left" input bit:
     pub a: Input,
@@ -181,35 +99,6 @@ pub struct FullAdder {
     pub sum: Output,
     /// 2s digit of a + b + c:
     pub carry: Output,
-}
-
-impl Reflect for FullAdder {
-    fn reflect(&self) -> Interface {
-        Interface {
-            inputs: HashMap::from([
-                ("a".to_string(), BusRef::from_input(self.a)),
-                ("b".to_string(), BusRef::from_input(self.b)),
-                ("c".to_string(), BusRef::from_input(self.c)),
-            ]),
-            outputs: HashMap::from([
-                ("sum".to_string(), BusRef::from_output(self.sum)),
-                ("carry".to_string(), BusRef::from_output(self.carry)),
-            ]),
-        }
-    }
-    fn name(&self) -> String { "FullAdder".into() }
-}
-
-impl Chip for FullAdder {
-    fn chip() -> Self {
-        FullAdder {
-            a: Input::new(),
-            b: Input::new(),
-            c: Input::new(),
-            sum: Output::new(),
-            carry: Output::new(),
-        }
-    }
 }
 
 /// Nothing to expand; FullAdder is primitive.
@@ -280,32 +169,11 @@ impl<Width: Nat> AsConst for Combinational<Width> {
 
 // - Registers (Sequential)
 
-#[derive(Clone)]
+#[derive(Clone, Reflect, Chip)]
 pub struct Register<Width: Nat> {
     pub data_in: InputBus<Width>,
     pub write: Input,
     pub data_out: OutputBus<Width>,
-}
-
-impl<Width: Nat + Clone> Reflect for Register<Width> {
-    fn reflect(&self) -> Interface {
-        Interface {
-            inputs:  HashMap::from([
-                ("data_in".to_string(), BusRef::from_input(self.data_in)),
-                ("write".to_string(),   BusRef::from_input(self.write)),
-            ]),
-            outputs: HashMap::from([
-                ("data_out".to_string(), BusRef::from_output(self.data_out)),
-            ]),
-        }
-    }
-    fn name(&self) -> String { "Register".into() }
-}
-
-impl<Width: Nat> Chip for Register<Width> {
-    fn chip() -> Self {
-        Register { data_in: InputBus::new(), write: Input::new(), data_out: OutputBus::<Width>::new() }
-    }
 }
 
 /// Nothing to expand; Register is primitive for the simulator we envisage.
@@ -383,7 +251,7 @@ pub type Sequential16 = Sequential<N16>;
 // - Memory and I/O (Computational)
 
 /// Simple, writable memory. The simulator supplies an implmentation when it finds one of these.
-#[derive(Clone)]
+#[derive(Clone, Reflect)]
 pub struct RAM<A: Nat, D: Nat> {
     /// Capacity of the RAM in words; <= 2^address_bits. Valid addresses are 0 to size-1.
     pub size: usize,
@@ -396,22 +264,7 @@ pub struct RAM<A: Nat, D: Nat> {
     pub data_out: OutputBus<D>,
 }
 
-impl<A: Nat + Clone, D: Nat + Clone> Reflect for RAM<A, D> {
-    fn reflect(&self) -> Interface {
-        Interface {
-            inputs: HashMap::from([
-                ("addr".to_string(),    BusRef::from_input(self.addr)),
-                ("data_in".to_string(), BusRef::from_input(self.data_in)),
-                ("write".to_string(),   BusRef::from_input(self.write)),
-            ]),
-            outputs: HashMap::from([
-                ("data_out".to_string(), BusRef::from_output(self.data_out)),
-            ]),
-        }
-    }
-    fn name(&self) -> String { "RAM".into() }
-}
-
+// Note: this is not the Chip trait, du to the extra arg.
 impl<A: Nat, D: Nat> RAM<A, D> {
     pub fn chip(size: usize) -> Self {
         RAM { size, addr: InputBus::new(), write: Input::new(), data_in: InputBus::new(), data_out: OutputBus::<D>::new() }
@@ -428,7 +281,7 @@ impl<A: Nat, D: Nat> Component for RAM<A, D> {
 }
 
 /// Simple, read-only memory. The simulator supplies an implmentation when it finds one of these.
-#[derive(Clone)]
+#[derive(Clone, Reflect)]
 pub struct ROM<A: Nat, D: Nat> {
     /// Capacity of the ROM in words; <= 2^address_bits. Valid addresses are 0 to size-1.
     pub size: usize,
@@ -438,20 +291,7 @@ pub struct ROM<A: Nat, D: Nat> {
     pub out: OutputBus<D>,
 }
 
-impl<A: Nat + Clone, D: Nat + Clone> Reflect for ROM<A, D> {
-    fn reflect(&self) -> Interface {
-        Interface {
-            inputs: HashMap::from([
-                ("addr".to_string(), BusRef::from_input(self.addr)),
-            ]),
-            outputs: HashMap::from([
-                ("out".to_string(), BusRef::from_output(self.out)),
-            ]),
-        }
-    }
-    fn name(&self) -> String { "ROM".into() }
-}
-
+// Note: this is not the Chip trait, du to the extra arg.
 impl<A: Nat, D: Nat> ROM<A, D> {
     pub fn chip(size: usize) -> Self {
         ROM { size: size, addr: InputBus::<A>::new(), out: OutputBus::<D>::new() }
@@ -474,7 +314,7 @@ impl<A: Nat, D: Nat> Component for ROM<A, D> {
 ///
 /// The chip sees data_out (read from the device) and can write via data_in + write.
 /// The simulator provides the backing store; the harness can push/pull values through a handle.
-#[derive(Clone)]
+#[derive(Clone, Reflect, Chip)]
 pub struct Serial<Width: Nat> {
     /// Data output: value made available to the chip by the external device.
     pub data_out: OutputBus<Width>,
@@ -486,30 +326,9 @@ pub struct Serial<Width: Nat> {
     pub write: Input,
 }
 
-impl<W: Nat + Clone> Reflect for Serial<W> {
-    fn reflect(&self) -> Interface {
-        Interface {
-            inputs: HashMap::from([
-                ("data_in".to_string(), BusRef::from_input(self.data_in)),
-                ("write".to_string(),   BusRef::from_input(self.write)),
-            ]),
-            outputs: HashMap::from([
-                ("data_out".to_string(), BusRef::from_output(self.data_out)),
-            ]),
-        }
-    }
-    fn name(&self) -> String { "Serial".into() }
-}
-
 impl<W: Nat> Component for Serial<W> {
     type Target = Serial<W>;
     fn expand(&self) -> Option<IC<Serial<W>>> { None }
-}
-
-impl<W: Nat> Chip for Serial<W> {
-    fn chip() -> Self {
-        Serial { data_out: OutputBus::<W>::new(), data_in: InputBus::<W>::new(), write: Input::new() }
-    }
 }
 
 impl<W: Nat> AsConst for Serial<W> {
@@ -519,7 +338,7 @@ impl<W: Nat> AsConst for Serial<W> {
 /// Abstracted writable memory system; presents the same interface as a RAM, but the simulator
 /// allows an arbitrary implementation to be supplied. This is analogous to dropping a CPU into
 /// a new system where some other chip is in charge of managing the bus.
-#[derive(Clone)]
+#[derive(Clone, Reflect, Chip)]
 pub struct MemorySystem<A: Nat, D: Nat> {
     pub addr: InputBus<A>,
 
@@ -529,34 +348,12 @@ pub struct MemorySystem<A: Nat, D: Nat> {
     pub data_out: OutputBus<D>,
 }
 
-impl<A: Nat + Clone, D: Nat + Clone> Reflect for MemorySystem<A, D> {
-    fn reflect(&self) -> Interface {
-        Interface {
-            inputs: HashMap::from([
-                ("addr".to_string(),    BusRef::from_input(self.addr)),
-                ("data_in".to_string(), BusRef::from_input(self.data_in)),
-                ("write".to_string(),   BusRef::from_input(self.write)),
-            ]),
-            outputs: HashMap::from([
-                ("data_out".to_string(), BusRef::from_output(self.data_out)),
-            ]),
-        }
-    }
-    fn name(&self) -> String { "MemorySystem".into() }
-}
-
 /// Nothing to expand; MemorySystem is primitive for the simulator.
 impl<A: Nat, D: Nat> Component for MemorySystem<A, D> {
     type Target = MemorySystem<A, D>;
 
     fn expand(&self) -> Option<IC<MemorySystem<A, D>>> {
         None
-    }
-}
-
-impl<A: Nat, D: Nat> Chip for MemorySystem<A, D> {
-    fn chip() -> Self {
-        MemorySystem { addr: InputBus::<A>::new(), write: Input::new(), data_in: InputBus::<D>::new(), data_out: OutputBus::<D>::new() }
     }
 }
 

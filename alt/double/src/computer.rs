@@ -36,6 +36,7 @@ use assignments::project_01::{And, Or, Not};
 use assignments::project_02::{ALU, Add16, Inc16};
 use assignments::project_05::{self, Decode, Project05Component};
 use simulator::{self, AsConst, Component, IC, Input, Input16, Output, Output16, Reflect, Chip, expand};
+use simulator::declare::{Interface, BusRef};
 use simulator::component::{Buffer, Computational16, Const, Mux16, MemorySystem16, Register16, ROM16};
 use simulator::nat::N16;
 use simulator::simulate::{ChipState, BusResident, ROMHandle};
