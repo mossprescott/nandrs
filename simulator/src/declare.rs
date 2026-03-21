@@ -59,8 +59,8 @@ impl<Width: Nat> Copy  for InputBus<Width> {}
 impl<Width: Nat> Clone for InputBus<Width> { fn clone(&self) -> Self { *self } }
 
 pub enum Input<Width: Nat> {
-    // Note: mismatches between this value and the Width param are trapped at runtime, if at all.
-    Fixed(u64),
+    /// A constant value, backed by its own WireId so the wire-ref machinery still works.
+    Fixed(u64, WireId),
 
     Bus(InputBus<Width>),
 }
@@ -77,7 +77,7 @@ impl<Width: Nat> Input<Width> {
     fn bus(&self) -> &InputBus<Width> {
         match self {
             Input::Bus(bus) => bus,
-            Input::Fixed(_) => panic!("cannot index into a fixed input"),
+            Input::Fixed(..) => panic!("cannot index into a fixed input"),
         }
     }
 
@@ -109,7 +109,7 @@ pub fn fixed<Width: Nat>(value: u64) -> Input<Width> {
     // Better to crash than find out much later that some of your 1 bits got dropped on the floor.
     assert!(value < (1u64 << Width::as_int()));
 
-    Input::Fixed(value)
+    Input::Fixed(value, WireId::new())
 }
 
 
@@ -210,23 +210,26 @@ pub struct BusRef {
     pub id: WireId,
     pub offset: usize,
     pub width: usize,
+    /// When Some, this input is a compile-time constant. The WireId is valid but needs to be
+    /// seeded with this value before evaluation.
+    pub fixed: Option<u64>,
 }
 
 impl BusRef {
     pub fn from_input_bus<W: Nat>(input: InputBus<W>) -> Self {
         let width = if input.effective_width != 0 { input.effective_width } else { W::as_int() };
-        BusRef { id: input.id, offset: input.offset, width }
+        BusRef { id: input.id, offset: input.offset, width, fixed: None }
     }
 
     pub fn from_input<W: Nat>(input: Input<W>) -> Self {
         match input {
             Input::Bus(bus) => Self::from_input_bus(bus),
-            Input::Fixed(_) => panic!("BusRef::from_input called on a Fixed input"),
+            Input::Fixed(value, id) => BusRef { id, offset: 0, width: W::as_int(), fixed: Some(value) },
         }
     }
 
     pub fn from_output<W: Nat>(output: OutputBus<W>) -> Self {
-        BusRef { id: output.id, offset: output.offset, width: W::as_int() }
+        BusRef { id: output.id, offset: output.offset, width: W::as_int(), fixed: None }
     }
 }
 

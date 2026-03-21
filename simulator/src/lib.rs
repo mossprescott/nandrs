@@ -91,6 +91,7 @@ where
     print_ic_graph_named(&chip.name(), &intf, &subs.components)
 }
 
+/// Show the components making up this IC, with no additional expansion.
 pub fn print_ic_graph<C>(ic: &IC<C>) -> String
 where
     C: Reflect,
@@ -124,6 +125,11 @@ where
         let sub_intf = sub.reflect();
         let label = format!("{}_{}", sub.name().to_lowercase(), index);
         for (port, busref) in &sub_intf.inputs {
+            if let Some(value) = busref.fixed {
+                // Fixed input: register the constant as a raw source on its own wire
+                wires.entry(wire_id(busref)).or_default()
+                    .push((value.to_string(), false, 0, busref.width, true));
+            }
             wires.entry(wire_id(busref)).or_default()
                 .push((format!("{}.{}", label, port), true, busref.offset, busref.width, false));
         }
