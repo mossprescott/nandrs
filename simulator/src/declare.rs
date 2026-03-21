@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::nat::{Nat, N1, N16};
 
+
 static NEXT_ID: AtomicUsize = AtomicUsize::new(1);
 
 /// Unique identity of a wire (bus). Two bus ends with the same `WireId` are connected.
@@ -15,6 +16,11 @@ impl WireId {
         WireId(NEXT_ID.fetch_add(1, Ordering::Relaxed))
     }
 }
+
+
+//
+// Input wiring:
+//
 
 /// The end of a wire that connects to destination components as one of their inputs.
 ///
@@ -35,9 +41,9 @@ impl<Width: Nat> InputBus<Width> {
 
     /// Select a single bit from this bus, returning a 1-bit InputBus that shares
     /// the same underlying wire identity but refers only to bit `i`.
-    pub fn bit(&self, i: usize) -> Input {
+    pub fn bit(&self, i: usize) -> Input1 {
         assert!(i < Width::as_int(), "bit index {} out of range for {}-bit bus", i, Width::as_int());
-        InputBus { width: PhantomData, effective_width: 0, id: self.id, offset: self.offset + i }
+        Input::Bus(InputBus { width: PhantomData, effective_width: 0, id: self.id, offset: self.offset + i })
     }
 
     /// Slice `len` bits starting at `offset` from this bus.
@@ -52,26 +58,72 @@ impl<Width: Nat> InputBus<Width> {
 impl<Width: Nat> Copy  for InputBus<Width> {}
 impl<Width: Nat> Clone for InputBus<Width> { fn clone(&self) -> Self { *self } }
 
-pub enum Inputs<Width: Nat> {
+pub enum Input<Width: Nat> {
+    // Note: mismatches between this value and the Width param are trapped at runtime, if at all.
     Fixed(u64),
+
     Bus(InputBus<Width>),
 }
 
+impl<Width: Nat> Copy  for Input<Width> {}
+impl<Width: Nat> Clone for Input<Width> { fn clone(&self) -> Self { *self } }
+
+/// The most generic input: a bus that may or may not be connected eventually.
+impl<Width: Nat> Input<Width> {
+    pub fn new() -> Self {
+        Input::Bus(InputBus::new())
+    }
+
+    fn bus(&self) -> &InputBus<Width> {
+        match self {
+            Input::Bus(bus) => bus,
+            Input::Fixed(_) => panic!("cannot index into a fixed input"),
+        }
+    }
+
+    pub fn bit(&self, i: usize) -> Input1 {
+        self.bus().bit(i)
+    }
+
+    pub fn mask(&self, offset: usize, len: usize) -> InputBus<Width> {
+        self.bus().mask(offset, len)
+    }
+}
+
+impl<Width: Nat> From<InputBus<Width>> for Input<Width> {
+    fn from(bus: InputBus<Width>) -> Self {
+        Input::Bus(bus)
+    }
+}
+
+/// An output can always be the source for another input — whether or not other inputs are
+/// connected.
+impl<Width: Nat> From<OutputBus<Width>> for Input<Width> {
+    fn from(output: OutputBus<Width>) -> Self {
+        Input::Bus(InputBus::from(output))
+    }
+}
+
 /// An input providing fixed bit values.
-pub fn fixed<Width: Nat>(value: u64) -> Inputs<Width> {
+pub fn fixed<Width: Nat>(value: u64) -> Input<Width> {
     // Better to crash than find out much later that some of your 1 bits got dropped on the floor.
     assert!(value < (1u64 << Width::as_int()));
 
-    Inputs::Fixed(value)
+    Input::Fixed(value)
 }
 
 
 /// A simple, single-valued input signal; that is, an incoming 1-bit wire.
-pub type Input = Inputs<N1>;
+pub type Input1 = Input<N1>;
 
 
 /// A multi-bit input signal; that is, an incoming 16-bit bus.
-pub type Input16 = Inputs<N16>;
+pub type Input16 = Input<N16>;
+
+
+//
+// Output wiring:
+//
 
 /// The end of a wire that originates from a single component output.
 ///
@@ -116,6 +168,7 @@ impl<Width: Nat> OutputBus<Width> {
 }
 
 /// A simple, single-valued output signal; that is, an outgoing 1-bit wire.
+// TODO: rename to Output1 for consistency
 pub type Output = OutputBus<N1>;
 
 /// A multi-bit output signal; that is, an outgoing 16-bit bus.
@@ -160,9 +213,16 @@ pub struct BusRef {
 }
 
 impl BusRef {
-    pub fn from_input<W: Nat>(input: InputBus<W>) -> Self {
+    pub fn from_input_bus<W: Nat>(input: InputBus<W>) -> Self {
         let width = if input.effective_width != 0 { input.effective_width } else { W::as_int() };
         BusRef { id: input.id, offset: input.offset, width }
+    }
+
+    pub fn from_input<W: Nat>(input: Input<W>) -> Self {
+        match input {
+            Input::Bus(bus) => Self::from_input_bus(bus),
+            Input::Fixed(_) => panic!("BusRef::from_input called on a Fixed input"),
+        }
     }
 
     pub fn from_output<W: Nat>(output: OutputBus<W>) -> Self {

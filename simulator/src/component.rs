@@ -1,4 +1,4 @@
-use crate::{Component, IC, Input, InputBus, Output, OutputBus, Reflect, Chip, Interface};
+use crate::{Component, IC, Input, Input1, Output, OutputBus, Reflect, Chip, Interface};
 use crate::declare::BusRef;
 use crate::nat::{Nat, N1, N16, IsGreater};
 
@@ -7,8 +7,8 @@ use crate::nat::{Nat, N1, N16, IsGreater};
 /// The single primitive: true if either input is false.
 #[derive(Clone, Reflect, Chip)]
 pub struct Nand {
-    pub a: Input,
-    pub b: Input,
+    pub a: Input1,
+    pub b: Input1,
     pub out: Output,
 }
 
@@ -16,7 +16,7 @@ pub struct Nand {
 /// this is useful for connecting an input directly to an ouput in an IC.
 #[derive(Clone, Reflect)]
 pub struct Buffer {
-    pub a: Input,
+    pub a: Input1,
     pub out: Output,
 }
 
@@ -32,9 +32,9 @@ impl Component for Buffer {
 /// The Mux primitive: out = if sel { a1 } else { a0 }, applied bitwise across Width bits.
 #[derive(Clone, Reflect, Chip)]
 pub struct Mux<Width: Nat> {
-    pub a0: InputBus<Width>,
-    pub a1: InputBus<Width>,
-    pub sel: Input,
+    pub a0: Input<Width>,
+    pub a1: Input<Width>,
+    pub sel: Input1,
     pub out: OutputBus<Width>,
 }
 
@@ -56,11 +56,11 @@ pub type Mux16 = Mux<N16>;
 #[derive(Clone, Reflect, Chip)]
 pub struct FullAdder {
     /// "Left" input bit:
-    pub a: Input,
+    pub a: Input1,
     /// "Right" input bit:
-    pub b: Input,
+    pub b: Input1,
     /// "Carry-in" bit:
-    pub c: Input,
+    pub c: Input1,
 
     /// 1s digit of a + b + c:
     pub sum: Output,
@@ -123,8 +123,8 @@ impl<Width: Nat + Clone> Reflect for Combinational<Width> {
 
 #[derive(Clone, Reflect, Chip)]
 pub struct Register<Width: Nat> {
-    pub data_in: InputBus<Width>,
-    pub write: Input,
+    pub data_in: Input<Width>,
+    pub write: Input1,
     pub data_out: OutputBus<Width>,
 }
 
@@ -204,10 +204,10 @@ pub struct RAM<A: Nat, D: Nat> {
     /// Capacity of the RAM in words; <= 2^address_bits. Valid addresses are 0 to size-1.
     pub size: usize,
 
-    pub addr: InputBus<A>,
+    pub addr: Input<A>,
 
-    pub write: Input,
-    pub data_in: InputBus<D>,
+    pub write: Input1,
+    pub data_in: Input<D>,
 
     pub data_out: OutputBus<D>,
 }
@@ -215,7 +215,7 @@ pub struct RAM<A: Nat, D: Nat> {
 // Note: this is not the Chip trait, du to the extra arg.
 impl<A: Nat, D: Nat> RAM<A, D> {
     pub fn chip(size: usize) -> Self {
-        RAM { size, addr: InputBus::new(), write: Input::new(), data_in: InputBus::new(), data_out: OutputBus::<D>::new() }
+        RAM { size, addr: Input::new(), write: Input::new(), data_in: Input::new(), data_out: OutputBus::<D>::new() }
     }
 }
 
@@ -234,7 +234,7 @@ pub struct ROM<A: Nat, D: Nat> {
     /// Capacity of the ROM in words; <= 2^address_bits. Valid addresses are 0 to size-1.
     pub size: usize,
 
-    pub addr: InputBus<A>,
+    pub addr: Input<A>,
 
     pub out: OutputBus<D>,
 }
@@ -242,7 +242,7 @@ pub struct ROM<A: Nat, D: Nat> {
 // Note: this is not the Chip trait, du to the extra arg.
 impl<A: Nat, D: Nat> ROM<A, D> {
     pub fn chip(size: usize) -> Self {
-        ROM { size: size, addr: InputBus::<A>::new(), out: OutputBus::<D>::new() }
+        ROM { size: size, addr: Input::<A>::new(), out: OutputBus::<D>::new() }
     }
 }
 
@@ -268,10 +268,10 @@ pub struct Serial<Width: Nat> {
     pub data_out: OutputBus<Width>,
 
     /// Data input: value the chip wants to send to the external device.
-    pub data_in: InputBus<Width>,
+    pub data_in: Input<Width>,
 
     /// Write strobe: when 1, data_in is latched to the external device.
-    pub write: Input,
+    pub write: Input1,
 }
 
 impl<W: Nat> Component for Serial<W> {
@@ -284,10 +284,10 @@ impl<W: Nat> Component for Serial<W> {
 /// a new system where some other chip is in charge of managing the bus.
 #[derive(Clone, Reflect, Chip)]
 pub struct MemorySystem<A: Nat, D: Nat> {
-    pub addr: InputBus<A>,
+    pub addr: Input<A>,
 
-    pub write: Input,
-    pub data_in: InputBus<D>,
+    pub write: Input1,
+    pub data_in: Input<D>,
 
     pub data_out: OutputBus<D>,
 }

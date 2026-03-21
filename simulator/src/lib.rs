@@ -14,9 +14,9 @@ pub use eval::eval;
 
 pub use declare::{
     Reflect, Interface, Component, Chip,
-    Input, Input16, InputBus,
+    Input, Input1, Input16, InputBus,
     Output, Output16, OutputBus,
-    IC,
+    IC, fixed,
 };
 
 pub use simulator_derive::{Reflect, Chip};
@@ -72,7 +72,7 @@ fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
 /// Sub-component ports are labelled `{typename}{index}.{port}`.
 ///
 /// ```ignore
-/// let chip = And { a: Input::new(), b: Input::new(), out: Output::new() };
+/// let chip = And { a: Input1::new(), b: Input1::new(), out: Output::new() };
 /// assert_eq!(print_graph(&chip), "And:\nnand0.a <- a\nnand0.b <- b\nnot1.a <- nand0.out\nout <- not1.out");
 /// ```
 ///

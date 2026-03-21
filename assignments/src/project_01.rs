@@ -1,16 +1,15 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, Chip, expand};
+use simulator::{self, Component, IC, Input1, Input16, Output, Output16, Reflect, Chip, expand};
 use simulator::declare::{Interface, BusRef};
 use simulator::component::Combinational;
 use simulator::nat::{N1, N16};
-use simulator::AsConst;
 use simulator::Reflect as _;
 use simulator::Chip as _;
 use std::collections::HashMap;
 
 // Re-export since the other components here parallel Nand:
-pub use simulator::component::{Nand, Const, Buffer, Mux1, Mux16};
+pub use simulator::component::{Nand, Buffer, Mux1, Mux16};
 
 /// Components implemented in this project: simple, logical components for 1 and 16 bits.
 #[derive(Clone)]
@@ -18,7 +17,6 @@ pub enum Project01Component {
     // primitive:
     Nand(Nand),
     Buffer(Buffer),
-    Const(Const),
     Mux1(Mux1),
     Mux16(Mux16),
     // non-primitive:
@@ -35,7 +33,6 @@ pub enum Project01Component {
 // primitive:
 impl From<Nand>   for Project01Component { fn from(c: Nand)   -> Self { Project01Component::Nand(c)   } }
 impl From<Buffer> for Project01Component { fn from(c: Buffer) -> Self { Project01Component::Buffer(c) } }
-impl From<Const>  for Project01Component { fn from(c: Const)  -> Self { Project01Component::Const(c)  } }
 impl From<Mux1>   for Project01Component { fn from(c: Mux1)   -> Self { Project01Component::Mux1(c)   } }
 impl From<Mux16>  for Project01Component { fn from(c: Mux16)  -> Self { Project01Component::Mux16(c)  } }
 // non-primitive:
@@ -56,7 +53,6 @@ impl Component for Project01Component {
             // primitive:
             Project01Component::Nand(c)  => None,
             Project01Component::Buffer(c) => None,
-            Project01Component::Const(c) => None,
             Project01Component::Mux1(c)  => None,
             Project01Component::Mux16(c) => None,
             // non-primitive:
@@ -76,7 +72,6 @@ impl Reflect for Project01Component {
             // primitive:
             Project01Component::Nand(c)  => c.reflect(),
             Project01Component::Buffer(c) => c.reflect(),
-            Project01Component::Const(c) => c.reflect(),
             Project01Component::Mux1(c)  => c.reflect(),
             Project01Component::Mux16(c) => c.reflect(),
             // non-primitive:
@@ -94,7 +89,6 @@ impl Reflect for Project01Component {
             // primitive:
             Project01Component::Nand(c)  => c.name(),
             Project01Component::Buffer(c) => c.name(),
-            Project01Component::Const(c) => c.name(),
             Project01Component::Mux1(c)  => c.name(),
             Project01Component::Mux16(c) => c.name(),
             // non-primitive:
@@ -109,19 +103,12 @@ impl Reflect for Project01Component {
     }
 }
 
-impl AsConst for Project01Component {
-    fn as_const(&self) -> Option<u64> {
-        if let Project01Component::Const(c) = self { c.as_const() } else { None }
-    }
-}
-
 /// Recursively expand() until only primitives are left.
 pub fn flatten<C: Reflect + Into<Project01Component>>(chip: C) -> IC<Combinational<N16>> {
     fn go(comp: Project01Component) -> Vec<Combinational<N16>> {
         match comp.expand() {
             None => match comp {
                 Project01Component::Nand(c) => vec![c.into()],
-                Project01Component::Const(c) => vec![c.into()],
                 Project01Component::Buffer(c) => vec![c.into()],
                 Project01Component::Mux1(c) => vec![Combinational::Mux1(c)],
                 Project01Component::Mux16(c) => vec![Combinational::Mux(c)],
@@ -140,7 +127,7 @@ pub fn flatten<C: Reflect + Into<Project01Component>>(chip: C) -> IC<Combination
 /// Inverts its input.
 #[derive(Clone, Reflect, Chip)]
 pub struct Not {
-    pub a: Input,
+    pub a: Input1,
     pub out: Output,
 }
 impl Component for Not {
@@ -158,8 +145,8 @@ impl Component for Not {
 /// True only when both inputs are true.
 #[derive(Clone, Reflect, Chip)]
 pub struct And {
-    pub a: Input,
-    pub b: Input,
+    pub a: Input1,
+    pub b: Input1,
     pub out: Output,
 }
 impl Component for And {
@@ -181,8 +168,8 @@ impl Component for And {
 /// True when at least one input is true.
 #[derive(Clone, Reflect, Chip)]
 pub struct Or {
-    pub a: Input,
-    pub b: Input,
+    pub a: Input1,
+    pub b: Input1,
     pub out: Output,
 }
 impl Component for Or {
@@ -198,8 +185,8 @@ impl Component for Or {
 /// True when inputs differ.
 #[derive(Clone, Reflect, Chip)]
 pub struct Xor {
-    pub a: Input,
-    pub b: Input,
+    pub a: Input1,
+    pub b: Input1,
     pub out: Output,
 }
 impl Component for Xor {
@@ -222,9 +209,9 @@ pub type Mux = simulator::component::Mux<N1>;
 /// Passes a0 through when sel is 0, a1 when sel is 1.
 #[derive(Clone, Reflect, Chip)]
 pub struct MyMux {
-    pub a0: Input,
-    pub a1: Input,
-    pub sel: Input,
+    pub a0: Input1,
+    pub a1: Input1,
+    pub sel: Input1,
     pub out: Output,
 }
 impl Component for MyMux {
@@ -241,8 +228,8 @@ impl Component for MyMux {
 /// Routes input to a when sel is 0, or b when sel is 1; the unused output is zero.
 #[derive(Clone, Reflect, Chip)]
 pub struct Dmux {
-    pub input: Input,
-    pub sel: Input,
+    pub input: Input1,
+    pub sel: Input1,
     pub a: Output,
     pub b: Output,
 }
@@ -295,7 +282,7 @@ impl Component for And16 {
 // pub struct Mux16 {
 //     pub a0: Input16,
 //     pub a1: Input16,
-//     pub sel: Input,
+//     pub sel: Input1,
 //     pub out: Output16,
 // }
 // impl Component for Mux16 {

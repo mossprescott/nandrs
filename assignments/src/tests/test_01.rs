@@ -1,11 +1,11 @@
-use simulator::{Input, Output, Reflect, print_graph, Component, IC};
+use simulator::{Input1, Output, Reflect, print_graph, Component, IC};
 use simulator::Chip as _;
 use simulator::eval::eval;
 use crate::project_01::{flatten, Const, Nand, Not, And, Or, Xor, MyMux, Dmux, Not16, And16, Mux16};
 
 #[test]
 fn nand_reflect() {
-    let chip = Nand { a: Input::new(), b: Input::new(), out: Output::new() };
+    let chip = Nand { a: Input1::new(), b: Input1::new(), out: Output::new() };
     let intf = chip.reflect();
     assert_eq!(intf.inputs.len(), 2);
     assert_eq!(intf.inputs["a"].width, 1);

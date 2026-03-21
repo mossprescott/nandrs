@@ -1,12 +1,12 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, AsConst, Chip, expand};
+use simulator::{self, Component, IC, Input1, Input16, Output, Output16, Reflect, Chip, expand, fixed};
 use simulator::declare::{Interface, BusRef};
 use simulator::Reflect as _;
 use simulator::Chip as _;
 use simulator::component::{Combinational, FullAdder};
 use simulator::nat::N16;
-use crate::project_01::{Project01Component, Nand, Const, Buffer, Mux1, Mux16, Not16, And16, Not, Xor, And, Or};
+use crate::project_01::{Project01Component, Nand, Buffer, Mux1, Mux16, Not16, And16, Not, Xor, And, Or};
 
 #[derive(Clone)]
 pub enum Project02Component {
@@ -73,12 +73,6 @@ impl Reflect for Project02Component {
     }
 }
 
-impl AsConst for Project02Component {
-    fn as_const(&self) -> Option<u64> {
-        if let Project02Component::Project01(c) = self { c.as_const() } else { None }
-    }
-}
-
 /// Recursively expand until only primitives are left.
 pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Combinational<N16>> {
     fn go(comp: Project02Component) -> Vec<Combinational<N16>> {
@@ -106,8 +100,8 @@ pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Combination
 /// Future: for pedagocical purposes, define this as HalfAdder here, with reduction to Nands.
 #[derive(Clone, Reflect, Chip)]
 pub struct MyHalfAdder {
-    pub a:     Input,
-    pub b:     Input,
+    pub a:     Input1,
+    pub b:     Input1,
     pub sum:   Output,
     pub carry: Output,
 }
@@ -140,9 +134,9 @@ impl Component for MyHalfAdder {
 /// *not* to be expanded when we want to do an efficient simulation.
 #[derive(Clone, Reflect, Chip)]
 pub struct MyFullAdder {
-    pub a:     Input,
-    pub b:     Input,
-    pub c:     Input,
+    pub a:     Input1,
+    pub b:     Input1,
+    pub c:     Input1,
     pub sum:   Output,
     pub carry: Output,
 }
@@ -183,10 +177,9 @@ impl Component for Inc16 {
 
         // Carry-ripple: fold threads the carry across iterations
         _carry_out: (1..16).fold(this.a.bit(0), |carry, i| {
-            zero: Const { value: 0, out: Output16::new() },
             add: FullAdder {
                 a: this.a.bit(i),
-                b: zero.out.bit(0).into(),
+                b: fixed(0),
                 c: carry,
                 sum: this.out.bit(i),
                 carry: Output::new(),
@@ -209,11 +202,10 @@ impl Component for Add16 {
 
     expand! { |this| {
         // bit 0: half-add (carry-in is 0)
-        zero0: Const { value: 0, out: Output16::new() },
         add0: FullAdder {
             a: this.a.bit(0),
             b: this.b.bit(0),
-            c: zero0.out.bit(0).into(),
+            c: fixed(0),
             sum: this.out.bit(0),
             carry: Output::new(),
         },
@@ -292,17 +284,17 @@ pub struct ALU {
     // "Right" input
     pub y:   Input16,
     /// Zero the x input
-    pub zx:  Input,
+    pub zx:  Input1,
     /// Negate the x input (i.e. "not")
-    pub nx:  Input,
+    pub nx:  Input1,
     /// Zero the y input
-    pub zy:  Input,
+    pub zy:  Input1,
     /// Negate the y input (i.e. "not")
-    pub ny:  Input,
+    pub ny:  Input1,
     /// 0 => x && y; 1 => x + y
-    pub f:   Input,
+    pub f:   Input1,
     /// Negate the result (i.e. "not")
-    pub no:  Input,
+    pub no:  Input1,
 
     /// 16-bit result
     pub out: Output16,
@@ -313,22 +305,20 @@ pub struct ALU {
 
     /// Disable: when 1, all outputs are forced to 0. This makes it easier for the simulator to
     /// identify this logic as inactive and avoid spending time evaluating it.
-    pub disable: Input,
+    pub disable: Input1,
 }
 
 impl Component for ALU {
     type Target = Project02Component;
 
     expand! { |this| {
-        zero_const: Const { value: 0, out: Output16::new() },
-
         // zx/nx: conditionally zero then negate x
-        x1: Mux16 { sel: this.zx, a0: this.x, a1: zero_const.out.into(), out: Output16::new() },
+        x1: Mux16 { sel: this.zx, a0: this.x, a1: fixed(0), out: Output16::new() },
         x2_not: Not16 { a: x1.out.into(), out: Output16::new() },
         x2: Mux16 { sel: this.nx, a0: x1.out.into(), a1: x2_not.out.into(), out: Output16::new() },
 
         // zy/ny: conditionally zero then negate y
-        y1: Mux16 { sel: this.zy, a0: this.y, a1: zero_const.out.into(), out: Output16::new() },
+        y1: Mux16 { sel: this.zy, a0: this.y, a1: fixed(0), out: Output16::new() },
         y2_not: Not16 { a: y1.out.into(), out: Output16::new() },
         y2: Mux16 { sel: this.ny, a0: y1.out.into(), a1: y2_not.out.into(), out: Output16::new() },
 
@@ -339,8 +329,8 @@ impl Component for ALU {
         // algorithm can move all Add16 nands into a mux branch.
         not_disable: Not { a: this.disable, out: Output::new() },
         add_active: And { a: this.f, b: not_disable.out.into(), out: Output::new() },
-        add_x: Mux16 { sel: add_active.out.into(), a0: zero_const.out.into(), a1: x2.out.into(), out: Output16::new() },
-        add_y: Mux16 { sel: add_active.out.into(), a0: zero_const.out.into(), a1: y2.out.into(), out: Output16::new() },
+        add_x: Mux16 { sel: add_active.out.into(), a0: fixed(0), a1: x2.out.into(), out: Output16::new() },
+        add_y: Mux16 { sel: add_active.out.into(), a0: fixed(0), a1: y2.out.into(), out: Output16::new() },
         add: Add16 { a: add_x.out.into(), b: add_y.out.into(), out: Output16::new() },
 
         result: Mux16 { sel: this.f, a0: and.out.into(), a1: add.out.into(), out: Output16::new() },
@@ -352,9 +342,8 @@ impl Component for ALU {
         raw_zr: Zero16 { a: raw_out.out.into(), out: Output::new() },
 
         // Gate output and zr with disable.  When disabled: out=0, zr=1.
-        const_one: Const { value: 1, out: Output::new() },
-        out_gate: Mux16 { sel: this.disable, a0: raw_out.out.into(), a1: zero_const.out.into(), out: this.out },
-        zr_gate: Mux1 { sel: this.disable, a0: raw_zr.out.into(), a1: const_one.out.bit(0).into(), out: this.zr },
+        out_gate: Mux16 { sel: this.disable, a0: raw_out.out.into(), a1: fixed(0), out: this.out },
+        zr_gate: Mux1 { sel: this.disable, a0: raw_zr.out.into(), a1: fixed(1), out: this.zr },
 
         // ng reads from the gated output; when disabled out=0 so ng=0 (correct).
         // Neg16 is 0 nands (just a buffer) so there's nothing to skip.

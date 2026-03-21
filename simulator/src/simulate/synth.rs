@@ -305,10 +305,6 @@ where
                     assign(WireID::from(&intf.inputs["b"]));
                     assign(WireID::from(&intf.outputs["out"]));
                 }
-                Computational::Const(c) => {
-                    let intf = c.reflect();
-                    assign(WireID::from(&intf.outputs["out"]));
-                }
                 Computational::Buffer(_) => {
                     // Ignore; already recorded in `renamed`
                 }
@@ -391,18 +387,7 @@ where
         }
     };
 
-    let const_wiring: Vec<wiring::ConstWiring> = components.iter().flat_map(|comp| {
-        match comp {
-            Computational::Const(c) => {
-                let intf = c.reflect();
-                Some(wiring::ConstWiring {
-                    value: c.value,
-                    out: wire_indexes[&WireID::from(&intf.outputs["out"])]
-                })
-            },
-            _ => None,
-        }
-    }).collect();
+    let const_wiring: Vec<wiring::ConstWiring> = vec![];
 
     let component_wiring: Vec<wiring::ComponentWiring> = components.iter().flat_map(|comp| {
         use wiring::ComponentWiring as CW;
@@ -415,7 +400,6 @@ where
                     out: ref_for(&intf.outputs["out"]),
                 }))
             }
-            Computational::Const(_)        => None,
             Computational::Buffer(_)       => None,
             Computational::Mux(c)          => {
                 let intf = c.reflect();

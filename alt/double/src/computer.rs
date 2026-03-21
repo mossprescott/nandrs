@@ -35,9 +35,9 @@
 use assignments::project_01::{And, Or, Not};
 use assignments::project_02::{ALU, Add16, Inc16};
 use assignments::project_05::{self, Decode, Project05Component};
-use simulator::{self, AsConst, Component, IC, Input, Input16, Output, Output16, Reflect, Chip, expand};
+use simulator::{self, Component, IC, Input1, Input16, Output, Output16, Reflect, Chip, expand, fixed};
 use simulator::declare::{Interface, BusRef};
-use simulator::component::{Buffer, Computational16, Const, Mux16, MemorySystem16, Register16, ROM16};
+use simulator::component::{Buffer, Computational16, Mux16, MemorySystem16, Register16, ROM16};
 use simulator::nat::N16;
 use simulator::simulate::{ChipState, BusResident, ROMHandle};
 
@@ -45,7 +45,7 @@ use simulator::simulate::{ChipState, BusResident, ROMHandle};
 #[derive(Clone, Reflect, Chip)]
 pub struct CPU {
     /// Return to a known state (i.e. jump to address 0)
-    pub reset: Input,
+    pub reset: Input1,
 
     /// Address of the next instructions to load
     pub pc0: Output16,
@@ -189,7 +189,7 @@ impl Component for CPU {
 #[derive(Clone, Reflect, Chip)]
 pub struct Computer {
     /// A way to force the CPU to return to a known state (i.e. jump to address 0)
-    pub reset: Input,
+    pub reset: Input1,
 
     /// Useful for debugging, but also acts as a root for traversing the graph
     pub pc: Output16,
@@ -240,11 +240,11 @@ impl Component for Computer {
 /// in
 #[derive(Clone, Reflect, Chip)]
 pub struct DoublePC {
-    pub reset: Input,
+    pub reset: Input1,
     pub addr: Input16,
-    pub load: Input,
+    pub load: Input1,
     /// When asserted (and not load/reset), increment by 2 instead of 1.
-    pub skip: Input,
+    pub skip: Input1,
 
     /// Address of the current instruction (latched)
     pub out0: Output16,
@@ -256,9 +256,6 @@ impl Component for DoublePC {
     type Target = DoubleComponent;
 
     expand! { |this| {
-        zero: Const { value: 0, out: Output16::new() },
-        one: Const { value: 1, out: Output::new() },
-
         inc1: Inc16 { a: this.out0.into(), out: Output16::new() },
         inc2: Inc2 { a: this.out0.into(), out: Output16::new() },
 
@@ -269,18 +266,18 @@ impl Component for DoublePC {
         next1: Mux16 { a0: next0.out.into(), a1: this.addr, sel: this.load, out: Output16::new() },
 
         // reset overrides everything
-        next2: Mux16 { a0: next1.out.into(), a1: zero.out.into(), sel: this.reset, out: Output16::new() },
+        next2: Mux16 { a0: next1.out.into(), a1: fixed(0), sel: this.reset, out: Output16::new() },
 
         reg0: Register16 {
             data_in:  next2.out.into(),
-            write:    one.out.bit(0).into(),
+            write:    fixed(1),
             data_out: this.out0,
         },
 
         inc3: Inc16 { a: next2.out.into(), out: Output16::new() },
         reg1: Register16 {
             data_in:  inc3.out.into(),
-            write:    one.out.bit(0).into(),
+            write:    fixed(1),
             data_out: this.out1,
         },
     }}
@@ -298,8 +295,7 @@ impl Component for Inc2 {
 
     expand! { |this| {
         // Adding a constant value is just as efficient in simulation:
-        two: Const { value: 2, out: Output16::new() },
-        _add: Add16 { a: this.a, b: two.out.into(), out: this.out },
+        _add: Add16 { a: this.a, b: fixed(2), out: this.out },
     }}
 }
 
@@ -395,11 +391,6 @@ pub fn flatten<C: Reflect + Into<DoubleComponent>>(chip: C) -> IC<Computational1
     }
 }
 
-impl AsConst for DoubleComponent {
-    fn as_const(&self) -> Option<u64> {
-        if let DoubleComponent::Project05(c) = self { c.as_const() } else { None }
-    }
-}
 
 #[cfg(test)]
 mod test {

@@ -1,12 +1,12 @@
-use crate::{Component, Input, Output, Reflect, expand};
-use crate::declare::{Chip, Interface, BusRef, InputBus, OutputBus};
-use crate::component::{Buffer, Nand, Const, Register, Sequential, Combinational};
+use crate::{Component, Input, Input1, Output, OutputBus, Reflect, expand, fixed};
+use crate::declare::{Chip, Interface, BusRef};
+use crate::component::{Buffer, Nand, Register, Sequential, Combinational};
 use crate::nat::{N1, N8};
 
 
 /// Really just about trivial component for testing the expand! macro.
 pub struct TestNot {
-    pub a: Input,
+    pub a: Input1,
     pub out: Output,
 }
 
@@ -67,8 +67,8 @@ fn test_expand_not() {
 
 /// Almost as trivial, but uses a second Nand.
 pub struct TestAnd {
-    pub a: Input,
-    pub b: Input,
+    pub a: Input1,
+    pub b: Input1,
     pub out: Output,
 }
 
@@ -85,7 +85,7 @@ impl Reflect for TestAnd {
 
 impl Chip for TestAnd {
     fn chip() -> Self {
-        TestAnd { a: Input::new(), b: Input::new(), out: Output::new() }
+        TestAnd { a: Input1::new(), b: Input1::new(), out: Output::new() }
     }
 }
 
@@ -140,10 +140,10 @@ fn test_expand_and() {
     assert_eq!(not_out.id, out.id);
 }
 
-/// A simple, bit-parallel component
+/// A simple, bit-parallel component, for an uncommon data size.
 pub struct TestNand8 {
-    pub a: InputBus<N8>,
-    pub b: InputBus<N8>,
+    pub a: Input<N8>,
+    pub b: Input<N8>,
 
     pub out: OutputBus<N8>,
 }
@@ -161,7 +161,7 @@ impl Reflect for TestNand8 {
 
 impl Chip for TestNand8 {
     fn chip() -> Self {
-        TestNand8 { a: InputBus::<N8>::new(), b: InputBus::<N8>::new(), out: OutputBus::<N8>::new() }
+        TestNand8 { a: Input::<N8>::new(), b: Input::<N8>::new(), out: OutputBus::<N8>::new() }
     }
 }
 
@@ -218,8 +218,7 @@ impl Component for TestFlipFlop {
         reg_out: forward Output::new(),
 
         not: Nand { a: reg_out.into(), b: this.out.into(), out: Output::new() },
-        one: Const { value: 1, out: Output::new() },
-        reg: Register { data_in: not.out.into(), write: one.out.bit(0).into(), data_out: reg_out },
+        reg: Register { data_in: not.out.into(), write: fixed(1), data_out: reg_out },
 
         // Now connect to the chip output also
         _out: Buffer { a: reg_out.into(), out: this.out },
