@@ -41,7 +41,7 @@ use simulator::nat::N16;
 use simulator::simulate::{ChipState, BusResident, ROMHandle};
 
 /// CPU which (potentially) decodes and executes a pair of instructions in each cycle.
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct CPU {
     /// Return to a known state (i.e. jump to address 0)
     pub reset: Input,
@@ -185,7 +185,7 @@ impl Component for CPU {
 }
 
 
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct Computer {
     /// A way to force the CPU to return to a known state (i.e. jump to address 0)
     pub reset: Input,
@@ -237,7 +237,7 @@ impl Component for Computer {
 /// PC with a "skip" input: when asserted, increment by 2 instead of 1.
 /// load and reset take priority over skip (same precedence rules as project_03::PC).
 /// in
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct DoublePC {
     pub reset: Input,
     pub addr: Input16,
@@ -286,7 +286,7 @@ impl Component for DoublePC {
 }
 
 /// Add with the constant 2.
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct Inc2 {
     a: Input16,
     out: Output16,
@@ -303,6 +303,7 @@ impl Component for Inc2 {
 }
 
 
+#[derive(Clone)]
 pub enum DoubleComponent {
     Project05(Project05Component),
     CPU(CPU),

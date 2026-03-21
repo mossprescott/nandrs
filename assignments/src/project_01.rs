@@ -12,6 +12,7 @@ use std::collections::HashMap;
 pub use simulator::component::{Nand, Const, Buffer, Mux1, Mux16};
 
 /// Components implemented in this project: simple, logical components for 1 and 16 bits.
+#[derive(Clone)]
 pub enum Project01Component {
     // primitive:
     Nand(Nand),
@@ -136,7 +137,7 @@ pub fn flatten<C: Reflect + Into<Project01Component>>(chip: C) -> IC<Combination
 
 
 /// Inverts its input.
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct Not {
     pub a: Input,
     pub out: Output,
@@ -154,7 +155,7 @@ impl Component for Not {
 }
 
 /// True only when both inputs are true.
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct And {
     pub a: Input,
     pub b: Input,
@@ -177,7 +178,7 @@ impl Component for And {
 }
 
 /// True when at least one input is true.
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct Or {
     pub a: Input,
     pub b: Input,
@@ -194,7 +195,7 @@ impl Component for Or {
 }
 
 /// True when inputs differ.
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct Xor {
     pub a: Input,
     pub b: Input,
@@ -218,7 +219,7 @@ pub type Mux = simulator::component::Mux<N1>;
 /// implement separately anyway; this version isn't used by any other components
 ///
 /// Passes a0 through when sel is 0, a1 when sel is 1.
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct MyMux {
     pub a0: Input,
     pub a1: Input,
@@ -237,7 +238,7 @@ impl Component for MyMux {
 }
 
 /// Routes input to a when sel is 0, or b when sel is 1; the unused output is zero.
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct Dmux {
     pub input: Input,
     pub sel: Input,
@@ -256,7 +257,7 @@ impl Component for Dmux {
 }
 
 /// Inverts each bit of a 16-bit input.
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct Not16 {
     pub a: Input16,
     pub out: Output16,
@@ -272,7 +273,7 @@ impl Component for Not16 {
 }
 
 /// Bitwise `And` across two 16-bit inputs.
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct And16 {
     pub a: Input16,
     pub b: Input16,
@@ -289,7 +290,7 @@ impl Component for And16 {
 }
 
 // /// Selects between two 16-bit inputs bit-by-bit, using a single sel bit.
-// #[derive(Reflect, Chip)]
+// #[derive(Clone, Reflect, Chip)]
 // pub struct Mux16 {
 //     pub a0: Input16,
 //     pub a1: Input16,

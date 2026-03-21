@@ -7,6 +7,7 @@ use simulator::component::{Combinational, FullAdder};
 use simulator::nat::N16;
 use crate::project_01::{Project01Component, Nand, Const, Buffer, Mux1, Mux16, Not16, And16, Not, Xor, And, Or};
 
+#[derive(Clone)]
 pub enum Project02Component {
     Project01(Project01Component),
     // HalfAdder(HalfAdder),
@@ -102,7 +103,7 @@ pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Combination
 /// sum = 1s-digit of two-bit sum, carry = 2s-digit
 ///
 /// Future: for pedagocical purposes, define this as HalfAdder here, with reduction to Nands.
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct MyHalfAdder {
     pub a:     Input,
     pub b:     Input,
@@ -136,7 +137,7 @@ impl Component for MyHalfAdder {
 ///
 /// Future: for pedagocical purposes, define this here, with reduction to Nands. Then arrange for it
 /// *not* to be expanded when we want to do an efficient simulation.
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct MyFullAdder {
     pub a:     Input,
     pub b:     Input,
@@ -166,7 +167,7 @@ impl Component for MyFullAdder {
 }
 
 /// out = in + 1 (16-bit, overflow ignored)
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct Inc16 {
     pub a: Input16,
     pub out: Output16,
@@ -195,7 +196,7 @@ impl Component for Inc16 {
 }
 
 /// out = a + b (16-bit, overflow ignored)
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct Add16 {
     pub a:   Input16,
     pub b:   Input16,
@@ -230,7 +231,7 @@ impl Component for Add16 {
 }
 
 /// Returns 1 if all bits of input are 0.
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct Zero16 {
     pub a: Input16,
     pub out: Output,
@@ -265,7 +266,7 @@ impl Component for Zero16 {
 }
 
 /// out = true if the most-significant bit of a is 1 (i.e., input is negative in two's complement).
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct Neg16 {
     pub a: Input16,
     pub out: Output,
@@ -283,7 +284,7 @@ impl Component for Neg16 {
 }
 
 /// Hack ALU: computes one of several functions of x and y selected by control bits.
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct ALU {
     /// "Left" input
     pub x:   Input16,

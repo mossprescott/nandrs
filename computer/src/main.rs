@@ -2,9 +2,11 @@ use std::fs;
 
 use clap::Parser;
 
+use assignments::project_02::Project02Component;
+use assignments::project_03::Project03Component;
 use assignments::project_05::{self, Computer, Project05Component, find_rom, memory_system};
 use assignments::project_06::{assemble, Program};
-use simulator::{IC, flatten, print_graph, print_ic_graph};
+use simulator::{Component, IC, flatten, print_ic_graph};
 use simulator::declare::Chip as _;
 use simulator::simulate::{synthesize, initialize};
 use simulator::word::Word16;
@@ -26,10 +28,8 @@ fn main() {
 
     let computer = Computer::chip();
     if args.print {
-        println!("{}", print_graph(&computer));
-
-        // let squashed = half_flatten(Computer::chip().into());
-        // println!("{}", print_ic_graph(&squashed));
+        let simple = simplify(Computer::chip());
+        println!("{}", print_ic_graph(&simple));
     }
     let chip = project_05::flatten(computer);
 
@@ -57,11 +57,22 @@ fn main() {
     run(&args, state, &symbols, &fmt_instr);
 }
 
-/// Recursively expand high-level components (projects 3 and 5, for example), until only primitives
-/// and simple logic are left (projects 1 and 2). Note that the result remains in the "project"
-/// type, because it conveniently embeds the project 1 and 2 components, as well as the
-/// Computational primitives.
-fn half_flatten(chip: Project05Component) -> IC<Project05Component> {
-    todo!()
-    // flatten(chip, "simple", |c| None)
+/// Recursively expand high-level components (projects 3 and 5, essentially), until only primitives
+/// and simple logic are left (projects 1 and 2, except the ALU). Note that the result remains in
+/// the "project_05" type, because it conveniently embeds the project 1 and 2 components, as well as
+/// the Computational primitives.
+fn simplify<C: Into<Project05Component>>(chip: C) -> IC<Project05Component> {
+    flatten(chip.into(), "simple", &|c| match c {
+        Project05Component::Project03(Project03Component::Project02(Project02Component::Project01(_)))
+            => None,
+        Project05Component::Project03(Project03Component::Project02(ref p2)) => match p2 {
+            Project02Component::ALU(_) => c.expand(),
+            _ => None,
+        },
+        Project05Component::Project03(ref p3) => match p3 {
+            Project03Component::PC(_) => c.expand(),
+            _ => None,
+        },
+        _ => c.expand(),
+    })
 }

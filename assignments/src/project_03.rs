@@ -7,6 +7,7 @@ use simulator::component::{Combinational, Const, Nand, Register16, Sequential, S
 use crate::project_01::{Or, Mux16, Project01Component};
 use crate::project_02::{Inc16, Project02Component};
 
+#[derive(Clone)]
 pub enum Project03Component {
     Project02(Project02Component),
     Register16(Register16),
@@ -87,7 +88,7 @@ pub fn flatten<C: Reflect + Into<Project03Component>>(chip: C) -> IC<Sequential1
 /// Program counter component, including a register storing the current instruction address.
 ///
 /// When more than one flag is set, "reset" supercedes "load", which supercedes "inc".
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct PC {
     /// Reset to zero on the next cycle
     pub reset: Input,

@@ -11,6 +11,7 @@ use crate::project_01::{Project01Component, Const, Not, And, Or, Mux16};
 use crate::project_02::{Project02Component, ALU};
 use crate::project_03::{Project03Component, PC};
 
+#[derive(Clone)]
 pub enum Project05Component {
     // Previous project:
     Project03(Project03Component),
@@ -176,7 +177,7 @@ pub fn find_rom(state: &ChipState<N16, N16>) -> ROMHandle<N16, N16> {
 /// But treating the bits of an A-instruction as control signals means the simulator has to evaluate
 /// lots of meaningless signals (mostly, the ALU), so all these control lines are low when is_c is
 /// low. That costs a few gates, but saves a *lot* of evaluation.
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct Decode {
     /// Instuction word from the ROM
     pub instr: Input16,
@@ -251,7 +252,7 @@ impl Component for Decode {
     }}
 }
 
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct CPU {
     /// Return to a known state (i.e. jump to address 0)
     pub reset: Input,
@@ -375,7 +376,7 @@ impl Component for CPU {
     }}
 }
 
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct Computer {
     /// A way to force the CPU to return to a known state (i.e. jump to address 0)
     pub reset: Input,

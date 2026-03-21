@@ -5,8 +5,11 @@ use assignments::project_05::memory_system;
 use assignments::project_06::{assemble, Program};
 use computer::cli::Args;
 use computer::disasm::disassemble;
+use assignments::project_02::Project02Component;
+use assignments::project_03::Project03Component;
+use assignments::project_05::Project05Component;
 use double::computer::{Computer, DoubleComponent, find_roms, flatten as flatten_double, start};
-use simulator::{Chip, IC, flatten, print_graph, print_ic_graph};
+use simulator::{Chip, Component, IC, flatten, print_ic_graph};
 use simulator::simulate::{synthesize, initialize};
 use simulator::word::Word16;
 
@@ -23,10 +26,8 @@ fn main() {
 
     let computer = Computer::chip();
     if args.print {
-        println!("{}", print_graph(&computer));   // useless
-
-        // let squashed = half_flatten(Computer::chip());
-        // println!("{}", print_ic_graph(&squashed));
+        let simple = simplify(Computer::chip());
+        println!("{}", print_ic_graph(&simple));
     }
 
     let chip = flatten_double(computer);
@@ -70,7 +71,19 @@ fn main() {
 }
 
 /// Recursively expand until only primitives and simple logic are left (projects 1 and 2).
-fn half_flatten(chip: DoubleComponent) -> IC<DoubleComponent> {
-    todo!()
-    // flatten(chip, "simple", |c| None)
+fn simplify<C: Into<DoubleComponent>>(chip: C) -> IC<DoubleComponent> {
+    flatten(chip.into(), "simple", &|c| match c {
+        DoubleComponent::Project05(Project05Component::Project03(
+            Project03Component::Project02(Project02Component::Project01(_)))) => None,
+        DoubleComponent::Project05(Project05Component::Project03(
+            Project03Component::Project02(ref p2))) => match p2 {
+                Project02Component::ALU(_) => c.expand(),
+                _ => None,
+            },
+        DoubleComponent::Project05(Project05Component::Project03(ref p3)) => match p3 {
+            Project03Component::PC(_) => c.expand(),
+            _ => None,
+        },
+        _ => c.expand(),
+    })
 }
