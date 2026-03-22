@@ -136,8 +136,9 @@ fn fmt_component_tree(f: &mut fmt::Formatter<'_>, comp: &wiring::ComponentWiring
                 n.a.0, n.b.0, n.out.0),
 
         wiring::ComponentWiring::RippleAdder(a) =>
-            writeln!(f, "adder(ripple) a=w{}[..] b=w{}[..] out=w{}[..] carry_in={} carry_out={} width={}",
-                a.a.0, a.b.0, a.out.0, fmt_bit(a.carry_in), fmt_bit(a.carry_out), a.width),
+            writeln!(f, "adder(ripple) a=w{}[{}..{}] b=w{}[..] out=w{}[{}..{}] carry_in={} carry_out={}",
+                a.a.0, a.offset, a.offset + a.width, a.b.0, a.out.0, a.offset, a.offset + a.width,
+                fmt_bit(a.carry_in), fmt_bit(a.carry_out)),
 
     }
 }
@@ -558,7 +559,11 @@ where
 
     // Coalesce bit-parallel operations into single word-wide ops.
     coalesce_parallel_nands(&mut component_wiring);
-    coalesce_ripple_adders(&mut component_wiring);
+    let zero_wires: std::collections::HashSet<wiring::WireIndex> = const_wiring.iter()
+        .filter(|c| c.value == 0)
+        .map(|c| c.out)
+        .collect();
+    coalesce_ripple_adders(&mut component_wiring, &zero_wires);
 
     // Post-processing: move exclusive producers into mux branches (recursively).
     populate_mux_branches(&mut component_wiring, &output_wires);
@@ -869,62 +874,108 @@ fn coalesce_parallel_nands(components: &mut Vec<wiring::ComponentWiring>) {
     *components = result;
 }
 
-/// Coalesce consecutive `AdderWiring` entries that form a ripple-carry chain into a single
-/// `RippleAdderWiring`. The chain must have: same a.id, b.id, sum.id across all entries;
-/// offsets incrementing by 1; and each adder's carry feeding the next adder's c input.
-fn coalesce_ripple_adders(components: &mut Vec<wiring::ComponentWiring>) {
+/// Coalesce `AdderWiring` entries that form a ripple-carry chain into a single
+/// `RippleAdderWiring`. Chains are discovered by following carry→c links across the full
+/// component list (not just consecutive entries), since unrelated ops may be interleaved.
+/// Matched adders are pulled out of the list and replaced by a single RippleAdderWiring
+/// at the position of the last adder in the chain.
+///
+/// When all `b` wires in a chain are zero-valued constants (present in `zero_wires`),
+/// they're treated as equivalent even if they have different WireIndexes.
+fn coalesce_ripple_adders(
+    components: &mut Vec<wiring::ComponentWiring>,
+    zero_wires: &std::collections::HashSet<wiring::WireIndex>,
+) {
+    use std::collections::HashMap;
     use wiring::ComponentWiring as CW;
 
-    let mut result: Vec<CW> = Vec::with_capacity(components.len());
-    let mut i = 0;
-    while i < components.len() {
-        let first = match &components[i] {
-            CW::Adder(a) if a.a.offset == a.b.offset && a.a.offset == a.sum.offset => Some(a),
-            _ => None,
-        };
-        if let Some(first) = first {
-            let a_wire = first.a.id;
-            let b_wire = first.b.id;
-            let sum_wire = first.sum.id;
-            let base_offset = first.a.offset;
+    // Index adders by their carry-in (c) BitRef, so we can follow the chain.
+    let mut by_carry_in: HashMap<wiring::BitRef, usize> = HashMap::new();
+    for (i, comp) in components.iter().enumerate() {
+        if let CW::Adder(a) = comp {
+            by_carry_in.insert(a.c, i);
+        }
+    }
 
-            let start = i;
-            let mut prev_carry = first.carry;
-            i += 1;
-            while i < components.len() {
-                if let CW::Adder(a) = &components[i] {
-                    let expected_offset = base_offset + (i - start) as u8;
-                    if a.a.id == a_wire
-                        && a.b.id == b_wire
-                        && a.sum.id == sum_wire
-                        && a.a.offset == expected_offset
-                        && a.b.offset == expected_offset
-                        && a.sum.offset == expected_offset
-                        && a.c == prev_carry
-                    {
-                        prev_carry = a.carry;
-                        i += 1;
-                        continue;
-                    }
+    // Find chain heads: adders whose c input is NOT the carry output of another adder.
+    let mut is_chain_interior: Vec<bool> = vec![false; components.len()];
+    for (i, comp) in components.iter().enumerate() {
+        if let CW::Adder(a) = comp {
+            if let Some(&next) = by_carry_in.get(&a.carry) {
+                if next != i {
+                    is_chain_interior[next] = true;
                 }
+            }
+        }
+    }
+
+    // Walk chains from each head.
+    let mut claimed: Vec<bool> = vec![false; components.len()];
+    let mut replacements: HashMap<usize, wiring::RippleAdderWiring> = HashMap::new();
+
+    for i in 0..components.len() {
+        if claimed[i] || is_chain_interior[i] { continue; }
+        let CW::Adder(first) = &components[i] else { continue };
+
+        // Verify aligned offsets for the head.
+        if first.a.offset != first.sum.offset { continue; }
+
+        let a_wire = first.a.id;
+        let b_wire = first.b.id;
+        let b_is_zero = zero_wires.contains(&b_wire);
+        let sum_wire = first.sum.id;
+        let base_offset = first.a.offset;
+
+        // Follow the carry chain.
+        let mut chain = vec![i];
+        let mut prev_carry = first.carry;
+        let mut step = 1u8;
+        loop {
+            let Some(&next) = by_carry_in.get(&prev_carry) else { break };
+            let CW::Adder(a) = &components[next] else { break };
+            let expected_offset = base_offset.wrapping_add(step);
+            // b wires must match, OR all be zero-valued constants.
+            let b_ok = a.b.id == b_wire
+                || (b_is_zero && zero_wires.contains(&a.b.id));
+            if !b_ok
+                || a.a.id != a_wire
+                || a.sum.id != sum_wire
+                || a.a.offset != expected_offset
+                || a.sum.offset != expected_offset
+            {
                 break;
             }
-            let run_len = i - start;
-            if run_len >= 2 {
-                result.push(CW::RippleAdder(wiring::RippleAdderWiring {
-                    carry_in: first.c,
-                    a: a_wire,
-                    b: b_wire,
-                    out: sum_wire,
-                    carry_out: prev_carry,
-                    width: run_len as u8,
-                }));
-            } else {
-                result.push(components[start].clone());
-            }
-        } else {
+            chain.push(next);
+            prev_carry = a.carry;
+            step += 1;
+        }
+
+        if chain.len() < 2 { continue; }
+
+        let last_idx = *chain.last().unwrap();
+        for &idx in &chain {
+            claimed[idx] = true;
+        }
+        replacements.insert(last_idx, wiring::RippleAdderWiring {
+            carry_in: first.c,
+            a: a_wire,
+            b: b_wire,
+            out: sum_wire,
+            carry_out: prev_carry,
+            offset: base_offset,
+            width: chain.len() as u8,
+        });
+    }
+
+    if replacements.is_empty() { return; }
+
+    // Rebuild: skip claimed adders, insert RippleAdder at the last position of each chain.
+    let mut result: Vec<CW> = Vec::with_capacity(components.len());
+    for i in 0..components.len() {
+        if let Some(ripple) = replacements.remove(&i) {
+            result.push(CW::RippleAdder(ripple));
+        } else if !claimed[i] {
             result.push(components[i].clone());
-            i += 1;
         }
     }
 

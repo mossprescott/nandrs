@@ -315,12 +315,17 @@ fn eval_logic(ws: &mut [u64], component_wiring: &[wiring::ComponentWiring]) {
                 ws[nand.out.0 as usize] = !(ws[nand.a.0 as usize] & ws[nand.b.0 as usize])
             }
             wiring::ComponentWiring::RippleAdder(add) => {
-                let a = ws[add.a.0 as usize];
-                let b = ws[add.b.0 as usize];
+                let off = add.offset as u32;
+                let w = add.width as u32;
+                let mask = ((1u64 << w) - 1) << off;
+                let a = (ws[add.a.0 as usize] & mask) >> off;
+                let b = (ws[add.b.0 as usize] & mask) >> off;
                 let c = read_bit(ws, add.carry_in) as u64;
-                let result = a.wrapping_add(b).wrapping_add(c);
-                ws[add.out.0 as usize] = result;
-                let carry = (result >> add.width) & 1 != 0;
+                let sum = a.wrapping_add(b).wrapping_add(c);
+                // Write only the affected bit range into out, preserving other bits.
+                let out = &mut ws[add.out.0 as usize];
+                *out = (*out & !mask) | ((sum << off) & mask);
+                let carry = (sum >> w) & 1 != 0;
                 write_bit(ws, add.carry_out, carry);
             }
             wiring::ComponentWiring::Adder(add) => {

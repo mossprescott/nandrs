@@ -138,22 +138,23 @@ pub(super) struct ParallelNandWiring {
     pub(super) out: WireIndex,
 }
 
-/// Multi-bit add operation. Always operates on bits from 0 to whatever size we found in the
-/// component graph.
+/// Multi-bit ripple-carry add operation over a contiguous range of bits.
 #[derive(Clone)]
 pub(super) struct RippleAdderWiring {
-    /// Bit which is injected into the one's place (often 0)
+    /// Bit which is injected as the carry into the lowest bit position.
     pub(super) carry_in: BitRef,
 
     pub(super) a: WireIndex,
     pub(super) b: WireIndex,
     pub(super) out: WireIndex,
 
-    /// Where to put the carry bit that comes out on the left (often unused)
+    /// Where to put the carry bit that comes out on the high end.
     pub(super) carry_out: BitRef,
 
-    /// Number of bits in the word. Practically speaking, this is the number of the bit
-    /// where the carry-out is found.
+    /// First bit position (e.g. 0 for Add16, 1 for Inc16's adder chain).
+    pub(super) offset: u8,
+
+    /// Number of bit positions covered by this adder.
     pub(super) width: u8,
 }
 
