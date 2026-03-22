@@ -138,6 +138,7 @@ pub(super) struct ParallelNandWiring {
 }
 
 // TODO: ParallelAndWiring
+// TODO: ParallelAdderWiring
 
 //
 // Constant values: come from `fixed()` inputs in the graph.

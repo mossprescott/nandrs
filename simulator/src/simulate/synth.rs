@@ -128,6 +128,9 @@ fn fmt_component_tree(f: &mut fmt::Formatter<'_>, comp: &wiring::ComponentWiring
             writeln!(f, "and   a={} b={} out={}",
                 fmt_bit(n.a), fmt_bit(n.b), fmt_bit(n.out)),
 
+        wiring::ComponentWiring::ParallelNand(n) if n.a == n.b =>
+            writeln!(f, "not(many) a=w{}[..] out=w{}[..]",
+                n.a.0, n.out.0),
         wiring::ComponentWiring::ParallelNand(n) =>
             writeln!(f, "nand(many) a=w{}[..] b=w{}[..] out=w{}[..]",
                 n.a.0, n.b.0, n.out.0),
@@ -745,56 +748,69 @@ fn eliminate_dead_gates(components: &mut Vec<wiring::ComponentWiring>, output_wi
     }
 }
 
-/// Coalesce consecutive `NandWiring` entries that operate on different bits of the same wires
-/// into a single `ParallelNandWiring`. Each individual nand must use the same bit offset for
-/// its a, b, and out refs (i.e. bit N of a nand'd with bit N of b producing bit N of out).
+/// Coalesce consecutive `NandWiring` or `AndWiring` entries that operate on different bits of the
+/// same wires into parallel operations. Each individual gate must use the same bit offset for its
+/// a, b, and out refs (i.e. bit N of a op'd with bit N of b producing bit N of out).
+///
+/// - A run of Nands becomes one `ParallelNandWiring`.
+/// - A run of Ands becomes two `ParallelNandWiring`s: nand into out, then not (self-nand) in place.
 fn coalesce_parallel_nands(components: &mut Vec<wiring::ComponentWiring>) {
     use wiring::ComponentWiring as CW;
 
-    // Key: (a wire, b wire, out wire). Nands with the same key and aligned offsets can merge.
+    // Key: (a wire, b wire, out wire). Gates with the same key and aligned offsets can merge.
     type GroupKey = (u32, u32, u32);
 
-    fn nand_group_key(n: &wiring::NandWiring) -> Option<GroupKey> {
-        // All three offsets must be equal (bit-aligned across a, b, out).
-        if n.a.offset == n.b.offset && n.b.offset == n.out.offset {
-            Some((n.a.id.0, n.b.id.0, n.out.id.0))
+    fn aligned_key(a: &wiring::BitRef, b: &wiring::BitRef, out: &wiring::BitRef) -> Option<GroupKey> {
+        if a.offset == b.offset && b.offset == out.offset {
+            Some((a.id.0, b.id.0, out.id.0))
         } else {
             None
         }
     }
 
+    #[derive(PartialEq, Clone, Copy)]
+    enum RunKind { Nand, And }
+
     let mut result: Vec<CW> = Vec::with_capacity(components.len());
     let mut i = 0;
     while i < components.len() {
-        // Try to start a group of consecutive nands with matching key.
-        let key = match &components[i] {
-            CW::Nand(n) => nand_group_key(n),
-            _ => None,
+        // Try to start a group of consecutive gates of the same kind with matching key.
+        let (kind, key) = match &components[i] {
+            CW::Nand(n) => (RunKind::Nand, aligned_key(&n.a, &n.b, &n.out)),
+            CW::And(n)  => (RunKind::And,  aligned_key(&n.a, &n.b, &n.out)),
+            _ => (RunKind::Nand, None),
         };
         if let Some(k) = key {
-            // Extend the run as far as possible.
             let start = i;
             i += 1;
             while i < components.len() {
-                if let CW::Nand(n) = &components[i] {
-                    if nand_group_key(n) == Some(k) {
-                        i += 1;
-                        continue;
-                    }
-                }
-                break;
+                let next = match (&components[i], kind) {
+                    (CW::Nand(n), RunKind::Nand) => aligned_key(&n.a, &n.b, &n.out),
+                    (CW::And(n),  RunKind::And)  => aligned_key(&n.a, &n.b, &n.out),
+                    _ => None,
+                };
+                if next == Some(k) { i += 1; } else { break; }
             }
             let run_len = i - start;
             if run_len >= 2 {
-                // Extract the WireIndex from the first nand in the group.
-                let CW::Nand(first) = &components[start] else { unreachable!() };
+                let (a_id, b_id, out_id) = match &components[start] {
+                    CW::Nand(n) => (n.a.id, n.b.id, n.out.id),
+                    CW::And(n)  => (n.a.id, n.b.id, n.out.id),
+                    _ => unreachable!(),
+                };
+                // Nand(a, b) -> out
                 result.push(CW::ParallelNand(wiring::ParallelNandWiring {
-                    a:   first.a.id,
-                    b:   first.b.id,
-                    out: first.out.id,
+                    a: a_id, b: b_id, out: out_id,
                 }));
+                if kind == RunKind::And {
+                    // Not(out) -> out  (invert in place to complete the And)
+                    // Note: the "out" wire is being overwritten here, which isn't something that happens
+                    // anywhere else, but should be fine.
+                    result.push(CW::ParallelNand(wiring::ParallelNandWiring {
+                        a: out_id, b: out_id, out: out_id,
+                    }));
+                }
             } else {
-                // Single nand, keep as-is.
                 result.push(components[start].clone());
             }
         } else {
