@@ -48,6 +48,7 @@ pub(super) enum ComponentWiring {
     And(AndWiring),
     ParallelNand(ParallelNandWiring),
     RippleAdder(RippleAdderWiring),
+    ManyWayAnd(ManyWayAndWiring),
 }
 
 //
@@ -125,7 +126,7 @@ pub(super) struct SerialWiring { pub(super) device_slot: usize, pub(super) out: 
 pub(super) struct AndWiring {
     pub(super) a: BitRef,
     pub(super) b: BitRef,
-    pub(super) out: BitRef
+    pub(super) out: BitRef,
 }
 
 /// Bit-wise Nand of *all* bits, which are known to be aligned between all three wires.
@@ -158,6 +159,14 @@ pub(super) struct RippleAdderWiring {
     pub(super) width: u8,
 }
 
+/// "And" arbitrarily-many bits of the source into a single result bit.
+#[derive(Clone)]
+pub(super) struct ManyWayAndWiring {
+    pub(super) a: WireIndex,
+    pub(super) out: BitRef,
+
+    pub(super) mask: u64
+}
 
 //
 // Constant values: come from `fixed()` inputs in the graph.

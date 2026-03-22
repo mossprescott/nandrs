@@ -140,6 +140,10 @@ fn fmt_component_tree(f: &mut fmt::Formatter<'_>, comp: &wiring::ComponentWiring
                 a.a.0, a.offset, a.offset + a.width, a.b.0, a.out.0, a.offset, a.offset + a.width,
                 fmt_bit(a.carry_in), fmt_bit(a.carry_out)),
 
+        wiring::ComponentWiring::ManyWayAnd(m) =>
+            writeln!(f, "and(many-way) a=w{}[..] mask={:#06x} out={}",
+                m.a.0, m.mask, fmt_bit(m.out)),
+
     }
 }
 
@@ -156,7 +160,8 @@ fn count_components(components: &[wiring::ComponentWiring]) -> ComponentCounts {
     for comp in components {
         match comp {
             wiring::ComponentWiring::Nand(_) | wiring::ComponentWiring::And(_)
-                | wiring::ComponentWiring::ParallelNand(_) => {
+                | wiring::ComponentWiring::ParallelNand(_)
+                | wiring::ComponentWiring::ManyWayAnd(_) => {
                 gates.0 += 1; gates.1 += 1;
             }
             wiring::ComponentWiring::Adder(_) | wiring::ComponentWiring::RippleAdder(_) => {
@@ -259,6 +264,7 @@ pub struct OpCounts {
     pub muxes: usize,
     pub parallel_nands: usize,
     pub ripple_adders: usize,
+    pub many_way_ands: usize,
     pub registers: usize,
 }
 
@@ -274,6 +280,7 @@ impl<Width: Storable> ChipWiring<Width> {
                 wiring::ComponentWiring::Mux(_)          => c.muxes += 1,
                 wiring::ComponentWiring::ParallelNand(_) => c.parallel_nands += 1,
                 wiring::ComponentWiring::RippleAdder(_)  => c.ripple_adders += 1,
+                wiring::ComponentWiring::ManyWayAnd(_)   => c.many_way_ands += 1,
                 wiring::ComponentWiring::Register(_)     => c.registers += 1,
                 _ => {}
             }
@@ -576,6 +583,7 @@ where
 
     // Coalesce bit-parallel operations into single word-wide ops.
     coalesce_parallel_nands(&mut component_wiring);
+    coalesce_many_way_ands(&mut component_wiring);
     let zero_wires: std::collections::HashSet<wiring::WireIndex> = const_wiring.iter()
         .filter(|c| c.value == 0)
         .map(|c| c.out)
@@ -652,6 +660,9 @@ fn peephole_nand_not(components: &mut Vec<wiring::ComponentWiring>, output_wires
                 bus_consumed.insert(a.a.0);
                 bus_consumed.insert(a.b.0);
                 wire_consumers.entry((a.carry_in.id.0, a.carry_in.offset)).or_default().insert(i);
+            }
+            CW::ManyWayAnd(m) => {
+                bus_consumed.insert(m.a.0);
             }
             CW::Mux(m) => {
                 wire_consumers.entry((m.sel.id.0, m.sel.offset)).or_default().insert(i);
@@ -764,6 +775,9 @@ fn eliminate_dead_gates(components: &mut Vec<wiring::ComponentWiring>, output_wi
                     bus_consumed.insert(a.b.0);
                     consumed_bits.insert((a.carry_in.id.0, a.carry_in.offset));
                 }
+                CW::ManyWayAnd(m) => {
+                    bus_consumed.insert(m.a.0);
+                }
                 CW::Mux(m) => {
                     consumed_bits.insert((m.sel.id.0, m.sel.offset));
                     bus_consumed.insert(m.a0.0);
@@ -808,6 +822,10 @@ fn eliminate_dead_gates(components: &mut Vec<wiring::ComponentWiring>, output_wi
                 CW::And(n) => {
                     bus_consumed.contains(&n.out.id.0)
                         || consumed_bits.contains(&(n.out.id.0, n.out.offset))
+                }
+                CW::ManyWayAnd(m) => {
+                    bus_consumed.contains(&m.out.id.0)
+                        || consumed_bits.contains(&(m.out.id.0, m.out.offset))
                 }
                 _ => true, // keep registers, RAM, ROM, muxes, memory systems
             }
@@ -885,6 +903,132 @@ fn coalesce_parallel_nands(components: &mut Vec<wiring::ComponentWiring>) {
         } else {
             result.push(components[i].clone());
             i += 1;
+        }
+    }
+
+    *components = result;
+}
+
+/// Coalesce trees of `AndWiring` gates that reduce multiple bits of the same source wire
+/// to a single output bit into a single `ManyWayAndWiring`. Trees are discovered by walking
+/// backward from each And gate through intermediate And gates until leaf inputs are reached.
+/// If all leaves reference the same WireIndex, the tree is replaced.
+fn coalesce_many_way_ands(components: &mut Vec<wiring::ComponentWiring>) {
+    use std::collections::{HashMap, HashSet};
+    use wiring::ComponentWiring as CW;
+
+    // Index And gates by their output BitRef, so we can walk backward through the tree.
+    let mut and_by_out: HashMap<wiring::BitRef, usize> = HashMap::new();
+    for (i, comp) in components.iter().enumerate() {
+        if let CW::And(a) = comp {
+            and_by_out.insert(a.out, i);
+        }
+    }
+
+    if and_by_out.is_empty() { return; }
+
+    // For each And output, count how many distinct And gates consume it.
+    // A node with fan-out > 1 among And gates can't be cleanly claimed by one tree.
+    let mut and_consumers: HashMap<wiring::BitRef, HashSet<usize>> = HashMap::new();
+    for (i, comp) in components.iter().enumerate() {
+        if let CW::And(a) = comp {
+            if and_by_out.contains_key(&a.a) {
+                and_consumers.entry(a.a).or_default().insert(i);
+            }
+            if and_by_out.contains_key(&a.b) {
+                and_consumers.entry(a.b).or_default().insert(i);
+            }
+        }
+    }
+
+    // Walk backward from a BitRef, collecting leaf bits and tree node indices.
+    // Returns None if the tree mixes source wires or an intermediate has fan-out > 1.
+    fn collect_tree(
+        bit: wiring::BitRef,
+        and_by_out: &HashMap<wiring::BitRef, usize>,
+        and_consumers: &HashMap<wiring::BitRef, HashSet<usize>>,
+        components: &[CW],
+        tree_nodes: &mut Vec<usize>,
+        leaves: &mut Vec<wiring::BitRef>,
+    ) -> bool {
+        if let Some(&idx) = and_by_out.get(&bit) {
+            // This bit is produced by an And gate. Only follow if at most 1 distinct consumer.
+            if and_consumers.get(&bit).map_or(0, |s| s.len()) > 1 {
+                leaves.push(bit);
+                return true;
+            }
+            let CW::And(a) = &components[idx] else { unreachable!() };
+            let (a_bit, b_bit) = (a.a, a.b);
+            tree_nodes.push(idx);
+            collect_tree(a_bit, and_by_out, and_consumers, components, tree_nodes, leaves)
+                && collect_tree(b_bit, and_by_out, and_consumers, components, tree_nodes, leaves)
+        } else {
+            // Leaf: not produced by an And in our index.
+            leaves.push(bit);
+            true
+        }
+    }
+
+    // Find roots: And gates whose output is NOT consumed by another And gate.
+    let mut is_interior: HashSet<usize> = HashSet::new();
+    for comp in components.iter() {
+        if let CW::And(a) = comp {
+            if let Some(&idx) = and_by_out.get(&a.a) { is_interior.insert(idx); }
+            if let Some(&idx) = and_by_out.get(&a.b) { is_interior.insert(idx); }
+        }
+    }
+
+    let mut claimed: Vec<bool> = vec![false; components.len()];
+    let mut replacements: HashMap<usize, wiring::ManyWayAndWiring> = HashMap::new();
+
+    for (i, comp) in components.iter().enumerate() {
+        if claimed[i] || is_interior.contains(&i) { continue; }
+        let CW::And(root) = comp else { continue };
+
+        let mut tree_nodes = Vec::new();
+        let mut leaves = Vec::new();
+        tree_nodes.push(i);
+
+        let a_bit = root.a;
+        let b_bit = root.b;
+        if !collect_tree(a_bit, &and_by_out, &and_consumers, components, &mut tree_nodes, &mut leaves) { continue; }
+        if !collect_tree(b_bit, &and_by_out, &and_consumers, components, &mut tree_nodes, &mut leaves) { continue; }
+
+        // All leaves must reference the same WireIndex.
+        if leaves.is_empty() { continue; }
+        let source_wire = leaves[0].id;
+        if !leaves.iter().all(|l| l.id == source_wire) { continue; }
+
+        // Need at least 3 source bits (2+ And gates) to be worth coalescing.
+        if leaves.len() < 3 { continue; }
+
+        // Build mask.
+        let mut mask: u64 = 0;
+        for leaf in &leaves {
+            mask |= 1u64 << leaf.offset;
+        }
+
+        // Mark all tree nodes as claimed.
+        for &idx in &tree_nodes {
+            claimed[idx] = true;
+        }
+
+        replacements.insert(i, wiring::ManyWayAndWiring {
+            a: source_wire,
+            out: root.out,
+            mask,
+        });
+    }
+
+    if replacements.is_empty() { return; }
+
+    // Rebuild: skip claimed And gates, insert ManyWayAnd at root positions.
+    let mut result: Vec<CW> = Vec::with_capacity(components.len());
+    for i in 0..components.len() {
+        if let Some(mwa) = replacements.remove(&i) {
+            result.push(CW::ManyWayAnd(mwa));
+        } else if !claimed[i] {
+            result.push(components[i].clone());
         }
     }
 
@@ -1018,6 +1162,7 @@ fn populate_mux_branches(
             CW::And(n)          => { add_consumer(n.a.id, j); add_consumer(n.b.id, j); }
             CW::ParallelNand(n) => { add_consumer(n.a, j); add_consumer(n.b, j); }
             CW::RippleAdder(a) => { add_consumer(a.a, j); add_consumer(a.b, j); add_consumer(a.carry_in.id, j); }
+            CW::ManyWayAnd(m)   => { add_consumer(m.a, j); }
             CW::Mux(m)          => { add_consumer(m.sel.id, j); add_consumer(m.a0, j); add_consumer(m.a1, j); }
             CW::Adder(a)        => { add_consumer(a.a.id, j); add_consumer(a.b.id, j); add_consumer(a.c.id, j); }
             CW::Register(r)     => { add_consumer(r.write.id, j); add_consumer(r.data_in, j); }
@@ -1040,6 +1185,7 @@ fn populate_mux_branches(
             CW::Nand(n)  => producers.entry(n.out.id).or_default().push(j),
             CW::And(n)   => producers.entry(n.out.id).or_default().push(j),
             CW::ParallelNand(n) => producers.entry(n.out).or_default().push(j),
+            CW::ManyWayAnd(m) => producers.entry(m.out.id).or_default().push(j),
             CW::RippleAdder(a) => {
                 producers.entry(a.out).or_default().push(j);
                 producers.entry(a.carry_out.id).or_default().push(j);
@@ -1061,6 +1207,7 @@ fn populate_mux_branches(
             CW::And(n)          => vec![n.a.id, n.b.id],
             CW::ParallelNand(n)  => vec![n.a, n.b],
             CW::RippleAdder(a) => vec![a.a, a.b, a.carry_in.id],
+            CW::ManyWayAnd(m)   => vec![m.a],
             CW::Mux(m)          => vec![m.sel.id, m.a0, m.a1],
             CW::Adder(a)        => vec![a.a.id, a.b.id, a.c.id],
             CW::Register(r)     => vec![r.write.id, r.data_in],

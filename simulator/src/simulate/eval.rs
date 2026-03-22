@@ -328,6 +328,10 @@ fn eval_logic(ws: &mut [u64], component_wiring: &[wiring::ComponentWiring]) {
                 let carry = (sum >> w) & 1 != 0;
                 write_bit(ws, add.carry_out, carry);
             }
+            wiring::ComponentWiring::ManyWayAnd(m) => {
+                let val = ws[m.a.0 as usize] & m.mask;
+                write_bit(ws, m.out, val == m.mask);
+            }
             wiring::ComponentWiring::Adder(add) => {
                 let a = read_bit(ws, add.a) as u64;
                 let b = read_bit(ws, add.b) as u64;
