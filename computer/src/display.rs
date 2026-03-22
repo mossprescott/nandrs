@@ -120,11 +120,5 @@ pub fn text_width(text: &str, scale: usize) -> usize {
 }
 
 pub fn format_speed(cps: f64) -> String {
-    if cps >= 1_000_000.0 {
-        format!("{:.2} MHz", cps / 1_000_000.0)
-    } else if cps >= 1_000.0 {
-        format!("{:.0} KHz", cps / 1_000.0)
-    } else {
-        format!("{:.0} Hz", cps)
-    }
+    format!("{:.2} MHz", cps / 1_000_000.0)
 }
