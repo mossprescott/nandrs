@@ -298,16 +298,23 @@ where
 
     // Build map of wires that have been connected directly to some existing wire; when the Buffer's
     // "out" wire (the key in renamed) is encountered, the "a" wire should be substituted (the value
-    // here)
+    // here). Only full-bus Buffers are eligible for renaming; sub-bus Buffers (e.g. bit(0) of a
+    // wider bus) must emit a copy op instead, since renaming the wire ID would alias the entire bus.
     // Value is (bit offset for the src, WireID, bit offset of the dst)
     let mut renamed: HashMap<WireID, (usize, WireID, usize)> = HashMap::new();
-    for comp in &components {
+    // Buffers that connect a single bit of a wider bus — need a copy op instead of rename.
+    let mut sub_bus_buffers: Vec<usize> = Vec::new();
+    for (idx, comp) in components.iter().enumerate() {
         match comp {
             Computational::Buffer(c) => {
                 let intf = c.reflect();
                 let a = &intf.inputs["a"];
                 let out = &intf.outputs["out"];
-                renamed.insert(WireID::from(out), (a.offset, WireID::from(a), out.offset));
+                if a.width > 1 && out.width > 1 {
+                    renamed.insert(WireID::from(out), (a.offset, WireID::from(a), out.offset));
+                } else {
+                    sub_bus_buffers.push(idx);
+                }
             }
             _ => {}
         }
@@ -442,7 +449,7 @@ where
         }).collect::<Vec<_>>()
     }).collect();
 
-    let component_wiring: Vec<wiring::ComponentWiring> = components.iter().flat_map(|comp| {
+    let component_wiring: Vec<wiring::ComponentWiring> = components.iter().enumerate().flat_map(|(idx, comp)| {
         use wiring::ComponentWiring as CW;
         match comp {
             Computational::Nand(c) => {
@@ -453,7 +460,17 @@ where
                     out: ref_for(&intf.outputs["out"]),
                 }))
             }
-            Computational::Buffer(_)       => None,
+            Computational::Buffer(c) => {
+                if sub_bus_buffers.contains(&idx) {
+                    // Sub-bus buffer: emit And(x,x) as a single-bit copy.
+                    let intf = c.reflect();
+                    let a = ref_for(&intf.inputs["a"]);
+                    let out = ref_for(&intf.outputs["out"]);
+                    Some(CW::And(wiring::AndWiring { a, b: a, out }))
+                } else {
+                    None // Full-bus buffer: handled by rename
+                }
+            }
             Computational::Mux(c)          => {
                 let intf = c.reflect();
                 Some(CW::Mux(wiring::MuxWiring {

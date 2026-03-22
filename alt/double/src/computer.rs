@@ -33,11 +33,11 @@
 /// a second ROM which we'll load with the same binary.
 
 use assignments::project_01::{And, Or, Not};
-use assignments::project_02::{ALU, Add16, Inc16};
+use assignments::project_02::{ALU, Inc16};
 use assignments::project_05::{self, Decode, Project05Component};
 use simulator::{self, Component, IC, Input1, Input16, Output, Output16, Reflect, Chip, expand, fixed};
 use simulator::declare::{Interface, BusRef};
-use simulator::component::{Buffer, Computational16, Mux16, MemorySystem16, Register16, ROM16};
+use simulator::component::{Buffer, FullAdder, Computational16, Mux16, MemorySystem16, Register16, ROM16};
 use simulator::nat::N16;
 use simulator::simulate::{ChipState, BusResident, ROMHandle};
 
@@ -294,8 +294,22 @@ impl Component for Inc2 {
     type Target = DoubleComponent;
 
     expand! { |this| {
-        // Adding a constant value is just as efficient in simulation:
-        _add: Add16 { a: this.a, b: fixed(2), out: this.out },
+        // the low bit is unaffected:
+        low: Buffer { a: this.a.bit(0).into(), out: this.out.bit(0) },
+
+        // the 2's place is always flipped:
+        not1: Not { a: this.a.bit(1).into(), out: this.out.bit(1) },
+
+        _carry_out: (2..16).fold(this.a.bit(1), |carry, i| {
+            add: FullAdder {
+                a: this.a.bit(i),
+                b: fixed(0),
+                c: carry,
+                sum: this.out.bit(i),
+                carry: Output::new(),
+            },
+            add.carry.into()
+        }),
     }}
 }
 
@@ -434,8 +448,8 @@ mod test {
         let muxes  = components.iter().filter(|c| matches!(c, Computational::Mux(_))).count();
         assert_eq!(memsys,  1);
         assert_eq!(roms,    2);    // Compare to 1
-        assert_eq!(nands, 174);    // Compare to 166
-        assert_eq!(adders, 62);    // Compare to 31
+        assert_eq!(nands, 175);    // Compare to 166; +1 for Inc2's bit0 buffer-as-copy
+        assert_eq!(adders, 60);    // Compare to 31; Inc2 has 14 adders (bits 2-15) vs Inc16's 15
         assert_eq!(muxes,  16);    // Compare to 15
     }
 }
