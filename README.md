@@ -28,7 +28,7 @@ Focus on *processor* design considerations. Overall system design issues like bu
 hierarchies, etc. are beside the point. I want to play with different ISAs, functional unit
 selection and design, things like that.
 
-Don't try to implement the more academic aspects of the orignal materials. For example, a RAM
+Don't try to implement the more academic aspects of the original materials. For example, a RAM
 implemented out of raw gates is a mere exercise; here we always assume a better-performing,
 "native" RAM component.
 
@@ -59,7 +59,7 @@ Have a rust toolchain...
 |Make `FullAdder` (the bit-slice adder) primitive. Actually surprisingly little speed-up considering FullAdder was nine gates/operations. | 1.25MHz | 1.3x |
 | Detect important multi-bit patterns, namely 1) bit-parallel nand/not/and ops: squash them into one, 2) "normal" carry-chains for add and inc; any subset of the bits, and 3) Nand16Way (new component) as a single op. Result | 1.9 MHz | 1.5x |
 
-Noe: 2Mhz corresponds to about 30fps for the included [Pong binary](examples/Pong.asm), and that's about
+Note: 2MHz corresponds to about 30fps for the included [Pong binary](examples/Pong.asm), and that's about
 as fast as you want it to go to be playable.
 
 *All measurements taken on an Apple M2 MacBook Pro running macOS Tahoe, ca. 2026.*
@@ -89,9 +89,9 @@ a natural way that can also be simulated efficiently:
 
 Combinational:
 - `fixed`: feeds a fixed set of bits to any input. No runtime cost.
-- `Buffer`: passes its single, singe-bit input directly to its output. This is just a convenience
+- `Buffer`: passes its single, single-bit input directly to its output. This is just a convenience
   components can use, often to connect inputs directly to outputs. No runtime cost.
-- `Mux`: two (muti-bit) inputs, and a `sel` input controlling which one is used. During simulation,
+- `Mux`: two (multi-bit) inputs, and a `sel` input controlling which one is used. During simulation,
   `sel` is evaluated first; then the simulator only evaluates as needed for the "active" input.
 - `FullAdder`: add three bits (left, right, and carry-in), producing `sum` and `carry` outputs.
 
@@ -143,8 +143,8 @@ description, a `struct` which implements the `Component` trait, consists of prim
 composite *components*, whose outputs and inputs are wired together.
 
 Each type of component has a predefined set of inputs and outputs. For example, the primitive
-`Nand` has two one-bit inputs, `a` and `b`, and a single one-bit output `out`. An component can
-have more interesting inputs and outputs than that, d many user-defined components will.
+`Nand` has two one-bit inputs, `a` and `b`, and a single one-bit output `out`. A component can
+have more interesting inputs and outputs than that, and many user-defined components will.
 
 Components are constructed and used in several separate phases:
 
@@ -203,7 +203,7 @@ is converted to a form that can be handled efficiently, using `simulator::simula
 ### Simulation
 
 The state of entire chip is traced, cycle-by-cycle, simulating the behavior of the chip in full
-detail. The internal representation is optimized for speed of simulation, but the simulator might
+detail. The internal representation is optimized for speed of simulation, but the simulator might (someday)
 provide affordances for inspecting internal state for debugging purposes.
 
 "External" components like the keyboard and display are handled by native code in the harness.
