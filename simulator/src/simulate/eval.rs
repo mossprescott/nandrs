@@ -310,6 +310,10 @@ fn eval_logic(ws: &mut [u64], component_wiring: &[wiring::ComponentWiring]) {
                 let b = read_bit(ws, and.b);
                 write_bit(ws, and.out, a & b);
             }
+            wiring::ComponentWiring::ParallelNand(nand) => {
+                // Note: no bit slicing or shifting here.
+                ws[nand.out.0 as usize] = !(ws[nand.a.0 as usize] & ws[nand.b.0 as usize])
+            }
             wiring::ComponentWiring::Adder(add) => {
                 let a = read_bit(ws, add.a) as u64;
                 let b = read_bit(ws, add.b) as u64;

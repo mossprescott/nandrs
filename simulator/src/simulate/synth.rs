@@ -127,6 +127,12 @@ fn fmt_component_tree(f: &mut fmt::Formatter<'_>, comp: &wiring::ComponentWiring
         wiring::ComponentWiring::And(n) =>
             writeln!(f, "and   a={} b={} out={}",
                 fmt_bit(n.a), fmt_bit(n.b), fmt_bit(n.out)),
+
+        wiring::ComponentWiring::ParallelNand(n) =>
+            writeln!(f, "nand(many) a=w{}[..] b=w{}[..] out=w{}[..]",
+                n.a.0, n.b.0, n.out.0),
+
+
     }
 }
 
@@ -573,6 +579,10 @@ fn peephole_nand_not(components: &mut Vec<wiring::ComponentWiring>, output_wires
                 wire_consumers.entry((n.a.id.0, n.a.offset)).or_default().insert(i);
                 wire_consumers.entry((n.b.id.0, n.b.offset)).or_default().insert(i);
             }
+            CW::ParallelNand(n) => {
+                bus_consumed.insert(n.a.0);
+                bus_consumed.insert(n.b.0);
+            }
             CW::Mux(m) => {
                 wire_consumers.entry((m.sel.id.0, m.sel.offset)).or_default().insert(i);
                 bus_consumed.insert(m.a0.0);
@@ -675,6 +685,10 @@ fn eliminate_dead_gates(components: &mut Vec<wiring::ComponentWiring>, output_wi
                     consumed_bits.insert((n.a.id.0, n.a.offset));
                     consumed_bits.insert((n.b.id.0, n.b.offset));
                 }
+                CW::ParallelNand(n) => {
+                    bus_consumed.insert(n.a.0);
+                    bus_consumed.insert(n.b.0);
+                }
                 CW::Mux(m) => {
                     consumed_bits.insert((m.sel.id.0, m.sel.offset));
                     bus_consumed.insert(m.a0.0);
@@ -745,6 +759,7 @@ fn populate_mux_branches(
         match comp {
             CW::Nand(n)         => { add_consumer(n.a.id, j); add_consumer(n.b.id, j); }
             CW::And(n)          => { add_consumer(n.a.id, j); add_consumer(n.b.id, j); }
+            CW::ParallelNand(n) => { add_consumer(n.a, j); add_consumer(n.b, j); }
             CW::Mux(m)          => { add_consumer(m.sel.id, j); add_consumer(m.a0, j); add_consumer(m.a1, j); }
             CW::Adder(a)        => { add_consumer(a.a.id, j); add_consumer(a.b.id, j); add_consumer(a.c.id, j); }
             CW::Register(r)     => { add_consumer(r.write.id, j); add_consumer(r.data_in, j); }
@@ -766,6 +781,7 @@ fn populate_mux_branches(
         match comp {
             CW::Nand(n)  => producers.entry(n.out.id).or_default().push(j),
             CW::And(n)   => producers.entry(n.out.id).or_default().push(j),
+            CW::ParallelNand(n) => producers.entry(n.out).or_default().push(j),
             CW::Mux(m)   => producers.entry(m.out).or_default().push(j),
             CW::Adder(a) => {
                 producers.entry(a.sum.id).or_default().push(j);
@@ -781,6 +797,7 @@ fn populate_mux_branches(
         match comp {
             CW::Nand(n)         => vec![n.a.id, n.b.id],
             CW::And(n)          => vec![n.a.id, n.b.id],
+            CW::ParallelNand(n)  => vec![n.a, n.b],
             CW::Mux(m)          => vec![m.sel.id, m.a0, m.a1],
             CW::Adder(a)        => vec![a.a.id, a.b.id, a.c.id],
             CW::Register(r)     => vec![r.write.id, r.data_in],
