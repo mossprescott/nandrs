@@ -47,6 +47,7 @@ pub(super) enum ComponentWiring {
     // synthetic:
     And(AndWiring),
     ParallelNand(ParallelNandWiring),
+    RippleAdder(RippleAdderWiring),
 }
 
 //
@@ -137,8 +138,25 @@ pub(super) struct ParallelNandWiring {
     pub(super) out: WireIndex,
 }
 
-// TODO: ParallelAndWiring
-// TODO: ParallelAdderWiring
+/// Multi-bit add operation. Always operates on bits from 0 to whatever size we found in the
+/// component graph.
+#[derive(Clone)]
+pub(super) struct RippleAdderWiring {
+    /// Bit which is injected into the one's place (often 0)
+    pub(super) carry_in: BitRef,
+
+    pub(super) a: WireIndex,
+    pub(super) b: WireIndex,
+    pub(super) out: WireIndex,
+
+    /// Where to put the carry bit that comes out on the left (often unused)
+    pub(super) carry_out: BitRef,
+
+    /// Number of bits in the word. Practically speaking, this is the number of the bit
+    /// where the carry-out is found.
+    pub(super) width: u8,
+}
+
 
 //
 // Constant values: come from `fixed()` inputs in the graph.

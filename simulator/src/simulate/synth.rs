@@ -135,6 +135,9 @@ fn fmt_component_tree(f: &mut fmt::Formatter<'_>, comp: &wiring::ComponentWiring
             writeln!(f, "nand(many) a=w{}[..] b=w{}[..] out=w{}[..]",
                 n.a.0, n.b.0, n.out.0),
 
+        wiring::ComponentWiring::RippleAdder(a) =>
+            writeln!(f, "adder(ripple) a=w{}[..] b=w{}[..] out=w{}[..] carry_in={} carry_out={} width={}",
+                a.a.0, a.b.0, a.out.0, fmt_bit(a.carry_in), fmt_bit(a.carry_out), a.width),
 
     }
 }
@@ -151,10 +154,11 @@ fn count_components(components: &[wiring::ComponentWiring]) -> ComponentCounts {
     let mut adders = (0u32, 0u32);
     for comp in components {
         match comp {
-            wiring::ComponentWiring::Nand(_) | wiring::ComponentWiring::And(_) => {
+            wiring::ComponentWiring::Nand(_) | wiring::ComponentWiring::And(_)
+                | wiring::ComponentWiring::ParallelNand(_) => {
                 gates.0 += 1; gates.1 += 1;
             }
-            wiring::ComponentWiring::Adder(_) => {
+            wiring::ComponentWiring::Adder(_) | wiring::ComponentWiring::RippleAdder(_) => {
                 adders.0 += 1; adders.1 += 1;
             }
             wiring::ComponentWiring::Mux(m) => {
@@ -520,8 +524,9 @@ where
     // Remove gates whose output is never consumed.
     eliminate_dead_gates(&mut component_wiring, &output_wires);
 
-    // Coalesce bit-parallel nand operations into single word-wide ops.
+    // Coalesce bit-parallel operations into single word-wide ops.
     coalesce_parallel_nands(&mut component_wiring);
+    coalesce_ripple_adders(&mut component_wiring);
 
     // Post-processing: move exclusive producers into mux branches (recursively).
     populate_mux_branches(&mut component_wiring, &output_wires);
@@ -588,6 +593,11 @@ fn peephole_nand_not(components: &mut Vec<wiring::ComponentWiring>, output_wires
             CW::ParallelNand(n) => {
                 bus_consumed.insert(n.a.0);
                 bus_consumed.insert(n.b.0);
+            }
+            CW::RippleAdder(a) => {
+                bus_consumed.insert(a.a.0);
+                bus_consumed.insert(a.b.0);
+                wire_consumers.entry((a.carry_in.id.0, a.carry_in.offset)).or_default().insert(i);
             }
             CW::Mux(m) => {
                 wire_consumers.entry((m.sel.id.0, m.sel.offset)).or_default().insert(i);
@@ -694,6 +704,11 @@ fn eliminate_dead_gates(components: &mut Vec<wiring::ComponentWiring>, output_wi
                 CW::ParallelNand(n) => {
                     bus_consumed.insert(n.a.0);
                     bus_consumed.insert(n.b.0);
+                }
+                CW::RippleAdder(a) => {
+                    bus_consumed.insert(a.a.0);
+                    bus_consumed.insert(a.b.0);
+                    consumed_bits.insert((a.carry_in.id.0, a.carry_in.offset));
                 }
                 CW::Mux(m) => {
                     consumed_bits.insert((m.sel.id.0, m.sel.offset));
@@ -822,6 +837,68 @@ fn coalesce_parallel_nands(components: &mut Vec<wiring::ComponentWiring>) {
     *components = result;
 }
 
+/// Coalesce consecutive `AdderWiring` entries that form a ripple-carry chain into a single
+/// `RippleAdderWiring`. The chain must have: same a.id, b.id, sum.id across all entries;
+/// offsets incrementing by 1; and each adder's carry feeding the next adder's c input.
+fn coalesce_ripple_adders(components: &mut Vec<wiring::ComponentWiring>) {
+    use wiring::ComponentWiring as CW;
+
+    let mut result: Vec<CW> = Vec::with_capacity(components.len());
+    let mut i = 0;
+    while i < components.len() {
+        let first = match &components[i] {
+            CW::Adder(a) if a.a.offset == a.b.offset && a.a.offset == a.sum.offset => Some(a),
+            _ => None,
+        };
+        if let Some(first) = first {
+            let a_wire = first.a.id;
+            let b_wire = first.b.id;
+            let sum_wire = first.sum.id;
+            let base_offset = first.a.offset;
+
+            let start = i;
+            let mut prev_carry = first.carry;
+            i += 1;
+            while i < components.len() {
+                if let CW::Adder(a) = &components[i] {
+                    let expected_offset = base_offset + (i - start) as u8;
+                    if a.a.id == a_wire
+                        && a.b.id == b_wire
+                        && a.sum.id == sum_wire
+                        && a.a.offset == expected_offset
+                        && a.b.offset == expected_offset
+                        && a.sum.offset == expected_offset
+                        && a.c == prev_carry
+                    {
+                        prev_carry = a.carry;
+                        i += 1;
+                        continue;
+                    }
+                }
+                break;
+            }
+            let run_len = i - start;
+            if run_len >= 2 {
+                result.push(CW::RippleAdder(wiring::RippleAdderWiring {
+                    carry_in: first.c,
+                    a: a_wire,
+                    b: b_wire,
+                    out: sum_wire,
+                    carry_out: prev_carry,
+                    width: run_len as u8,
+                }));
+            } else {
+                result.push(components[start].clone());
+            }
+        } else {
+            result.push(components[i].clone());
+            i += 1;
+        }
+    }
+
+    *components = result;
+}
+
 /// Move components that exclusively feed one branch of a mux into that mux's branch list.
 /// Applied recursively: muxes moved into a branch get their own branches populated too.
 fn populate_mux_branches(
@@ -840,6 +917,7 @@ fn populate_mux_branches(
             CW::Nand(n)         => { add_consumer(n.a.id, j); add_consumer(n.b.id, j); }
             CW::And(n)          => { add_consumer(n.a.id, j); add_consumer(n.b.id, j); }
             CW::ParallelNand(n) => { add_consumer(n.a, j); add_consumer(n.b, j); }
+            CW::RippleAdder(a) => { add_consumer(a.a, j); add_consumer(a.b, j); add_consumer(a.carry_in.id, j); }
             CW::Mux(m)          => { add_consumer(m.sel.id, j); add_consumer(m.a0, j); add_consumer(m.a1, j); }
             CW::Adder(a)        => { add_consumer(a.a.id, j); add_consumer(a.b.id, j); add_consumer(a.c.id, j); }
             CW::Register(r)     => { add_consumer(r.write.id, j); add_consumer(r.data_in, j); }
@@ -862,6 +940,10 @@ fn populate_mux_branches(
             CW::Nand(n)  => producers.entry(n.out.id).or_default().push(j),
             CW::And(n)   => producers.entry(n.out.id).or_default().push(j),
             CW::ParallelNand(n) => producers.entry(n.out).or_default().push(j),
+            CW::RippleAdder(a) => {
+                producers.entry(a.out).or_default().push(j);
+                producers.entry(a.carry_out.id).or_default().push(j);
+            }
             CW::Mux(m)   => producers.entry(m.out).or_default().push(j),
             CW::Adder(a) => {
                 producers.entry(a.sum.id).or_default().push(j);
@@ -878,6 +960,7 @@ fn populate_mux_branches(
             CW::Nand(n)         => vec![n.a.id, n.b.id],
             CW::And(n)          => vec![n.a.id, n.b.id],
             CW::ParallelNand(n)  => vec![n.a, n.b],
+            CW::RippleAdder(a) => vec![a.a, a.b, a.carry_in.id],
             CW::Mux(m)          => vec![m.sel.id, m.a0, m.a1],
             CW::Adder(a)        => vec![a.a.id, a.b.id, a.c.id],
             CW::Register(r)     => vec![r.write.id, r.data_in],

@@ -314,6 +314,15 @@ fn eval_logic(ws: &mut [u64], component_wiring: &[wiring::ComponentWiring]) {
                 // Note: no bit slicing or shifting here.
                 ws[nand.out.0 as usize] = !(ws[nand.a.0 as usize] & ws[nand.b.0 as usize])
             }
+            wiring::ComponentWiring::RippleAdder(add) => {
+                let a = ws[add.a.0 as usize];
+                let b = ws[add.b.0 as usize];
+                let c = read_bit(ws, add.carry_in) as u64;
+                let result = a.wrapping_add(b).wrapping_add(c);
+                ws[add.out.0 as usize] = result;
+                let carry = (result >> add.width) & 1 != 0;
+                write_bit(ws, add.carry_out, carry);
+            }
             wiring::ComponentWiring::Adder(add) => {
                 let a = read_bit(ws, add.a) as u64;
                 let b = read_bit(ws, add.b) as u64;
