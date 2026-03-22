@@ -1,9 +1,10 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, AsConst, Chip, expand};
+use simulator::{self, Component, IC, Input1, Input16, Output, Output16, Reflect, Chip, expand, fixed};
+use simulator::declare::{Interface, BusRef};
 use simulator::Reflect as _;
 use simulator::Chip as _;
-use simulator::component::{Combinational, Const, Nand, Register16, Sequential, Sequential16};
+use simulator::component::{Combinational, Nand, Register16, Sequential, Sequential16};
 use crate::project_01::{Or, Mux16, Project01Component};
 use crate::project_02::{Inc16, Project02Component};
 
@@ -49,12 +50,6 @@ impl Reflect for Project03Component {
     }
 }
 
-impl AsConst for Project03Component {
-    fn as_const(&self) -> Option<u64> {
-        if let Project03Component::Project02(c) = self { c.as_const() } else { None }
-    }
-}
-
 /// Recursively expand until only Nands and Registers are left.
 pub fn flatten<C: Reflect + Into<Project03Component>>(chip: C) -> IC<Sequential16> {
     fn go(comp: Project03Component) -> Vec<Sequential16> {
@@ -65,7 +60,6 @@ pub fn flatten<C: Reflect + Into<Project03Component>>(chip: C) -> IC<Sequential1
                         .components.into_iter()
                         .map(|c| match c {
                             Combinational::Nand(n)   => Sequential::Nand(n),
-                            Combinational::Const(c)  => Sequential::Const(c),
                             Combinational::Buffer(c) => Sequential::Buffer(c),
                             Combinational::Mux(m)    => Sequential::Mux(m),
                             Combinational::Mux1(m)   => Sequential::Mux1(m),
@@ -91,14 +85,14 @@ pub fn flatten<C: Reflect + Into<Project03Component>>(chip: C) -> IC<Sequential1
 #[derive(Clone, Reflect, Chip)]
 pub struct PC {
     /// Reset to zero on the next cycle
-    pub reset: Input,
+    pub reset: Input1,
 
     /// Load an arbitrary address
     pub addr: Input16,
-    pub load: Input,
+    pub load: Input1,
 
     /// Increment to point to the next address on the next cycle
-    pub inc: Input,
+    pub inc: Input1,
 
     pub out: Output16,
 }
@@ -116,19 +110,16 @@ impl Component for PC {
         reg = Register16 { data_in: next_reset, write: 1 }
      */
     expand! { |this| {
-        zero: Const { value: 0, out: Output16::new() },
-        one: Const { value: 1, out: Output16::new() },
-
         inc: Inc16 { a: this.out.into(), out: Output16::new() },
         next0: Mux16 { a0: this.out.into(), a1: inc.out.into(), sel: this.inc, out: Output16::new() },
 
         next1: Mux16 { a0: next0.out.into(), a1: this.addr, sel: this.load, out: Output16::new() },
 
-        next2: Mux16 { a0: next1.out.into(), a1: zero.out.into(), sel: this.reset, out: Output16::new() },
+        next2: Mux16 { a0: next1.out.into(), a1: fixed(0), sel: this.reset, out: Output16::new() },
 
         reg: Register16 {
             data_in:  next2.out.into(),
-            write:    one.out.bit(0).into(),
+            write:    fixed(1),
             data_out: this.out,
         },
     }}

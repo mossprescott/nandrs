@@ -1,13 +1,14 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, AsConst, Chip, expand};
+use simulator::{self, Component, IC, Input1, Input16, Output, Output16, Reflect, Chip, expand, fixed};
+use simulator::declare::{Interface, BusRef};
 use simulator::Reflect as _;
 use simulator::Chip as _;
 use simulator::component::{Buffer, Nand, Register16, RAM16, ROM16, MemorySystem16, Sequential, Computational, Computational16};
 use simulator::nat::N16;
 use simulator::simulate::{ChipState, BusResident, ROMHandle, RAMHandle, SerialHandle, MemoryMap, RegionMap, RAMMap, ROMMap, SerialMap};
 use simulator::word::Word16;
-use crate::project_01::{Project01Component, Const, Not, And, Or, Mux16};
+use crate::project_01::{Project01Component, Not, And, Or, Mux16};
 use crate::project_02::{Project02Component, ALU};
 use crate::project_03::{Project03Component, PC};
 
@@ -75,12 +76,6 @@ impl Reflect for Project05Component {
     }
 }
 
-impl AsConst for Project05Component {
-    fn as_const(&self) -> Option<u64> {
-        if let Project05Component::Project03(c) = self { c.as_const() } else { None }
-    }
-}
-
 /// Recursively expand until only Nands, Registers, RAMs, and ROMs are left.
 pub fn flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Computational16> {
     fn go(comp: Project05Component) -> Vec<Computational16> {
@@ -91,7 +86,6 @@ pub fn flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Computation
                         .components.into_iter()
                         .map(|s| match s {
                             Sequential::Nand(n)     => Computational::Nand(n),
-                            Sequential::Const(c)    => Computational::Const(c),
                             Sequential::Buffer(c)   => Computational::Buffer(c),
                             Sequential::Mux(m)      => Computational::Mux(m),
                             Sequential::Mux1(m)     => Computational::Mux1(m),
@@ -255,7 +249,7 @@ impl Component for Decode {
 #[derive(Clone, Reflect, Chip)]
 pub struct CPU {
     /// Return to a known state (i.e. jump to address 0)
-    pub reset: Input,
+    pub reset: Input1,
 
     /// Address of the next instruction to load
     pub pc: Output16,
@@ -364,12 +358,10 @@ impl Component for CPU {
         jump_any: Or  { a: j_lt_eq.out.into(), b: jgt_and.out.into(), out: Output::new() },
 
         // === PC: inc always 1 ===
-        const_one: Const { value: 1, out: Output::new() },
-
         pc: PC {
             addr:  reg_a_out.into(),
             load:  jump_any.out.into(),
-            inc:   const_one.out.bit(0).into(),
+            inc:   fixed(1),
             reset: this.reset.into(),
             out:   this.pc,
         },
@@ -379,7 +371,7 @@ impl Component for CPU {
 #[derive(Clone, Reflect, Chip)]
 pub struct Computer {
     /// A way to force the CPU to return to a known state (i.e. jump to address 0)
-    pub reset: Input,
+    pub reset: Input1,
 
     /// Useful for debugging, but also acts as a root for traversing the graph
     pub pc: Output16,

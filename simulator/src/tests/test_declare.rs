@@ -1,31 +1,14 @@
-use crate::{Component, Input, Output, Reflect, expand};
-use crate::declare::{Chip, Interface, BusRef, InputBus, OutputBus};
-use crate::component::{Buffer, Nand, Const, Register, Sequential, Combinational};
+use crate::{Chip, Component, Input, Input1, Output, OutputBus, Reflect, expand, fixed};
+use crate::declare::{Interface, BusRef};
+use crate::component::{Buffer, Nand, Register, Sequential, Combinational};
 use crate::nat::{N1, N8};
 
 
 /// Really just about trivial component for testing the expand! macro.
+#[derive(Reflect, Chip)]
 pub struct TestNot {
-    pub a: Input,
+    pub a: Input1,
     pub out: Output,
-}
-
-// Note: same as derived
-impl Reflect for TestNot {
-    fn reflect(&self) -> Interface {
-        Interface {
-            inputs:  [("a".to_string(),   BusRef::from_input(self.a))].into(),
-            outputs: [("out".to_string(), BusRef::from_output(self.out))].into(),
-        }
-    }
-    fn name(&self) -> String { "TestNot".to_string() }
-}
-
-// Note: same as derived
-impl Chip for TestNot {
-    fn chip() -> Self {
-        TestNot { a: Input::new(), out: Output::new() }
-    }
 }
 
 impl Component for TestNot {
@@ -66,27 +49,11 @@ fn test_expand_not() {
 }
 
 /// Almost as trivial, but uses a second Nand.
+#[derive(Reflect, Chip)]
 pub struct TestAnd {
-    pub a: Input,
-    pub b: Input,
+    pub a: Input1,
+    pub b: Input1,
     pub out: Output,
-}
-
-impl Reflect for TestAnd {
-    fn reflect(&self) -> Interface {
-        Interface {
-            inputs:  [("a".to_string(), BusRef::from_input(self.a)),
-                      ("b".to_string(), BusRef::from_input(self.b))].into(),
-            outputs: [("out".to_string(), BusRef::from_output(self.out))].into(),
-        }
-    }
-    fn name(&self) -> String { "TestAnd".to_string() }
-}
-
-impl Chip for TestAnd {
-    fn chip() -> Self {
-        TestAnd { a: Input::new(), b: Input::new(), out: Output::new() }
-    }
 }
 
 impl Component for TestAnd {
@@ -140,29 +107,13 @@ fn test_expand_and() {
     assert_eq!(not_out.id, out.id);
 }
 
-/// A simple, bit-parallel component
+/// A simple, bit-parallel component, for an uncommon data size.
+#[derive(Reflect, Chip)]
 pub struct TestNand8 {
-    pub a: InputBus<N8>,
-    pub b: InputBus<N8>,
+    pub a: Input<N8>,
+    pub b: Input<N8>,
 
     pub out: OutputBus<N8>,
-}
-
-impl Reflect for TestNand8 {
-    fn reflect(&self) -> Interface {
-        Interface {
-            inputs:  [("a".to_string(), BusRef::from_input(self.a)),
-                      ("b".to_string(), BusRef::from_input(self.b))].into(),
-            outputs: [("out".to_string(), BusRef::from_output(self.out))].into(),
-        }
-    }
-    fn name(&self) -> String { "TestNand8".to_string() }
-}
-
-impl Chip for TestNand8 {
-    fn chip() -> Self {
-        TestNand8 { a: InputBus::<N8>::new(), b: InputBus::<N8>::new(), out: OutputBus::<N8>::new() }
-    }
 }
 
 impl Component for TestNand8 {
@@ -190,24 +141,9 @@ fn test_expand_nand8() {
 }
 
 /// A circuit that needs to refer to an output before its component is declared.
+#[derive(Reflect, Chip)]
 pub struct TestFlipFlop {
     pub out: Output,
-}
-
-impl Reflect for TestFlipFlop {
-    fn reflect(&self) -> Interface {
-        Interface {
-            inputs:  [].into(),
-            outputs: [("out".to_string(), BusRef::from_output(self.out))].into(),
-        }
-    }
-    fn name(&self) -> String { "TestFlipFlop".to_string() }
-}
-
-impl Chip for TestFlipFlop {
-    fn chip() -> Self {
-        TestFlipFlop { out: Output::new() }
-    }
 }
 
 impl Component for TestFlipFlop {
@@ -218,8 +154,7 @@ impl Component for TestFlipFlop {
         reg_out: forward Output::new(),
 
         not: Nand { a: reg_out.into(), b: this.out.into(), out: Output::new() },
-        one: Const { value: 1, out: Output::new() },
-        reg: Register { data_in: not.out.into(), write: one.out.bit(0).into(), data_out: reg_out },
+        reg: Register { data_in: not.out.into(), write: fixed(1), data_out: reg_out },
 
         // Now connect to the chip output also
         _out: Buffer { a: reg_out.into(), out: this.out },
@@ -238,7 +173,7 @@ fn test_expand_flip_flop() {
     assert_eq!(ic.intf.outputs.len(), 1);
     let _out = ic.intf.outputs["out"];
 
-    assert_eq!(ic.components.len(), 4);
+    assert_eq!(ic.components.len(), 3);
     // TODO: verify wiring...
 }
 

@@ -32,6 +32,19 @@ where
         }
     }
 
+    // Seed fixed (constant) inputs on each component.
+    for comp in &chip.components {
+        let comp_intf = comp.reflect();
+        for busref in comp_intf.inputs.values() {
+            if let Some(value) = busref.fixed {
+                let id = wire_id(busref);
+                let mask = bus_mask(busref);
+                let entry = wire_state.entry(id).or_insert(0);
+                *entry = (*entry & !mask) | ((value << busref.offset) & mask);
+            }
+        }
+    }
+
     // Evaluate each component in order.
     for comp in &chip.components {
         match comp {
@@ -41,14 +54,6 @@ where
                 let b = read_bit(&wire_state, &intf.inputs["b"]);
                 write_bit(&mut wire_state, &intf.outputs["out"],
                     !(a & b));
-            }
-            Combinational::Const(c) => {
-                let intf = c.reflect();
-                let busref = &intf.outputs["out"];
-                let id = wire_id(busref);
-                let mask = bus_mask(busref);
-                let entry = wire_state.entry(id).or_insert(0);
-                *entry = (*entry & !mask) | ((c.value << busref.offset) & mask);
             }
             Combinational::Buffer(buffer) => {
                 let intf = buffer.reflect();

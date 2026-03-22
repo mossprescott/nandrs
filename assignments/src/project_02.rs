@@ -1,11 +1,12 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use simulator::{self, Component, IC, Input, Input16, Output, Output16, Reflect, AsConst, Chip, expand};
+use simulator::{self, Component, IC, Input1, Input16, Output, Output16, Reflect, Chip, expand, fixed};
+use simulator::declare::{Interface, BusRef};
 use simulator::Reflect as _;
 use simulator::Chip as _;
 use simulator::component::{Combinational, FullAdder};
 use simulator::nat::N16;
-use crate::project_01::{Project01Component, Nand, Const, Buffer, Mux1, Mux16, Not16, And16, Not, Xor, And, Or};
+use crate::project_01::{Project01Component, Nand, Buffer, Mux1, Mux16, Not16, And16, Not, Xor, And, Or};
 
 #[derive(Clone)]
 pub enum Project02Component {
@@ -14,6 +15,7 @@ pub enum Project02Component {
     FullAdder(FullAdder),
     Inc16(Inc16),
     Add16(Add16),
+    Nand16Way(Nand16Way),
     Zero16(Zero16),
     Neg16(Neg16),
     ALU(ALU),
@@ -27,6 +29,7 @@ impl<C: Into<Project01Component>> From<C> for Project02Component {
 impl From<FullAdder> for Project02Component { fn from(c: FullAdder) -> Self { Project02Component::FullAdder(c) } }
 impl From<Inc16>     for Project02Component { fn from(c: Inc16)     -> Self { Project02Component::Inc16(c)     } }
 impl From<Add16>     for Project02Component { fn from(c: Add16)     -> Self { Project02Component::Add16(c)     } }
+impl From<Nand16Way> for Project02Component { fn from(c: Nand16Way) -> Self { Project02Component::Nand16Way(c) } }
 impl From<Zero16>    for Project02Component { fn from(c: Zero16)    -> Self { Project02Component::Zero16(c)    } }
 impl From<Neg16>     for Project02Component { fn from(c: Neg16)     -> Self { Project02Component::Neg16(c)     } }
 impl From<ALU>       for Project02Component { fn from(c: ALU)       -> Self { Project02Component::ALU(c)       } }
@@ -40,6 +43,7 @@ impl Component for Project02Component {
             Project02Component::FullAdder(_) => None,
             Project02Component::Inc16(c)     => c.expand(),
             Project02Component::Add16(c)     => c.expand(),
+            Project02Component::Nand16Way(c) => c.expand(),
             Project02Component::Zero16(c)    => c.expand(),
             Project02Component::Neg16(c)     => c.expand(),
             Project02Component::ALU(c)       => c.expand(),
@@ -52,29 +56,25 @@ impl Reflect for Project02Component {
         match self {
             Project02Component::Project01(c) => c.reflect(),
             Project02Component::FullAdder(c) => c.reflect(),
-            Project02Component::Inc16(c)     => c.reflect(),
-            Project02Component::Add16(c)     => c.reflect(),
-            Project02Component::Zero16(c)    => c.reflect(),
-            Project02Component::Neg16(c)     => c.reflect(),
-            Project02Component::ALU(c)       => c.reflect(),
+            Project02Component::Inc16(c)      => c.reflect(),
+            Project02Component::Add16(c)      => c.reflect(),
+            Project02Component::Nand16Way(c)  => c.reflect(),
+            Project02Component::Zero16(c)     => c.reflect(),
+            Project02Component::Neg16(c)      => c.reflect(),
+            Project02Component::ALU(c)        => c.reflect(),
         }
     }
     fn name(&self) -> String {
         match self {
-            Project02Component::Project01(c) => c.name(),
-            Project02Component::FullAdder(c) => c.name(),
-            Project02Component::Inc16(c)     => c.name(),
-            Project02Component::Add16(c)     => c.name(),
-            Project02Component::Zero16(c)    => c.name(),
+            Project02Component::Project01(c)  => c.name(),
+            Project02Component::FullAdder(c)  => c.name(),
+            Project02Component::Inc16(c)      => c.name(),
+            Project02Component::Add16(c)      => c.name(),
+            Project02Component::Nand16Way(c)  => c.name(),
+            Project02Component::Zero16(c)     => c.name(),
             Project02Component::Neg16(c)     => c.name(),
             Project02Component::ALU(c)       => c.name(),
         }
-    }
-}
-
-impl AsConst for Project02Component {
-    fn as_const(&self) -> Option<u64> {
-        if let Project02Component::Project01(c) = self { c.as_const() } else { None }
     }
 }
 
@@ -105,8 +105,8 @@ pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Combination
 /// Future: for pedagocical purposes, define this as HalfAdder here, with reduction to Nands.
 #[derive(Clone, Reflect, Chip)]
 pub struct MyHalfAdder {
-    pub a:     Input,
-    pub b:     Input,
+    pub a:     Input1,
+    pub b:     Input1,
     pub sum:   Output,
     pub carry: Output,
 }
@@ -139,9 +139,9 @@ impl Component for MyHalfAdder {
 /// *not* to be expanded when we want to do an efficient simulation.
 #[derive(Clone, Reflect, Chip)]
 pub struct MyFullAdder {
-    pub a:     Input,
-    pub b:     Input,
-    pub c:     Input,
+    pub a:     Input1,
+    pub b:     Input1,
+    pub c:     Input1,
     pub sum:   Output,
     pub carry: Output,
 }
@@ -182,10 +182,9 @@ impl Component for Inc16 {
 
         // Carry-ripple: fold threads the carry across iterations
         _carry_out: (1..16).fold(this.a.bit(0), |carry, i| {
-            zero: Const { value: 0, out: Output16::new() },
             add: FullAdder {
                 a: this.a.bit(i),
-                b: zero.out.bit(0).into(),
+                b: fixed(0),
                 c: carry,
                 sum: this.out.bit(i),
                 carry: Output::new(),
@@ -208,11 +207,10 @@ impl Component for Add16 {
 
     expand! { |this| {
         // bit 0: half-add (carry-in is 0)
-        zero0: Const { value: 0, out: Output16::new() },
         add0: FullAdder {
             a: this.a.bit(0),
             b: this.b.bit(0),
-            c: zero0.out.bit(0).into(),
+            c: fixed(0),
             sum: this.out.bit(0),
             carry: Output::new(),
         },
@@ -230,6 +228,44 @@ impl Component for Add16 {
     }}
 }
 
+/// True if any of the 16 bits is false, as if they were all fed into a big 16-input Nand gate —
+/// which is a thing which exists — but here implemented with a series of discreet Ands.
+///
+/// Note: the simulator will recognize a series of Ands like this and
+#[derive(Clone, Reflect, Chip)]
+pub struct Nand16Way {
+    pub a: Input16,
+    pub out: Output,
+}
+
+impl Component for Nand16Way {
+    type Target = Project02Component;
+
+    expand! { |this| {
+        // Level 1
+        and_01:   And { a: this.a.bit(0).into(),  b: this.a.bit(1).into(),  out: Output::new() },
+        and_23:   And { a: this.a.bit(2).into(),  b: this.a.bit(3).into(),  out: Output::new() },
+        and_45:   And { a: this.a.bit(4).into(),  b: this.a.bit(5).into(),  out: Output::new() },
+        and_67:   And { a: this.a.bit(6).into(),  b: this.a.bit(7).into(),  out: Output::new() },
+        and_89:   And { a: this.a.bit(8).into(),  b: this.a.bit(9).into(),  out: Output::new() },
+        and_ab:   And { a: this.a.bit(10).into(), b: this.a.bit(11).into(), out: Output::new() },
+        and_cd:   And { a: this.a.bit(12).into(), b: this.a.bit(13).into(), out: Output::new() },
+        and_ef:   And { a: this.a.bit(14).into(), b: this.a.bit(15).into(), out: Output::new() },
+        // Level 2
+        and_0123: And { a: and_01.out.into(),     b: and_23.out.into(),     out: Output::new() },
+        and_4567: And { a: and_45.out.into(),     b: and_67.out.into(),     out: Output::new() },
+        and_89ab: And { a: and_89.out.into(),     b: and_ab.out.into(),     out: Output::new() },
+        and_cdef: And { a: and_cd.out.into(),     b: and_ef.out.into(),     out: Output::new() },
+        // Level 3
+        and_lo:   And { a: and_0123.out.into(),   b: and_4567.out.into(),   out: Output::new() },
+        and_hi:   And { a: and_89ab.out.into(),   b: and_cdef.out.into(),   out: Output::new() },
+        // Level 4
+        and_all: And { a: and_lo.out.into(),      b: and_hi.out.into(),     out: Output::new() },
+
+        _not: Not { a: and_all.out.into(), out: this.out },
+    }}
+}
+
 /// Returns 1 if all bits of input are 0.
 #[derive(Clone, Reflect, Chip)]
 pub struct Zero16 {
@@ -241,27 +277,14 @@ impl Component for Zero16 {
     type Target = Project02Component;
 
     expand! { |this| {
-        // Level 1: OR adjacent pairs
-        or_01:   Or { a: this.a.bit(0),  b: this.a.bit(1),  out: Output::new() },
-        or_23:   Or { a: this.a.bit(2),  b: this.a.bit(3),  out: Output::new() },
-        or_45:   Or { a: this.a.bit(4),  b: this.a.bit(5),  out: Output::new() },
-        or_67:   Or { a: this.a.bit(6),  b: this.a.bit(7),  out: Output::new() },
-        or_89:   Or { a: this.a.bit(8),  b: this.a.bit(9),  out: Output::new() },
-        or_ab:   Or { a: this.a.bit(10), b: this.a.bit(11), out: Output::new() },
-        or_cd:   Or { a: this.a.bit(12), b: this.a.bit(13), out: Output::new() },
-        or_ef:   Or { a: this.a.bit(14), b: this.a.bit(15), out: Output::new() },
-        // Level 2
-        or_0123: Or { a: or_01.out.into(),   b: or_23.out.into(),   out: Output::new() },
-        or_4567: Or { a: or_45.out.into(),   b: or_67.out.into(),   out: Output::new() },
-        or_89ab: Or { a: or_89.out.into(),   b: or_ab.out.into(),   out: Output::new() },
-        or_cdef: Or { a: or_cd.out.into(),   b: or_ef.out.into(),   out: Output::new() },
-        // Level 3
-        or_lo:   Or { a: or_0123.out.into(), b: or_4567.out.into(), out: Output::new() },
-        or_hi:   Or { a: or_89ab.out.into(), b: or_cdef.out.into(), out: Output::new() },
-        // Level 4
-        or_all:  Or { a: or_lo.out.into(),   b: or_hi.out.into(),   out: Output::new() },
-        // Invert: out is 1 iff no bit was set
-        _not_all: Not { a: or_all.out.into(), out: this.out },
+        // Negate into a single bus; the simulator makes this parallel.
+        not: Not16 { a: this.a, out: Output16::new() },
+
+        // Compare them all at once, as if 16-way fan-in was a thing. The simulator
+        // handles this efficiently, too.
+        nand_all: Nand16Way { a: not.out.into(), out: Output::new() },
+
+        _f: Not { a: nand_all.out.into(), out: this.out },
     }}
 }
 
@@ -291,17 +314,17 @@ pub struct ALU {
     // "Right" input
     pub y:   Input16,
     /// Zero the x input
-    pub zx:  Input,
+    pub zx:  Input1,
     /// Negate the x input (i.e. "not")
-    pub nx:  Input,
+    pub nx:  Input1,
     /// Zero the y input
-    pub zy:  Input,
+    pub zy:  Input1,
     /// Negate the y input (i.e. "not")
-    pub ny:  Input,
+    pub ny:  Input1,
     /// 0 => x && y; 1 => x + y
-    pub f:   Input,
+    pub f:   Input1,
     /// Negate the result (i.e. "not")
-    pub no:  Input,
+    pub no:  Input1,
 
     /// 16-bit result
     pub out: Output16,
@@ -312,22 +335,20 @@ pub struct ALU {
 
     /// Disable: when 1, all outputs are forced to 0. This makes it easier for the simulator to
     /// identify this logic as inactive and avoid spending time evaluating it.
-    pub disable: Input,
+    pub disable: Input1,
 }
 
 impl Component for ALU {
     type Target = Project02Component;
 
     expand! { |this| {
-        zero_const: Const { value: 0, out: Output16::new() },
-
         // zx/nx: conditionally zero then negate x
-        x1: Mux16 { sel: this.zx, a0: this.x, a1: zero_const.out.into(), out: Output16::new() },
+        x1: Mux16 { sel: this.zx, a0: this.x, a1: fixed(0), out: Output16::new() },
         x2_not: Not16 { a: x1.out.into(), out: Output16::new() },
         x2: Mux16 { sel: this.nx, a0: x1.out.into(), a1: x2_not.out.into(), out: Output16::new() },
 
         // zy/ny: conditionally zero then negate y
-        y1: Mux16 { sel: this.zy, a0: this.y, a1: zero_const.out.into(), out: Output16::new() },
+        y1: Mux16 { sel: this.zy, a0: this.y, a1: fixed(0), out: Output16::new() },
         y2_not: Not16 { a: y1.out.into(), out: Output16::new() },
         y2: Mux16 { sel: this.ny, a0: y1.out.into(), a1: y2_not.out.into(), out: Output16::new() },
 
@@ -338,8 +359,8 @@ impl Component for ALU {
         // algorithm can move all Add16 nands into a mux branch.
         not_disable: Not { a: this.disable, out: Output::new() },
         add_active: And { a: this.f, b: not_disable.out.into(), out: Output::new() },
-        add_x: Mux16 { sel: add_active.out.into(), a0: zero_const.out.into(), a1: x2.out.into(), out: Output16::new() },
-        add_y: Mux16 { sel: add_active.out.into(), a0: zero_const.out.into(), a1: y2.out.into(), out: Output16::new() },
+        add_x: Mux16 { sel: add_active.out.into(), a0: fixed(0), a1: x2.out.into(), out: Output16::new() },
+        add_y: Mux16 { sel: add_active.out.into(), a0: fixed(0), a1: y2.out.into(), out: Output16::new() },
         add: Add16 { a: add_x.out.into(), b: add_y.out.into(), out: Output16::new() },
 
         result: Mux16 { sel: this.f, a0: and.out.into(), a1: add.out.into(), out: Output16::new() },
@@ -351,9 +372,8 @@ impl Component for ALU {
         raw_zr: Zero16 { a: raw_out.out.into(), out: Output::new() },
 
         // Gate output and zr with disable.  When disabled: out=0, zr=1.
-        const_one: Const { value: 1, out: Output::new() },
-        out_gate: Mux16 { sel: this.disable, a0: raw_out.out.into(), a1: zero_const.out.into(), out: this.out },
-        zr_gate: Mux1 { sel: this.disable, a0: raw_zr.out.into(), a1: const_one.out.bit(0).into(), out: this.zr },
+        out_gate: Mux16 { sel: this.disable, a0: raw_out.out.into(), a1: fixed(0), out: this.out },
+        zr_gate: Mux1 { sel: this.disable, a0: raw_zr.out.into(), a1: fixed(1), out: this.zr },
 
         // ng reads from the gated output; when disabled out=0 so ng=0 (correct).
         // Neg16 is 0 nands (just a buffer) so there's nothing to skip.

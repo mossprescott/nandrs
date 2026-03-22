@@ -1,11 +1,11 @@
-use simulator::{Input, Output, Reflect, print_graph, Component, IC};
+use simulator::{Input1, Output, Reflect, print_graph, Component, IC};
 use simulator::Chip as _;
 use simulator::eval::eval;
-use crate::project_01::{flatten, Const, Nand, Not, And, Or, Xor, MyMux, Dmux, Not16, And16, Mux16};
+use crate::project_01::{flatten, Nand, Not, And, Or, Xor, MyMux, Dmux, Not16, And16, Mux16};
 
 #[test]
 fn nand_reflect() {
-    let chip = Nand { a: Input::new(), b: Input::new(), out: Output::new() };
+    let chip = Nand { a: Input1::new(), b: Input1::new(), out: Output::new() };
     let intf = chip.reflect();
     assert_eq!(intf.inputs.len(), 2);
     assert_eq!(intf.inputs["a"].width, 1);
@@ -21,15 +21,6 @@ fn nand_truth_table() {
     assert_eq!(eval(&chip, [("a", false.into()), ("b", true.into())])["out"].unsigned(), 1);
     assert_eq!(eval(&chip, [("a", true.into()), ("b", false.into())])["out"].unsigned(), 1);
     assert_eq!(eval(&chip, [("a", true.into()), ("b", true.into())])["out"].unsigned(), 0);
-}
-
-#[test]
-fn const_truth_table() {
-    let chip = flatten(Const::chip(0));
-    assert_eq!(eval(&chip, [])["out"].unsigned(), 0);
-
-    let chip = flatten(Const::chip(1234));
-    assert_eq!(eval(&chip, [])["out"].unsigned(), 1234);
 }
 
 #[test]

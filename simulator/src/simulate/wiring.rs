@@ -46,7 +46,14 @@ pub(super) enum ComponentWiring {
 
     // synthetic:
     And(AndWiring),
+    ParallelNand(ParallelNandWiring),
+    RippleAdder(RippleAdderWiring),
+    ManyWayAnd(ManyWayAndWiring),
 }
+
+//
+// Primitives:
+//
 
 /// A single nand, referring to completely arbitrary bits of the words where its inputs and output
 /// are stored.
@@ -84,6 +91,10 @@ pub(super) struct AdderWiring {
 }
 
 
+//
+// External ("Bus-resident"):
+//
+
 #[derive(Clone)]
 pub(super) struct RegisterWiring { pub(super) write: BitRef, pub(super) data_in: WireIndex, pub(super) data_out: WireIndex }
 
@@ -99,14 +110,67 @@ pub(super) struct MemorySystemWiring { pub(super) device_slot: usize, pub(super)
 #[derive(Clone)]
 pub(super) struct SerialWiring { pub(super) device_slot: usize, pub(super) out: WireIndex, pub(super) write: BitRef, pub(super) data_in: WireIndex }
 
+
+
+//
+// "Synthetic" operations: result from coalescing multiple primitive operations which have related
+// inputs and outputs; the host can handle lots of bits in a single operation when we detect those
+// patterns.
+//
+
 /// Similar to NandWiring, but (un)inverting the result. This allows two steps to be collapsed
-/// whenever this very common pattern occurs.
+/// whenever this very common pattern occurs. Mostly because it's easier to read, but potentially
+/// also because it's an easiear incremental step to coalescing many of them turn out to be
+/// bit-parallel.
 #[derive(Clone)]
 pub(super) struct AndWiring {
     pub(super) a: BitRef,
     pub(super) b: BitRef,
-    pub(super) out: BitRef
+    pub(super) out: BitRef,
 }
+
+/// Bit-wise Nand of *all* bits, which are known to be aligned between all three wires.
+///
+/// No masking of inputs or output is needed (until proven otherwise.)
+#[derive(Clone)]
+pub(super) struct ParallelNandWiring {
+    pub(super) a: WireIndex,
+    pub(super) b: WireIndex,
+    pub(super) out: WireIndex,
+}
+
+/// Multi-bit ripple-carry add operation over a contiguous range of bits.
+#[derive(Clone)]
+pub(super) struct RippleAdderWiring {
+    /// Bit which is injected as the carry into the lowest bit position.
+    pub(super) carry_in: BitRef,
+
+    pub(super) a: WireIndex,
+    pub(super) b: WireIndex,
+    pub(super) out: WireIndex,
+
+    /// Where to put the carry bit that comes out on the high end.
+    pub(super) carry_out: BitRef,
+
+    /// First bit position (e.g. 0 for Add16, 1 for Inc16's adder chain).
+    pub(super) offset: u8,
+
+    /// Number of bit positions covered by this adder.
+    pub(super) width: u8,
+}
+
+/// "And" arbitrarily-many bits of the source into a single result bit.
+#[derive(Clone)]
+pub(super) struct ManyWayAndWiring {
+    pub(super) a: WireIndex,
+    pub(super) out: BitRef,
+
+    pub(super) mask: u64
+}
+
+//
+// Constant values: come from `fixed()` inputs in the graph.
+//
 
 /// Used during initialization, bot evaluated each cycle.
 pub(super) struct ConstWiring {

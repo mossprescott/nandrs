@@ -12,8 +12,12 @@ mod tests;
 
 pub use eval::eval;
 
-// TODO: re-export little if anything
-pub use declare::*;
+pub use declare::{
+    Reflect, Interface, Component, Chip,
+    Input, Input1, Input16, InputBus,
+    Output, Output16, OutputBus,
+    IC, fixed,
+};
 
 pub use simulator_derive::{Reflect, Chip};
 
@@ -68,7 +72,7 @@ fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
 /// Sub-component ports are labelled `{typename}{index}.{port}`.
 ///
 /// ```ignore
-/// let chip = And { a: Input::new(), b: Input::new(), out: Output::new() };
+/// let chip = And { a: Input1::new(), b: Input1::new(), out: Output::new() };
 /// assert_eq!(print_graph(&chip), "And:\nnand0.a <- a\nnand0.b <- b\nnot1.a <- nand0.out\nout <- not1.out");
 /// ```
 ///
@@ -77,7 +81,7 @@ fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
 pub fn print_graph<C>(chip: &C) -> String
 where
     C: Component + Reflect,
-    C::Target: Component<Target = C::Target> + Reflect + AsConst,
+    C::Target: Component<Target = C::Target> + Reflect,
 {
     let intf = chip.reflect();
     let subs = match chip.expand() {
@@ -87,18 +91,20 @@ where
     print_ic_graph_named(&chip.name(), &intf, &subs.components)
 }
 
+/// Show the components making up this IC, with no additional expansion.
 pub fn print_ic_graph<C>(ic: &IC<C>) -> String
 where
-    C: Reflect + AsConst,
+    C: Reflect,
 {
     print_ic_graph_named(&ic.name, &ic.intf, &ic.components)
 }
 
 fn print_ic_graph_named<C>(name: &str, intf: &Interface, components: &[C]) -> String
 where
-    C: Reflect + AsConst,
+    C: Reflect,
 {
     use std::collections::HashMap;
+    use crate::declare::BusRef;
 
     let wire_id = |b: &BusRef| b.id.0;
 
@@ -117,24 +123,21 @@ where
     let mut index = 0usize;
     for sub in components.iter() {
         let sub_intf = sub.reflect();
-        if let Some(v) = sub.as_const() {
-            let label = v.to_string();
-            for (_, busref) in &sub_intf.outputs {
+        let label = format!("{}_{}", sub.name().to_lowercase(), index);
+        for (port, busref) in &sub_intf.inputs {
+            if let Some(value) = busref.fixed {
+                // Fixed input: register the constant as a raw source on its own wire
                 wires.entry(wire_id(busref)).or_default()
-                    .push((label.clone(), false, busref.offset, busref.width, true));
+                    .push((value.to_string(), false, 0, busref.width, true));
             }
-        } else {
-            let label = format!("{}_{}", sub.name().to_lowercase(), index);
-            for (port, busref) in &sub_intf.inputs {
-                wires.entry(wire_id(busref)).or_default()
-                    .push((format!("{}.{}", label, port), true, busref.offset, busref.width, false));
-            }
-            for (port, busref) in &sub_intf.outputs {
-                wires.entry(wire_id(busref)).or_default()
-                    .push((format!("{}.{}", label, port), false, busref.offset, busref.width, false));
-            }
-            index += 1;
+            wires.entry(wire_id(busref)).or_default()
+                .push((format!("{}.{}", label, port), true, busref.offset, busref.width, false));
         }
+        for (port, busref) in &sub_intf.outputs {
+            wires.entry(wire_id(busref)).or_default()
+                .push((format!("{}.{}", label, port), false, busref.offset, busref.width, false));
+        }
+        index += 1;
     }
 
     // Label for an endpoint: no subscript if the endpoint itself is 1-bit;

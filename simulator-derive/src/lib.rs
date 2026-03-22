@@ -59,20 +59,21 @@ pub fn derive_reflect(input: TokenStream) -> TokenStream {
 
         if type_name_starts_with(field_ty, "Input") {
             inputs.push(quote! {
-                (#field_name_str.to_string(), ::simulator::BusRef::from_input(self.#field_name))
+                (#field_name_str.to_string(), BusRef::from_input(self.#field_name))
             });
         } else if type_name_starts_with(field_ty, "Output") {
             outputs.push(quote! {
-                (#field_name_str.to_string(), ::simulator::BusRef::from_output(self.#field_name))
+                (#field_name_str.to_string(), BusRef::from_output(self.#field_name))
             });
         }
     }
 
     let name_str = name.to_string();
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     quote! {
-        impl ::simulator::Reflect for #name {
-            fn reflect(&self) -> ::simulator::Interface {
-                ::simulator::Interface {
+        impl #impl_generics Reflect for #name #ty_generics #where_clause {
+            fn reflect(&self) -> Interface {
+                Interface {
                     inputs:  ::std::collections::HashMap::from([#(#inputs),*]),
                     outputs: ::std::collections::HashMap::from([#(#outputs),*]),
                 }
@@ -119,6 +120,8 @@ pub fn derive_chip(input: TokenStream) -> TokenStream {
         panic!("Chip can only be derived for structs with named fields");
     };
 
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
     let chip_fields: Vec<_> = named_fields.named.iter().map(|field| {
         let field_name = field.ident.as_ref().unwrap();
         let field_ty   = &field.ty;
@@ -126,7 +129,7 @@ pub fn derive_chip(input: TokenStream) -> TokenStream {
     }).collect();
 
     quote! {
-        impl ::simulator::Chip for #name {
+        impl #impl_generics Chip for #name #ty_generics #where_clause {
             fn chip() -> Self {
                 Self { #(#chip_fields),* }
             }
