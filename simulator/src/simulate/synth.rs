@@ -517,6 +517,9 @@ where
     // Remove gates whose output is never consumed.
     eliminate_dead_gates(&mut component_wiring, &output_wires);
 
+    // Coalesce bit-parallel nand operations into single word-wide ops.
+    coalesce_parallel_nands(&mut component_wiring);
+
     // Post-processing: move exclusive producers into mux branches (recursively).
     populate_mux_branches(&mut component_wiring, &output_wires);
 
@@ -742,6 +745,67 @@ fn eliminate_dead_gates(components: &mut Vec<wiring::ComponentWiring>, output_wi
     }
 }
 
+/// Coalesce consecutive `NandWiring` entries that operate on different bits of the same wires
+/// into a single `ParallelNandWiring`. Each individual nand must use the same bit offset for
+/// its a, b, and out refs (i.e. bit N of a nand'd with bit N of b producing bit N of out).
+fn coalesce_parallel_nands(components: &mut Vec<wiring::ComponentWiring>) {
+    use wiring::ComponentWiring as CW;
+
+    // Key: (a wire, b wire, out wire). Nands with the same key and aligned offsets can merge.
+    type GroupKey = (u32, u32, u32);
+
+    fn nand_group_key(n: &wiring::NandWiring) -> Option<GroupKey> {
+        // All three offsets must be equal (bit-aligned across a, b, out).
+        if n.a.offset == n.b.offset && n.b.offset == n.out.offset {
+            Some((n.a.id.0, n.b.id.0, n.out.id.0))
+        } else {
+            None
+        }
+    }
+
+    let mut result: Vec<CW> = Vec::with_capacity(components.len());
+    let mut i = 0;
+    while i < components.len() {
+        // Try to start a group of consecutive nands with matching key.
+        let key = match &components[i] {
+            CW::Nand(n) => nand_group_key(n),
+            _ => None,
+        };
+        if let Some(k) = key {
+            // Extend the run as far as possible.
+            let start = i;
+            i += 1;
+            while i < components.len() {
+                if let CW::Nand(n) = &components[i] {
+                    if nand_group_key(n) == Some(k) {
+                        i += 1;
+                        continue;
+                    }
+                }
+                break;
+            }
+            let run_len = i - start;
+            if run_len >= 2 {
+                // Extract the WireIndex from the first nand in the group.
+                let CW::Nand(first) = &components[start] else { unreachable!() };
+                result.push(CW::ParallelNand(wiring::ParallelNandWiring {
+                    a:   first.a.id,
+                    b:   first.b.id,
+                    out: first.out.id,
+                }));
+            } else {
+                // Single nand, keep as-is.
+                result.push(components[start].clone());
+            }
+        } else {
+            result.push(components[i].clone());
+            i += 1;
+        }
+    }
+
+    *components = result;
+}
+
 /// Move components that exclusively feed one branch of a mux into that mux's branch list.
 /// Applied recursively: muxes moved into a branch get their own branches populated too.
 fn populate_mux_branches(
@@ -965,6 +1029,7 @@ fn populate_mux_branches(
     }
 
     // Extract claimed components EXCEPT top-level branch roots.
+
     let mut extracted: Vec<Option<CW>> = vec![None; components.len()];
     for j in (0..components.len()).rev() {
         if claimed[j] && !branch_roots.contains(&j) {
