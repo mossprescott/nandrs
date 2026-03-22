@@ -154,7 +154,7 @@ pub fn run(
             window.update_with_buffer(&pixels, win_width, win_height).unwrap();
 
             let elapsed = interval_start.elapsed();
-            if elapsed.as_millis() >= 200 {
+            if elapsed.as_millis() >= 1000 {
                 let cps = interval_cycles as f64 / elapsed.as_secs_f64();
                 let fps = interval_frames as f64 / elapsed.as_secs_f64();
                 display_speed = display::format_speed(cps);
@@ -174,7 +174,7 @@ pub fn run(
                 } else {
                     (cycle_f, "")
                 };
-                println!("cycles/s: {val:.1}{suffix} (total: {tval:.1}{tsuffix}, {fps:.1} fps)");
+                println!("cycles/s: {val:.1}{suffix} (total: {tval:.1}{tsuffix}); {fps:.1} fps");
                 interval_start = Instant::now();
                 interval_cycles = 0;
                 interval_frames = 0;
