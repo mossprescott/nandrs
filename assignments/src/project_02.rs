@@ -15,6 +15,7 @@ pub enum Project02Component {
     FullAdder(FullAdder),
     Inc16(Inc16),
     Add16(Add16),
+    Nand16Way(Nand16Way),
     Zero16(Zero16),
     Neg16(Neg16),
     ALU(ALU),
@@ -28,6 +29,7 @@ impl<C: Into<Project01Component>> From<C> for Project02Component {
 impl From<FullAdder> for Project02Component { fn from(c: FullAdder) -> Self { Project02Component::FullAdder(c) } }
 impl From<Inc16>     for Project02Component { fn from(c: Inc16)     -> Self { Project02Component::Inc16(c)     } }
 impl From<Add16>     for Project02Component { fn from(c: Add16)     -> Self { Project02Component::Add16(c)     } }
+impl From<Nand16Way> for Project02Component { fn from(c: Nand16Way) -> Self { Project02Component::Nand16Way(c) } }
 impl From<Zero16>    for Project02Component { fn from(c: Zero16)    -> Self { Project02Component::Zero16(c)    } }
 impl From<Neg16>     for Project02Component { fn from(c: Neg16)     -> Self { Project02Component::Neg16(c)     } }
 impl From<ALU>       for Project02Component { fn from(c: ALU)       -> Self { Project02Component::ALU(c)       } }
@@ -41,6 +43,7 @@ impl Component for Project02Component {
             Project02Component::FullAdder(_) => None,
             Project02Component::Inc16(c)     => c.expand(),
             Project02Component::Add16(c)     => c.expand(),
+            Project02Component::Nand16Way(c) => c.expand(),
             Project02Component::Zero16(c)    => c.expand(),
             Project02Component::Neg16(c)     => c.expand(),
             Project02Component::ALU(c)       => c.expand(),
@@ -53,20 +56,22 @@ impl Reflect for Project02Component {
         match self {
             Project02Component::Project01(c) => c.reflect(),
             Project02Component::FullAdder(c) => c.reflect(),
-            Project02Component::Inc16(c)     => c.reflect(),
-            Project02Component::Add16(c)     => c.reflect(),
-            Project02Component::Zero16(c)    => c.reflect(),
-            Project02Component::Neg16(c)     => c.reflect(),
-            Project02Component::ALU(c)       => c.reflect(),
+            Project02Component::Inc16(c)      => c.reflect(),
+            Project02Component::Add16(c)      => c.reflect(),
+            Project02Component::Nand16Way(c)  => c.reflect(),
+            Project02Component::Zero16(c)     => c.reflect(),
+            Project02Component::Neg16(c)      => c.reflect(),
+            Project02Component::ALU(c)        => c.reflect(),
         }
     }
     fn name(&self) -> String {
         match self {
-            Project02Component::Project01(c) => c.name(),
-            Project02Component::FullAdder(c) => c.name(),
-            Project02Component::Inc16(c)     => c.name(),
-            Project02Component::Add16(c)     => c.name(),
-            Project02Component::Zero16(c)    => c.name(),
+            Project02Component::Project01(c)  => c.name(),
+            Project02Component::FullAdder(c)  => c.name(),
+            Project02Component::Inc16(c)      => c.name(),
+            Project02Component::Add16(c)      => c.name(),
+            Project02Component::Nand16Way(c)  => c.name(),
+            Project02Component::Zero16(c)     => c.name(),
             Project02Component::Neg16(c)     => c.name(),
             Project02Component::ALU(c)       => c.name(),
         }
@@ -223,6 +228,44 @@ impl Component for Add16 {
     }}
 }
 
+/// True if any of the 16 bits is false, as if they were all fed into a big 16-input Nand gate —
+/// which is a thing which exists — but here implemented with a series of discreet Ands.
+///
+/// Note: the simulator will recognize a series of Ands like this and
+#[derive(Clone, Reflect, Chip)]
+pub struct Nand16Way {
+    pub a: Input16,
+    pub out: Output,
+}
+
+impl Component for Nand16Way {
+    type Target = Project02Component;
+
+    expand! { |this| {
+        // Level 1
+        and_01:   And { a: this.a.bit(0).into(),  b: this.a.bit(1).into(),  out: Output::new() },
+        and_23:   And { a: this.a.bit(2).into(),  b: this.a.bit(3).into(),  out: Output::new() },
+        and_45:   And { a: this.a.bit(4).into(),  b: this.a.bit(5).into(),  out: Output::new() },
+        and_67:   And { a: this.a.bit(6).into(),  b: this.a.bit(7).into(),  out: Output::new() },
+        and_89:   And { a: this.a.bit(8).into(),  b: this.a.bit(9).into(),  out: Output::new() },
+        and_ab:   And { a: this.a.bit(10).into(), b: this.a.bit(11).into(), out: Output::new() },
+        and_cd:   And { a: this.a.bit(12).into(), b: this.a.bit(13).into(), out: Output::new() },
+        and_ef:   And { a: this.a.bit(14).into(), b: this.a.bit(15).into(), out: Output::new() },
+        // Level 2
+        and_0123: And { a: and_01.out.into(),     b: and_23.out.into(),     out: Output::new() },
+        and_4567: And { a: and_45.out.into(),     b: and_67.out.into(),     out: Output::new() },
+        and_89ab: And { a: and_89.out.into(),     b: and_ab.out.into(),     out: Output::new() },
+        and_cdef: And { a: and_cd.out.into(),     b: and_ef.out.into(),     out: Output::new() },
+        // Level 3
+        and_lo:   And { a: and_0123.out.into(),   b: and_4567.out.into(),   out: Output::new() },
+        and_hi:   And { a: and_89ab.out.into(),   b: and_cdef.out.into(),   out: Output::new() },
+        // Level 4
+        and_all: And { a: and_lo.out.into(),      b: and_hi.out.into(),     out: Output::new() },
+
+        _not: Not { a: and_all.out.into(), out: this.out },
+    }}
+}
+
 /// Returns 1 if all bits of input are 0.
 #[derive(Clone, Reflect, Chip)]
 pub struct Zero16 {
@@ -234,27 +277,14 @@ impl Component for Zero16 {
     type Target = Project02Component;
 
     expand! { |this| {
-        // Level 1: OR adjacent pairs
-        or_01:   Or { a: this.a.bit(0),  b: this.a.bit(1),  out: Output::new() },
-        or_23:   Or { a: this.a.bit(2),  b: this.a.bit(3),  out: Output::new() },
-        or_45:   Or { a: this.a.bit(4),  b: this.a.bit(5),  out: Output::new() },
-        or_67:   Or { a: this.a.bit(6),  b: this.a.bit(7),  out: Output::new() },
-        or_89:   Or { a: this.a.bit(8),  b: this.a.bit(9),  out: Output::new() },
-        or_ab:   Or { a: this.a.bit(10), b: this.a.bit(11), out: Output::new() },
-        or_cd:   Or { a: this.a.bit(12), b: this.a.bit(13), out: Output::new() },
-        or_ef:   Or { a: this.a.bit(14), b: this.a.bit(15), out: Output::new() },
-        // Level 2
-        or_0123: Or { a: or_01.out.into(),   b: or_23.out.into(),   out: Output::new() },
-        or_4567: Or { a: or_45.out.into(),   b: or_67.out.into(),   out: Output::new() },
-        or_89ab: Or { a: or_89.out.into(),   b: or_ab.out.into(),   out: Output::new() },
-        or_cdef: Or { a: or_cd.out.into(),   b: or_ef.out.into(),   out: Output::new() },
-        // Level 3
-        or_lo:   Or { a: or_0123.out.into(), b: or_4567.out.into(), out: Output::new() },
-        or_hi:   Or { a: or_89ab.out.into(), b: or_cdef.out.into(), out: Output::new() },
-        // Level 4
-        or_all:  Or { a: or_lo.out.into(),   b: or_hi.out.into(),   out: Output::new() },
-        // Invert: out is 1 iff no bit was set
-        _not_all: Not { a: or_all.out.into(), out: this.out },
+        // Negate into a single bus; the simulator makes this parallel.
+        not: Not16 { a: this.a, out: Output16::new() },
+
+        // Compare them all at once, as if 16-way fan-in was a thing. The simulator
+        // handles this efficiently, too.
+        nand_all: Nand16Way { a: not.out.into(), out: Output::new() },
+
+        _f: Not { a: nand_all.out.into(), out: this.out },
     }}
 }
 

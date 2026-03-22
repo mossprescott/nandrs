@@ -121,8 +121,10 @@ fn zero16_truth_table() {
 
 #[test]
 fn zero16_optimal() {
-    // Or-tree over 16 bits (15 Ors x 3 Nands) + Not(1) = 46
-    assert_eq!(flatten(Zero16::chip()).components.len(), 46);
+    // negate each bit: 16
+    // and-tree: 2*(8+4+2+1) = 30
+    // two nots because we use 16-way nand for "realism"
+    assert_eq!(flatten(Zero16::chip()).components.len(), 48);
 }
 
 #[test]
@@ -200,7 +202,7 @@ fn alu_optimal() {
     let nands = components.iter().filter(|c| matches!(c, Combinational::Nand(_))).count();
     let adders = components.iter().filter(|c| matches!(c, Combinational::Adder(_))).count();
     let muxes = components.iter().filter(|c| matches!(c, Combinational::Mux(_))).count();
-    assert_eq!(nands, 129);
+    assert_eq!(nands, 131);
     assert_eq!(adders, 16);
     assert_eq!(muxes, 9);
 }

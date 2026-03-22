@@ -448,7 +448,7 @@ mod test {
         let muxes  = components.iter().filter(|c| matches!(c, Computational::Mux(_))).count();
         assert_eq!(memsys,  1);
         assert_eq!(roms,    2);    // Compare to 1
-        assert_eq!(nands, 175);    // Compare to 166; +1 for Inc2's bit0 buffer-as-copy
+        assert_eq!(nands, 177);    // Compare to 168; +1 for Inc2's bit0 buffer-as-copy
         assert_eq!(adders, 60);    // Compare to 31; Inc2 has 14 adders (bits 2-15) vs Inc16's 15
         assert_eq!(muxes,  16);    // Compare to 15
     }
