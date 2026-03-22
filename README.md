@@ -46,31 +46,23 @@ Have a rust toolchain...
 
 ## Performance/Results
 
-An initial, naive simulator ran at about 900Hz (Apple M2, ca. 2026.)
+| Changes | Simulated cycles/sec | Gain |
+|---------|----------------------:|--:|
+|Baseline  |  900Hz | |
+|Pre-compute storage location to avoid lookups in the simulation loop | 5KHz |  5.5x |
+|Store all the state in `Vec<u64>` with dense indices instead of `HashMap` | 100KHz | 20x |
+|Make `Mux` for arbitrary width a primitive. Still evaluating all the logic for both inputs, so far.|  175KHz | 1.75x |
+| Conditional evaluation of just the immediate inputs of each Mux branch; all the bits of just the active branch | 250KHz | 1.4x
+|Undo earlier optimization so we have more muxes and less total gates; a little more gating (inputs to `Add16` this time) | 440KHz | 1.75x |
+|Collapse `Nand`/`Not` to synthetic, unitary `AndWiring` op | 550KHz | 1.25x |
+| Prune unused outputs, including the carry-out bit from `Add16`, which allowed the mux folding pass to pull in the whole adder (or something like that) | >900KHz | 1.75x |
+|Make `FullAdder` (the bit-slice adder) primitive. Actually surprisingly little speed-up considering FullAdder was nine gates/operations. | 1.25MHz | 1.3x |
+| Detect important multi-bit patterns, namely 1) bit-parallel nand/not/and ops: squash them into one, 2) "normal" carry-chains for add and inc; any subset of the bits, and 3) Nand16Way (new component) as a single op. Result | 1.9 MHz | 1.5x |
 
-After pre-computing storage location to avoid lookups in the simulation loop, we're up to about
-5KHz.
+Noe: 2Mhz corresponds to about 30fps for the included [Pong binary](examples/Pong.asm), and that's about
+as fast as you want it to go to be playable.
 
-Storing all the state in Vec<u64> with dense indices instead of HashMaps: about 100KHz.
-
-Making `Mux` for arbitrary width a primitive: 175KHz. Still evaluating all the logic for both inputs, so far.
-
-Conditional evaluation of just the immediate inputs of each Mux branch; all the bits of just the
-active branch: 250KHz now.
-
-Undo earlier optimization so we have more muxes and less total gates; a little more gating (inputs to Add16 this time): 440KHz.
-
-Collapsed Nand/Not to unitary AndWiring op: 550KHz.
-
-Pruned unused outputs, including the carry-out bit from Add16, which allowed the mux folding pass to pull in the whole adder, or something like that: >900KHz.
-
-Made FullAdder (the bit-slice adder) primitive: 1.25MHz. Actually surprisingly little speed-up
-considering FullAdder was nine gates/operations.
-
-Detect important multi-bit patterns, namely 1) bit-parallel nand/not/and ops: squash them into one,
-2) "normal" carry-chains for add and inc; any subset of the bits, and 3) Nand16Way (new component) as a single op. Result: about 1.9 MHz and
-close to 30 fps. Almost getting *too* fast now. Almost.
-
+*All measurements taken on an Apple M2 MacBook Pro running macOS Tahoe, ca. 2026.*
 
 ## Simulation
 
@@ -96,7 +88,7 @@ In addition to the essential primitive, `Nand`, the following are provided to he
 a natural way that can also be simulated efficiently:
 
 Combinational:
-- `Const`: no inputs, output is a fixed set of bits. No runtime cost.
+- `fixed`: feeds a fixed set of bits to any input. No runtime cost.
 - `Buffer`: passes its single, singe-bit input directly to its output. This is just a convenience
   components can use, often to connect inputs directly to outputs. No runtime cost.
 - `Mux`: two (muti-bit) inputs, and a `sel` input controlling which one is used. During simulation,
@@ -109,7 +101,7 @@ Sequential:
 
 ## Support Chips
 
-Memory and I/O devices that would interface with a CPU over some kind of off-chip bus, are
+Memory and I/O devices that would interface with a CPU over some kind of off-chip bus are
 implemented in Rust with fixed functionality but some flexibility in use.
 
 - ROM
@@ -128,7 +120,7 @@ implemented in Rust with fixed functionality but some flexibility in use.
     - TODO: configurable "read" latency beyond the one cycle that the Hack design requires.
 - Serial
     - a location where a single word of data can be exchanged between the CPU and the outside world.
-    Depending on the harness, can be treated an emulated Keyboard/Printer or external terminal, etc.
+    Depending on the harness, can be treated as an emulated Keyboard/Printer or external terminal, etc.
 - MemoryMap
     - exposes the same interface as RAM, and internally maps writes and reads to one or more
     components (RAMs, ROMs, and Serial) in a common address space.
@@ -160,10 +152,29 @@ Components are constructed and used in several separate phases:
 
 Any novel components are defined as `struct`s with corresponding `Component` impls.
 
-`fn expand()` specifies how the component behaves, in terms of more primitive components.
+`fn expand()` specifies how the component behaves, in terms of more primitive components. The `expand!()` macro makes them somewhat easier to read.
 
 For example, a simple circuit might consist of just two `Nand`s, with the output of one connected to
-the inputs of the other.
+the inputs of the other:
+
+```rust
+/// Computes !(a & !b), in case somebody needs that.
+#[derive(Clone, Reflect, Chip)]
+pub struct Unuseful {
+    pub a: Input1,
+    pub b: Input1,
+    pub out: Output1,
+}
+
+impl Component for Unuseful {
+    type Target = Nand;
+
+    expand!{ |this| {
+        not_b: Nand { a: this.b, b: this.b, out: Output1::new() },
+        nand:  Nand { a: this.a, b: not_b.out.into(), out: this.out },
+    }}
+}
+```
 
 ### Construction
 
@@ -174,7 +185,7 @@ derived.
 ### Expansion
 
 The complete chip is expanded recursively (flattened) so that all sub-components are reduced to just
-the pre-defined primitives and support chips descibed above.
+the pre-defined primitives and support chips described above.
 
 Before and/or after expansion, the graph may be transformed, for example to eliminate unused
 elements.
@@ -186,8 +197,8 @@ a stateless way using `simulator::eval::eval()`.
 
 ### Synthesis
 
-The final chip's configuration is converted to a form that can be handled efficiently by
-the simulator, using `simulator::simulate::synthesize()`.
+Any chip involving a `Register` or memory requires the more full-featured simulator. First, the chip
+is converted to a form that can be handled efficiently, using `simulator::simulate::synthesize()`.
 
 ### Simulation
 
