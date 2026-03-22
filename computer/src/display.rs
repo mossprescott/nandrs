@@ -6,23 +6,41 @@ use simulator::nat::N16;
 pub const WIDTH: usize = 512;
 pub const HEIGHT: usize = 256;
 pub const BEZEL: usize = 20;
-pub const FRAME_TIME: Duration = Duration::from_millis(1000/60);
+pub const FRAME_TIME: Duration = Duration::from_millis(1000/120);
 const BEZEL_PNG: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/bezel.png");
+
+
+const WHITE_PIXEL: u32 = 0xFFFFFF;
+const BLACK_PIXEL: u32 = 0x000000;
 
 pub fn render_screen(screen: &RAMHandle<N16, N16>, pixels: &mut [u32], scale: usize) {
     let win_width = (WIDTH + 2 * BEZEL) * scale;
+
+    // Fill the screen region with white.
+    for row in 0..HEIGHT {
+        for dy in 0..scale {
+            let y = (BEZEL + row) * scale + dy;
+            let start = y * win_width + BEZEL * scale;
+            let end = start + WIDTH * scale;
+            pixels[start..end].fill(WHITE_PIXEL);
+        }
+    }
+
+    // Set only the black pixels.
     for word_idx in 0..(WIDTH / 16 * HEIGHT) {
         let word = screen.peek(word_idx as u64).unsigned() as u16;
+        if word == 0 { continue; }
         let row = word_idx / (WIDTH / 16);
         let col_word = word_idx % (WIDTH / 16);
-        for bit in 0..16usize {
-            let color = if (word >> bit) & 1 == 1 { 0x000000 } else { 0xFFFFFF };
-            let px_x = BEZEL + col_word * 16 + bit;
-            let px_y = BEZEL + row;
+        let mut bits = word;
+        while bits != 0 {
+            let bit = bits.trailing_zeros() as usize;
+            bits &= bits - 1;
+            let px_x = (BEZEL + col_word * 16 + bit) * scale;
+            let px_y = (BEZEL + row) * scale;
             for dy in 0..scale {
-                for dx in 0..scale {
-                    pixels[(px_y * scale + dy) * win_width + px_x * scale + dx] = color;
-                }
+                let base = (px_y + dy) * win_width + px_x;
+                pixels[base..base + scale].fill(BLACK_PIXEL);
             }
         }
     }
