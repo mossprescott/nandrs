@@ -67,9 +67,10 @@ Pruned unused outputs, including the carry-out bit from Add16, which allowed the
 Made FullAdder (the bit-slice adder) primitive: 1.25MHz. Actually surprisingly little speed-up
 considering FullAdder was nine gates/operations.
 
-Detect important multi-bit patterns, namely 1) bit-parallel nand/not/and ops: squash them into one
-and 2) "normal" carry-chains for add and inc; any subset of the bits. Result: about 1.7 MHz and
+Detect important multi-bit patterns, namely 1) bit-parallel nand/not/and ops: squash them into one,
+2) "normal" carry-chains for add and inc; any subset of the bits, and 3) Nand16Way (new component) as a single op. Result: about 1.9 MHz and
 close to 30 fps. Almost getting *too* fast now. Almost.
+
 
 ## Simulation
 
