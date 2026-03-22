@@ -249,6 +249,38 @@ impl<Width: Storable> fmt::Display for ChipWiring<Width> {
     }
 }
 
+/// Counts of each top-level operation type in a synthesized wiring.
+#[derive(Debug, Default)]
+pub struct OpCounts {
+    pub nands: usize,
+    pub ands: usize,
+    pub adders: usize,
+    pub muxes: usize,
+    pub parallel_nands: usize,
+    pub ripple_adders: usize,
+    pub registers: usize,
+}
+
+impl<Width: Storable> ChipWiring<Width> {
+    /// Count top-level operations by type (does not recurse into mux branches).
+    pub fn op_counts(&self) -> OpCounts {
+        let mut c = OpCounts::default();
+        for comp in &self.component_wiring {
+            match comp {
+                wiring::ComponentWiring::Nand(_)         => c.nands += 1,
+                wiring::ComponentWiring::And(_)          => c.ands += 1,
+                wiring::ComponentWiring::Adder(_)        => c.adders += 1,
+                wiring::ComponentWiring::Mux(_)          => c.muxes += 1,
+                wiring::ComponentWiring::ParallelNand(_) => c.parallel_nands += 1,
+                wiring::ComponentWiring::RippleAdder(_)  => c.ripple_adders += 1,
+                wiring::ComponentWiring::Register(_)     => c.registers += 1,
+                _ => {}
+            }
+        }
+        c
+    }
+}
+
 /// Transform a circuit description into a pre-computed wiring layout.
 ///
 /// No RAM or ROM buffers are allocated here. Call [`super::initialize`] to create a runnable

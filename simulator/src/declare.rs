@@ -258,6 +258,12 @@ pub struct IC<C> {
     pub components: Vec<C>,
 }
 
+impl<C> IC<C> {
+    pub fn map<D>(self, f: impl FnMut(C) -> D) -> IC<D> {
+        IC { name: self.name, intf: self.intf, components: self.components.into_iter().map(f).collect() }
+    }
+}
+
 impl<C> Reflect for IC<C> {
     fn reflect(&self) -> Interface {
         self.intf.clone()

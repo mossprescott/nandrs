@@ -372,6 +372,18 @@ pub type Serial16        = Serial<N16>;
 pub type MemorySystem16  = MemorySystem<N16, N16>;
 pub type Computational16 = Computational<N16, N16>;
 
+impl<A: Nat, D: Nat> From<Combinational<D>> for Computational<A, D> {
+    fn from(c: Combinational<D>) -> Self {
+        match c {
+            Combinational::Nand(n)   => Computational::Nand(n),
+            Combinational::Buffer(b) => Computational::Buffer(b),
+            Combinational::Mux(m)    => Computational::Mux(m),
+            Combinational::Mux1(m)   => Computational::Mux1(m),
+            Combinational::Adder(a)  => Computational::Adder(a),
+        }
+    }
+}
+
 impl<A: Nat, D: Nat> From<Sequential<D>> for Computational<A, D> {
     fn from(s: Sequential<D>) -> Self {
         match s {
