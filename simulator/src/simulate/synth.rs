@@ -387,7 +387,14 @@ where
         }
     };
 
-    let const_wiring: Vec<wiring::ConstWiring> = vec![];
+    let const_wiring: Vec<wiring::ConstWiring> = components.iter().flat_map(|comp| {
+        comp.reflect().inputs.values().filter_map(|busref| {
+            busref.fixed.map(|value| wiring::ConstWiring {
+                value,
+                out: wire_indexes[&WireID::from(busref)],
+            })
+        }).collect::<Vec<_>>()
+    }).collect();
 
     let component_wiring: Vec<wiring::ComponentWiring> = components.iter().flat_map(|comp| {
         use wiring::ComponentWiring as CW;
