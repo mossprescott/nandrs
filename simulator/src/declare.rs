@@ -82,7 +82,11 @@ impl<Width: Nat> Input<Width> {
     }
 
     pub fn bit(&self, i: usize) -> Input1 {
-        self.bus().bit(i)
+        assert!(i < Width::as_int(), "bit index {} out of range for {}-bit input", i, Width::as_int());
+        match self {
+            Input::Bus(bus) => bus.bit(i),
+            Input::Fixed(value, _) => fixed((value >> i) & 1),
+        }
     }
 
     pub fn mask(&self, offset: usize, len: usize) -> InputBus<Width> {
