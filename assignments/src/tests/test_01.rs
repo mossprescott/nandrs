@@ -78,8 +78,8 @@ fn xor_optimal() {
 }
 
 #[test]
-fn my_mux_truth_table() {
-    let mux = MyMux::chip();
+fn mux_truth_table() {
+    let mux = Mux::chip();
     let ic = mux.expand().unwrap();
     let chip = IC { name: ic.name, intf: ic.intf, components: ic.components.into_iter().flat_map(|c| flatten(c).components).collect() };
     assert_eq!(eval(&chip, [("a0", false.into()), ("a1", false.into()), ("sel", false.into())])["out"].unsigned(), 0);
@@ -93,8 +93,8 @@ fn my_mux_truth_table() {
 }
 
 #[test]
-fn my_mux_optimal() {
-    let mux = MyMux::chip();
+fn mux_optimal() {
+    let mux = Mux::chip();
     let ic = mux.expand().unwrap();
     let chip: Vec<_> = ic.components.into_iter().flat_map(|c| flatten(c).components).collect();
     assert_eq!(chip.len(), 4);
