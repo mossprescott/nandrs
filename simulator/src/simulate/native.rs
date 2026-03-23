@@ -4,7 +4,7 @@
 use crate::{Component, IC, Input, Input1, Output, OutputBus, Reflect, Chip, Interface};
 use crate::component::Computational;
 use crate::declare::BusRef;
-use crate::nat::{Nat, N1, N16, IsGreater};
+use crate::nat::{Nat, N1, IsGreater};
 
 /// Mux: out = if sel { a1 } else { a0 }, applied bitwise across Width bits.
 #[derive(Clone, Reflect, Chip)]
@@ -56,6 +56,7 @@ impl Component for Adder {
 
 /// The type of components that participate in computers for simulation purposes: this includes the
 /// native components here in addition to the actual primitives of the Computational type.
+#[derive(Clone)]
 pub enum Simulational<A: Nat, D: Nat> {
     Primitive(Computational<A, D>),
     Mux(Mux<D>),

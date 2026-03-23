@@ -5,6 +5,8 @@ use simulator::declare::{Interface, BusRef};
 use simulator::Reflect as _;
 use simulator::Chip as _;
 use simulator::component::Combinational;
+use simulator::nat::Nat;
+use simulator::simulate::native;
 use crate::project_01::{Project01Component, Nand, Buffer, Mux16, Not16, And16, Not, Xor, And, Or, Mux};
 
 #[derive(Clone)]
@@ -99,10 +101,50 @@ pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Combination
     }
 }
 
-/// FullAdder is now provided as a primitive, but it's interesting to implement this separately
-/// anyway; this version isn't used by any other components.
-///
+/// Like `flatten`, but replaces HalfAdder/FullAdder with native Adder components for efficient
+/// simulation.
+pub fn flatten_for_simulation<C, A, D>(chip: C) -> IC<native::Simulational<A, D>>
+where
+    C: Reflect + Into<Project02Component>,
+    A: Nat,
+    D: Nat,
+{
+    fn go<A: Nat, D: Nat>(comp: Project02Component) -> Vec<native::Simulational<A, D>> {
+        match comp {
+            Project02Component::HalfAdder(c) => vec![
+                native::Adder {
+                    a: c.a, b: c.b, c: fixed(0), sum: c.sum, carry: c.carry,
+                }.into()
+            ],
+            Project02Component::FullAdder(c) => vec![
+                native::Adder {
+                    a: c.a, b: c.b, c: c.c, sum: c.sum, carry: c.carry,
+                }.into()
+            ],
+            _ => match comp.expand() {
+                None => match comp {
+                    Project02Component::Project01(p) =>
+                        crate::project_01::flatten(p).components
+                            .into_iter()
+                            .map(|c| native::Simulational::from(simulator::component::Computational::from(c)))
+                            .collect(),
+                    _ => panic!("Did not reduce to primitive: {:?}", comp.name()),
+                },
+                Some(ic) => ic.components.into_iter().flat_map(go).collect(),
+            }
+        }
+    }
+    IC {
+        name: format!("{} (flat/sim)", chip.name()),
+        intf: chip.reflect(),
+        components: go(chip.into()),
+    }
+}
+
 /// sum = 1s-digit of two-bit sum, carry = 2s-digit
+///
+/// Note: for efficiency in simulation, there is an alternative expansion for this component to
+/// native::Adder.
 #[derive(Clone, Reflect, Chip)]
 pub struct HalfAdder {
     pub a:     Input1,
@@ -130,25 +172,10 @@ impl Component for HalfAdder {
     }}
 }
 
-// impl HalfAdder {
-//     pub fn expand_for_simulation<C>(&self) -> C {
-//         Adder {
-//             a: self.a,
-//             b: self.b,
-//             c: fixed(0),
-//             sum: self.sum,
-//             carry: self.carry,
-//         }.into()
-//     }
-// }
-
-/// FullAdder is now provided as a primitive, but it's interesting to implement separately anyway;
-/// this version isn't used by any other components
-///
 /// sum = 1s-digit of three-bit sum, carry = 2s-digit
 ///
-/// Future: for pedagocical purposes, define this here, with reduction to Nands. Then arrange for it
-/// *not* to be expanded when we want to do an efficient simulation.
+/// Note: for efficiency in simulation, there is an alternative expansion for this component to
+/// native::Adder.
 #[derive(Clone, Reflect, Chip)]
 pub struct FullAdder {
     pub a:     Input1,
@@ -178,17 +205,7 @@ impl Component for FullAdder {
     }}
 }
 
-// impl FullAdder {
-//     pub fn expand_for_simulation<C>(&self) -> C {
-//         Adder {
-//             a: self.a,
-//             b: self.b,
-//             c: self.c,
-//             sum: self.sum,
-//             carry: self.carry,
-//         }.into()
-//     }
-// }
+
 
 /// out = in + 1 (16-bit, overflow ignored)
 #[derive(Clone, Reflect, Chip)]
