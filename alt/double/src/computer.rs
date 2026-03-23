@@ -33,7 +33,7 @@
 /// a second ROM which we'll load with the same binary.
 
 use assignments::project_01::{And, Or, Not};
-use assignments::project_02::{ALU, Inc16};
+use assignments::project_02::{ALU, Inc16, Zero16};
 use assignments::project_05::{self, Decode, Project05Component};
 use simulator::{self, Component, IC, Input1, Input16, Output, Output16, Reflect, Chip, expand, fixed};
 use simulator::declare::{Interface, BusRef};
@@ -174,8 +174,13 @@ impl Component for CPU {
         // === D register (write_d already gated with is_c in Decode) ===
         reg_d: Register16 { data_in: this.mem_data_out.into(), write: decode.write_d.into(), data_out: reg_d_out },
 
+        // Detect the invalid state of the PC at start: both addrs 0
+        // Equally-good tests would be: pc0 == pc1; what else?
+        invalid_pc: Zero16 { a:this.pc1.into(), out: Output::new() },
+        do_reset: Or { a: this.reset, b: invalid_pc.out.into(), out: Output::new() },
+
         pc: DoublePC {
-            reset: this.reset.into(),
+            reset: do_reset.out.into(),
             addr:  reg_a_out.into(),
             load:  do_jmp.out.into(),
             skip:  do_skip.out.into(),
@@ -313,7 +318,6 @@ impl Component for Inc2 {
     }}
 }
 
-
 #[derive(Clone)]
 pub enum DoubleComponent {
     Project05(Project05Component),
@@ -368,14 +372,6 @@ impl Reflect for DoubleComponent {
     }
 }
 
-/// Reset the CPU so that DoublePC's registers are properly initialized (out0=0, out1=1).
-/// Must be called before the first ticktock; also needed in main() after loading ROMs.
-pub fn start(state: &mut ChipState<N16, N16>) {
-    state.set("reset", true.into());
-    state.ticktock();
-    state.set("reset", false.into());
-}
-
 /// Find the two ROMs (rom0 at pc, rom1 at pc+1) in the chip state.
 pub fn find_roms(state: &ChipState<N16, N16>) -> (ROMHandle<N16, N16>, ROMHandle<N16, N16>) {
     let roms: Vec<_> = state.bus_residents().iter()
@@ -415,7 +411,7 @@ mod test {
     use simulator::print_graph;
     use simulator::simulate::simulate;
 
-    use crate::computer::{Computer, find_roms, flatten, start};
+    use crate::computer::{Computer, find_roms, flatten};
 
     #[test]
     fn computer_max_behavior() {
@@ -425,15 +421,13 @@ mod test {
         println!("{}", print_graph(&chip));
 
         let flat = flatten(chip);
-        let mut state = simulate(&flat, memory_system());
+        let state = simulate(&flat, memory_system());
 
         let (rom0, rom1) = find_roms(&state);
 
         let pgm = test_05::max_program();
         rom0.flash(pgm.clone());
         rom1.flash(pgm.clone());
-
-        start(&mut state);
 
         test_05::test_computer_max_behavior(state, pgm.len() as u64);
     }
@@ -448,7 +442,7 @@ mod test {
         let muxes  = components.iter().filter(|c| matches!(c, Computational::Mux(_))).count();
         assert_eq!(memsys,  1);
         assert_eq!(roms,    2);    // Compare to 1
-        assert_eq!(nands, 177);    // Compare to 168; +1 for Inc2's bit0 buffer-as-copy
+        assert_eq!(nands, 228);    // Compare to 168; +1 for Inc2's bit0 buffer-as-copy
         assert_eq!(adders, 60);    // Compare to 31; Inc2 has 14 adders (bits 2-15) vs Inc16's 15
         assert_eq!(muxes,  16);    // Compare to 15
     }
