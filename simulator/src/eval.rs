@@ -12,7 +12,7 @@ use crate::word::{Storable, Word};
 /// Evaluate a chip statelessly; given named input values, return named output values.
 ///
 /// Input and output values are `Word<Width>`, wrapping the raw bits in a width-aware type.
-pub fn eval<'a, Width: Nat + Clone, I>(chip: &IC<Combinational<Width>>, inputs: I) -> HashMap<String, Word<Width>>
+pub fn eval<'a, Width: Nat + Clone, I>(chip: &IC<Combinational>, inputs: I) -> HashMap<String, Word<Width>>
 where
     Width: Storable,
     I: IntoIterator<Item = (&'a str, Word<Width>)>,
@@ -59,41 +59,6 @@ where
                 let intf = buffer.reflect();
                 let a = read_bit(&wire_state, &intf.inputs["a"]);
                 write_bit(&mut wire_state, &intf.outputs["out"], a);
-            }
-            Combinational::Mux(mux) => {
-                let intf = mux.reflect();
-                let sel = read_bit(&wire_state, &intf.inputs["sel"]);
-                let src = if sel { &intf.inputs["a1"] } else { &intf.inputs["a0"] };
-                let out = &intf.outputs["out"];
-                let id = wire_id(out);
-                let mask = bus_mask(out);
-                let val = wire_state.get(&wire_id(src)).copied().unwrap_or(0);
-                let shifted = ((val >> src.offset) & width_mask(out.width)) << out.offset;
-                let entry = wire_state.entry(id).or_insert(0);
-                *entry = (*entry & !mask) | shifted;
-            }
-            Combinational::Mux1(mux) => {
-                let intf = mux.reflect();
-                let sel = read_bit(&wire_state, &intf.inputs["sel"]);
-                let src = if sel { &intf.inputs["a1"] } else { &intf.inputs["a0"] };
-                let out = &intf.outputs["out"];
-                let id = wire_id(out);
-                let mask = bus_mask(out);
-                let val = wire_state.get(&wire_id(src)).copied().unwrap_or(0);
-                let shifted = ((val >> src.offset) & width_mask(out.width)) << out.offset;
-                let entry = wire_state.entry(id).or_insert(0);
-                *entry = (*entry & !mask) | shifted;
-            }
-            Combinational::Adder(adder) => {
-                let intf = adder.reflect();
-                let a = read_bit(&wire_state, &intf.inputs["a"]);
-                let b = read_bit(&wire_state, &intf.inputs["b"]);
-                let c = read_bit(&wire_state, &intf.inputs["c"]);
-                let total = a as u64 + b as u64 + c as u64;
-                let sum_ref = &intf.outputs["sum"];
-                let carry_ref = &intf.outputs["carry"];
-                write_bit(&mut wire_state, sum_ref, total & 1 != 0);
-                write_bit(&mut wire_state, carry_ref, total & 2 != 0);
             }
         }
     }

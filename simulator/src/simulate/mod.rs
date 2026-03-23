@@ -1,11 +1,13 @@
 mod wiring;
 mod memory;
+mod native;
 mod synth;
 mod eval;
 
 use crate::nat::Nat;
 use crate::word::Storable;
 
+pub use native::{Simulational};
 pub use memory::{MemoryMap, RegionMap, RAMMap, ROMMap, SerialMap};
 pub use synth::{synthesize, ChipWiring, OpCounts, RAMSpec, ROMSpec, MemorySystemSpec, SerialSpec};
 pub use eval::{initialize, ChipState, BusResident, RAMHandle, ROMHandle, SerialHandle};
@@ -13,7 +15,7 @@ pub use eval::{initialize, ChipState, BusResident, RAMHandle, ROMHandle, SerialH
 /// Synthesize a chip and initialize its state in one step.
 pub fn simulate<C, A: Nat + Storable + Clone, D: Nat + Storable + Clone>(chip: &crate::declare::IC<C>, memory_map: MemoryMap) -> ChipState<A, D>
 where
-    C: Clone + crate::Reflect + Into<crate::component::Computational<A, D>>,
+    C: Clone + crate::Reflect + Into<Simulational<A, D>>,
 {
     initialize(synthesize(chip, memory_map))
 }
