@@ -61,9 +61,6 @@ pub fn flatten<C: Reflect + Into<Project03Component>>(chip: C) -> IC<Sequential1
                         .map(|c| match c {
                             Combinational::Nand(n)   => Sequential::Nand(n),
                             Combinational::Buffer(c) => Sequential::Buffer(c),
-                            Combinational::Mux(m)    => Sequential::Mux(m),
-                            Combinational::Mux1(m)   => Sequential::Mux1(m),
-                            Combinational::Adder(a)  => Sequential::Adder(a),
                         })
                         .collect(),
                 Project03Component::Register16(reg) => vec![Sequential::Register(reg)],

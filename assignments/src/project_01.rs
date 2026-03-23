@@ -291,7 +291,7 @@ impl Component for Mux16 {
      */
     fn expand(&self) -> Option<IC<Project01Component>> {
         let not_sel = Not { a: self.sel.clone(), out: Output::new() };
-        let not_sel_out: Input = not_sel.out.clone().into();
+        let not_sel_out: Input1 = not_sel.out.clone().into();
 
         let mut components = vec![not_sel.into()];
         components.extend((0..16).flat_map(|i| {

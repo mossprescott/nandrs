@@ -24,9 +24,6 @@ impl<Width: Nat> Component for Mux<Width> {
     }
 }
 
-pub type Mux1 = Mux<N1>;
-pub type Mux16 = Mux<N16>;
-
 /// Single-bit slice off a multi-bit adder: adds three bits, producing a two-bit result.
 ///
 /// Note that this primitive has the same interface and behavior as the project_02::FullAdder, which
@@ -87,6 +84,17 @@ impl<A: Nat + Clone, D: Nat + Clone> Reflect for Simulational<A, D> {
 
 impl<A: Nat, D: Nat> From<Computational<A, D>> for Simulational<A, D> {
     fn from(c: Computational<A, D>) -> Self { Simulational::Primitive(c) }
+}
+
+impl<A: Nat, D: Nat> From<crate::component::Sequential<D>> for Simulational<A, D> {
+    fn from(s: crate::component::Sequential<D>) -> Self {
+        use crate::component::Sequential;
+        Simulational::Primitive(match s {
+            Sequential::Nand(n)     => Computational::Nand(n),
+            Sequential::Buffer(b)   => Computational::Buffer(b),
+            Sequential::Register(r) => Computational::Register(r),
+        })
+    }
 }
 
 impl<A: Nat, D: Nat> From<Mux<D>> for Simulational<A, D>

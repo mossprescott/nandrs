@@ -12,7 +12,7 @@ pub struct TestNot {
 }
 
 impl Component for TestNot {
-    type Target = Combinational<N1>;
+    type Target = Combinational;
 
     expand! { |this| {
         nand: Nand {
@@ -57,7 +57,7 @@ pub struct TestAnd {
 }
 
 impl Component for TestAnd {
-    type Target = Combinational<N1>;
+    type Target = Combinational;
 
     expand! { |this| {
         nand: Nand {
@@ -117,7 +117,7 @@ pub struct TestNand8 {
 }
 
 impl Component for TestNand8 {
-    type Target = Combinational<N8>;
+    type Target = Combinational;
 
     expand! { |this| {
         for i in 0..8 {

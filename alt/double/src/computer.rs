@@ -37,7 +37,9 @@ use assignments::project_02::{ALU, Inc16, Zero16};
 use assignments::project_05::{self, Decode, Project05Component};
 use simulator::{self, Component, IC, Input1, Input16, Output, Output16, Reflect, Chip, expand, fixed};
 use simulator::declare::{Interface, BusRef};
-use simulator::component::{Buffer, FullAdder, Computational16, Mux16, MemorySystem16, Register16, ROM16};
+use simulator::component::{Buffer, Computational16, MemorySystem16, Register16, ROM16};
+use assignments::project_01::Mux16;
+use assignments::project_02::FullAdder;
 use simulator::nat::N16;
 use simulator::simulate::{ChipState, BusResident, ROMHandle};
 
@@ -438,12 +440,10 @@ mod test {
         let memsys = components.iter().filter(|c| matches!(c, Computational::MemorySystem(_))).count();
         let roms   = components.iter().filter(|c| matches!(c, Computational::ROM(_))).count();
         let nands  = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
-        let adders = components.iter().filter(|c| matches!(c, Computational::Adder(_))).count();
-        let muxes  = components.iter().filter(|c| matches!(c, Computational::Mux(_))).count();
-        assert_eq!(memsys,  1);
-        assert_eq!(roms,    2);    // Compare to 1
-        assert_eq!(nands, 228);    // Compare to 168; +1 for Inc2's bit0 buffer-as-copy
-        assert_eq!(adders, 60);    // Compare to 31; Inc2 has 14 adders (bits 2-15) vs Inc16's 15
-        assert_eq!(muxes,  16);    // Compare to 15
+        let registers = components.iter().filter(|c| matches!(c, Computational::Register(_))).count();
+        assert_eq!(memsys,    1);
+        assert_eq!(roms,      2); // Compare to 1
+        assert_eq!(nands,  1556); // Compare to 1186
+        assert_eq!(registers, 4); // Compare to 3
     }
 }

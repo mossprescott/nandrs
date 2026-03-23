@@ -6,6 +6,7 @@ use std::marker::PhantomData;
 use crate::component::Computational;
 use crate::declare::{BusRef, IC, Reflect as _};
 use crate::nat::Nat;
+use super::native::Simulational;
 use crate::word::{Word, Storable};
 
 use super::wiring::{self, Indexes, WireID, WireIndex, WireRef};
@@ -298,9 +299,9 @@ impl<Width: Storable> ChipWiring<Width> {
 /// was generalized.
 pub fn synthesize<C, A: Nat + Storable + Clone, D: Nat + Storable + Clone>(chip: &IC<C>, memory_map: MemoryMap) -> ChipWiring<D>
 where
-    C: Clone + crate::Reflect + Into<Computational<A, D>>,
+    C: Clone + crate::Reflect + Into<Simulational<A, D>>,
 {
-    let components: Vec<Computational<A, D>> = chip.components.iter().cloned().map(Into::into).collect();
+    let components: Vec<Simulational<A, D>> = chip.components.iter().cloned().map(Into::into).collect();
     let mut memory_map = Some(memory_map);
 
     // Build map of wires that have been connected directly to some existing wire; when the Buffer's
@@ -313,7 +314,7 @@ where
     let mut sub_bus_buffers: Vec<usize> = Vec::new();
     for (idx, comp) in components.iter().enumerate() {
         match comp {
-            Computational::Buffer(c) => {
+            Simulational::Primitive(Computational::Buffer(c)) => {
                 let intf = c.reflect();
                 let a = &intf.inputs["a"];
                 let out = &intf.outputs["out"];
@@ -359,30 +360,30 @@ where
         for b in intf.outputs.values() { assign(WireID::from(b)); }
         for comp in &components {
             match comp {
-                Computational::Nand(c) => {
+                Simulational::Primitive(Computational::Nand(c)) => {
                     let intf = c.reflect();
                     assign(WireID::from(&intf.inputs["a"]));
                     assign(WireID::from(&intf.inputs["b"]));
                     assign(WireID::from(&intf.outputs["out"]));
                 }
-                Computational::Buffer(_) => {
+                Simulational::Primitive(Computational::Buffer(_)) => {
                     // Ignore; already recorded in `renamed`
                 }
-                Computational::Mux(c) => {
+                Simulational::Mux(c) => {
                     let intf = c.reflect();
                     assign(WireID::from(&intf.inputs["a0"]));
                     assign(WireID::from(&intf.inputs["a1"]));
                     assign(WireID::from(&intf.inputs["sel"]));
                     assign(WireID::from(&intf.outputs["out"]));
                 }
-                Computational::Mux1(c) => {
+                Simulational::Mux1(c) => {
                     let intf = c.reflect();
                     assign(WireID::from(&intf.inputs["a0"]));
                     assign(WireID::from(&intf.inputs["a1"]));
                     assign(WireID::from(&intf.inputs["sel"]));
                     assign(WireID::from(&intf.outputs["out"]));
                 }
-                Computational::Adder(c) => {
+                Simulational::Adder(c) => {
                     let intf = c.reflect();
                     assign(WireID::from(&intf.inputs["a"]));
                     assign(WireID::from(&intf.inputs["b"]));
@@ -391,31 +392,31 @@ where
                     assign(WireID::from(&intf.outputs["carry"]));
                 }
 
-                Computational::Register(c) => {
+                Simulational::Primitive(Computational::Register(c)) => {
                     let intf = c.reflect();
                     assign(WireID::from(&intf.inputs["write"]));
                     assign(WireID::from(&intf.inputs["data_in"]));
                     assign(WireID::from(&intf.outputs["data_out"]));
                 }
-                Computational::RAM(c) => {
+                Simulational::Primitive(Computational::RAM(c)) => {
                     let intf = c.reflect();
                     assign(WireID::from(&intf.outputs["data_out"]));
                     assign(WireID::from(&intf.inputs["addr"]));
                     assign(WireID::from(&intf.inputs["write"]));
                     assign(WireID::from(&intf.inputs["data_in"]));
                 }
-                Computational::ROM(c) => {
+                Simulational::Primitive(Computational::ROM(c)) => {
                     let intf = c.reflect();
                     assign(WireID::from(&intf.outputs["out"]));
                     assign(WireID::from(&intf.inputs["addr"]));
                 }
-                Computational::Serial(c) => {
+                Simulational::Primitive(Computational::Serial(c)) => {
                     let intf = c.reflect();
                     assign(WireID::from(&intf.outputs["data_out"]));
                     assign(WireID::from(&intf.inputs["write"]));
                     assign(WireID::from(&intf.inputs["data_in"]));
                 }
-                Computational::MemorySystem(c) => {
+                Simulational::Primitive(Computational::MemorySystem(c)) => {
                     let intf = c.reflect();
                     assign(WireID::from(&intf.outputs["data_out"]));
                     assign(WireID::from(&intf.inputs["addr"]));
@@ -459,7 +460,7 @@ where
     let component_wiring: Vec<wiring::ComponentWiring> = components.iter().enumerate().flat_map(|(idx, comp)| {
         use wiring::ComponentWiring as CW;
         match comp {
-            Computational::Nand(c) => {
+            Simulational::Primitive(Computational::Nand(c)) => {
                 let intf = c.reflect();
                 Some(CW::Nand(wiring::NandWiring {
                     a:   ref_for(&intf.inputs["a"]),
@@ -467,7 +468,7 @@ where
                     out: ref_for(&intf.outputs["out"]),
                 }))
             }
-            Computational::Buffer(c) => {
+            Simulational::Primitive(Computational::Buffer(c)) => {
                 if sub_bus_buffers.contains(&idx) {
                     // Sub-bus buffer: emit And(x,x) as a single-bit copy.
                     let intf = c.reflect();
@@ -478,7 +479,7 @@ where
                     None // Full-bus buffer: handled by rename
                 }
             }
-            Computational::Mux(c)          => {
+            Simulational::Mux(c)          => {
                 let intf = c.reflect();
                 Some(CW::Mux(wiring::MuxWiring {
                     sel: ref_for(&intf.inputs["sel"]),
@@ -489,7 +490,7 @@ where
                     branch1: Vec::new(),
                 }))
             }
-            Computational::Mux1(c)         => {
+            Simulational::Mux1(c)         => {
                 let intf = c.reflect();
                 Some(CW::Mux(wiring::MuxWiring {
                     sel: ref_for(&intf.inputs["sel"]),
@@ -500,7 +501,7 @@ where
                     branch1: Vec::new(),
                 }))
             }
-            Computational::Adder(c) => {
+            Simulational::Adder(c) => {
                 let intf = c.reflect();
                 Some(CW::Adder(wiring::AdderWiring {
                     a:     ref_for(&intf.inputs["a"]),
@@ -510,7 +511,7 @@ where
                     carry: ref_for(&intf.outputs["carry"]),
                 }))
             }
-            Computational::Register(c)     => {
+            Simulational::Primitive(Computational::Register(c))     => {
                 let intf = c.reflect();
                 Some(CW::Register(wiring::RegisterWiring  {
                     write:    ref_for(&intf.inputs["write"]),
@@ -518,7 +519,7 @@ where
                     data_out: wire_indexes[&WireID::from(&intf.outputs["data_out"])],
                 }))
             }
-            Computational::RAM(c)          => {
+            Simulational::Primitive(Computational::RAM(c))          => {
                 let slot = ram_specs.len();
                 ram_specs.push(RAMSpec { size: c.size });
 
@@ -531,7 +532,7 @@ where
                     data_in: wire_indexes[&WireID::from(&intf.inputs["data_in"])],
                 }))
             }
-            Computational::ROM(c)          => {
+            Simulational::Primitive(Computational::ROM(c))          => {
                 let slot = rom_specs.len();
                 rom_specs.push(ROMSpec { size: c.size });
 
@@ -542,11 +543,11 @@ where
                     addr: wire_indexes[&WireID::from(&intf.inputs["addr"])],
                 }))
             }
-            Computational::Serial(_c) => {
+            Simulational::Primitive(Computational::Serial(c)) => {
                 let slot = serial_specs.len();
                 serial_specs.push(SerialSpec);
 
-                let intf = _c.reflect();
+                let intf = c.reflect();
                 Some(CW::Serial(wiring::SerialWiring {
                     device_slot: slot,
                     out:     wire_indexes[&WireID::from(&intf.outputs["data_out"])],
@@ -554,7 +555,7 @@ where
                     data_in: wire_indexes[&WireID::from(&intf.inputs["data_in"])],
                 }))
             }
-            Computational::MemorySystem(c) => {
+            Simulational::Primitive(Computational::MemorySystem(c)) => {
                 let slot = ms_specs.len();
                 let regions = memory_map.take().expect("only one MemorySystem supported").regions;
                 ms_specs.push(MemorySystemSpec { regions });
