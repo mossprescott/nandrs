@@ -48,15 +48,15 @@ Have a rust toolchain...
 
 | Changes | Simulated cycles/sec | Gain |
 |---------|----------------------:|--:|
-|Baseline  |  900Hz | |
-|Pre-compute storage location to avoid lookups in the simulation loop | 5KHz |  5.5x |
-|Store all the state in `Vec<u64>` with dense indices instead of `HashMap` | 100KHz | 20x |
-|Make `Mux` for arbitrary width a primitive. Still evaluating all the logic for both inputs, so far.|  175KHz | 1.75x |
-| Conditional evaluation of just the immediate inputs of each Mux branch; all the bits of just the active branch | 250KHz | 1.4x
-|Undo earlier optimization so we have more muxes and less total gates; a little more gating (inputs to `Add16` this time) | 440KHz | 1.75x |
-|Collapse `Nand`/`Not` to synthetic, unitary `AndWiring` op | 550KHz | 1.25x |
-| Prune unused outputs, including the carry-out bit from `Add16`, which allowed the mux folding pass to pull in the whole adder (or something like that) | >900KHz | 1.75x |
-|Make `FullAdder` (the bit-slice adder) primitive. Actually surprisingly little speed-up considering FullAdder was nine gates/operations. | 1.25MHz | 1.3x |
+|Baseline  |  900 Hz | |
+|Pre-compute storage location to avoid lookups in the simulation loop | 5 KHz |  5.5x |
+|Store all the state in `Vec<u64>` with dense indices instead of `HashMap` | 100 KHz | 20x |
+|Make `Mux` for arbitrary width a primitive. Still evaluating all the logic for both inputs, so far.|  175 KHz | 1.75x |
+| Conditional evaluation of just the immediate inputs of each Mux branch; all the bits of just the active branch | 250 KHz | 1.4x
+|Undo earlier optimization so we have more muxes and less total gates; a little more gating (inputs to `Add16` this time) | 440 KHz | 1.75x |
+|Collapse `Nand`/`Not` to synthetic, unitary `AndWiring` op | 550 KHz | 1.25x |
+| Prune unused outputs, including the carry-out bit from `Add16`, which allowed the mux folding pass to pull in the whole adder (or something like that) | >900 KHz | 1.75x |
+|Make `FullAdder` (the bit-slice adder) primitive. Actually surprisingly little speed-up considering FullAdder was nine gates/operations. | 1.25 MHz | 1.3x |
 | Detect important multi-bit patterns, namely 1) bit-parallel nand/not/and ops: squash them into one, 2) "normal" carry-chains for add and inc; any subset of the bits, and 3) Nand16Way (new component) as a single op. Result | 1.9 MHz | 1.5x |
 
 Note: 2MHz corresponds to about 30fps for the included [Pong binary](examples/Pong.asm), and that's about
