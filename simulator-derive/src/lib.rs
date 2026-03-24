@@ -111,7 +111,7 @@ fn derive_reflect_enum(
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     quote! {
         impl #impl_generics Reflect for #name #ty_generics #where_clause {
-            fn reflect(&self) -> simulator::Interface {
+            fn reflect(&self) -> Interface {
                 match self {
                     #(#reflect_arms,)*
                 }

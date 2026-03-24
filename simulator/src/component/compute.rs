@@ -122,43 +122,15 @@ impl<A: Nat, D: Nat> Component for MemorySystem<A, D> {
 }
 
 /// Type of components that participate in computers, including logic, registers, memory, and I/O.
-#[derive(Clone)]
+#[derive(Clone, Reflect)]
 pub enum Computational<A: Nat, D: Nat> {
-    // combinational:
     Nand(Nand),
     Buffer(Buffer),
-    // sequential:
     Register(Register<D>),
-    // computational:
     RAM(RAM<A, D>),
     ROM(ROM<A, D>),
     Serial(Serial<D>),
     MemorySystem(MemorySystem<A, D>),
-}
-
-impl<A: Nat + Clone, D: Nat + Clone> Reflect for Computational<A, D> {
-    fn reflect(&self) -> Interface {
-        match self {
-            Self::Nand(c) => c.reflect(),
-            Self::Buffer(c) => c.reflect(),
-            Self::Register(c) => c.reflect(),
-            Self::RAM(c) => c.reflect(),
-            Self::ROM(c) => c.reflect(),
-            Self::Serial(c) => c.reflect(),
-            Self::MemorySystem(c) => c.reflect(),
-        }
-    }
-    fn name(&self) -> String {
-        match self {
-            Self::Nand(c) => c.name(),
-            Self::Buffer(c) => c.name(),
-            Self::Register(c) => c.name(),
-            Self::RAM(c) => c.name(),
-            Self::ROM(c) => c.name(),
-            Self::Serial(c) => c.name(),
-            Self::MemorySystem(c) => c.name(),
-        }
-    }
 }
 
 impl<A: Nat, D: Nat> Component for Computational<A, D> {

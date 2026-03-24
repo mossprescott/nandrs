@@ -31,6 +31,7 @@ impl Component for Buffer {
 /// Type of components that participate in "combinational" circuits:
 /// - most importantly `Nand`
 /// - `Buffer` for pass-through connections
+#[derive(Reflect)]
 pub enum Combinational {
     Nand(Nand),
     Buffer(Buffer),
@@ -44,21 +45,6 @@ impl From<Nand> for Combinational {
 impl From<Buffer> for Combinational {
     fn from(c: Buffer) -> Self {
         Combinational::Buffer(c)
-    }
-}
-
-impl Reflect for Combinational {
-    fn reflect(&self) -> Interface {
-        match self {
-            Self::Nand(c) => c.reflect(),
-            Self::Buffer(c) => c.reflect(),
-        }
-    }
-    fn name(&self) -> String {
-        match self {
-            Self::Nand(c) => c.name(),
-            Self::Buffer(c) => c.name(),
-        }
     }
 }
 

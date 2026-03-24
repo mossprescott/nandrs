@@ -57,31 +57,12 @@ impl Component for Adder {
 
 /// The type of components that participate in computers for simulation purposes: this includes the
 /// native components here in addition to the actual primitives of the Computational type.
-#[derive(Clone)]
+#[derive(Clone, Reflect)]
 pub enum Simulational<A: Nat, D: Nat> {
     Primitive(Computational<A, D>),
     Mux(Mux<D>),
     Mux1(Mux<N1>),
     Adder(Adder),
-}
-
-impl<A: Nat + Clone, D: Nat + Clone> Reflect for Simulational<A, D> {
-    fn reflect(&self) -> Interface {
-        match self {
-            Self::Primitive(c) => c.reflect(),
-            Self::Mux(c) => c.reflect(),
-            Self::Mux1(c) => c.reflect(),
-            Self::Adder(c) => c.reflect(),
-        }
-    }
-    fn name(&self) -> String {
-        match self {
-            Self::Primitive(c) => c.name(),
-            Self::Mux(c) => c.name(),
-            Self::Mux1(c) => c.name(),
-            Self::Adder(c) => c.name(),
-        }
-    }
 }
 
 impl<A: Nat, D: Nat> From<Computational<A, D>> for Simulational<A, D> {

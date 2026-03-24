@@ -27,7 +27,7 @@ pub type Register16 = Register<N16>;
 
 /// Type of components that participate in "sequential" circuits of a defined width: Combinational
 /// and `Register<Width>`.
-#[derive(Clone)]
+#[derive(Clone, Reflect)]
 pub enum Sequential<Width: Nat> {
     Nand(Nand),
     Buffer(Buffer),
@@ -47,23 +47,6 @@ impl<Width: Nat> From<Buffer> for Sequential<Width> {
 impl<Width: Nat> From<Register<Width>> for Sequential<Width> {
     fn from(c: Register<Width>) -> Self {
         Sequential::Register(c)
-    }
-}
-
-impl<Width: Nat + Clone> Reflect for Sequential<Width> {
-    fn reflect(&self) -> Interface {
-        match self {
-            Self::Nand(c) => c.reflect(),
-            Self::Buffer(c) => c.reflect(),
-            Self::Register(c) => c.reflect(),
-        }
-    }
-    fn name(&self) -> String {
-        match self {
-            Self::Nand(c) => c.name(),
-            Self::Buffer(c) => c.name(),
-            Self::Register(c) => c.name(),
-        }
     }
 }
 
