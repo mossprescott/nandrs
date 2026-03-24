@@ -30,9 +30,8 @@ impl Component for Buffer {
 }
 
 /// Type of components that participate in "combinational" circuits:
-/// - most importantly Nand
-/// - Buffer for pass-through connections
-/// - Mux, included because it makes simulation significantly more efficient
+/// - most importantly `Nand`
+/// - `Buffer` for pass-through connections
 pub enum Combinational {
     Nand(Nand),
     Buffer(Buffer),
@@ -54,6 +53,22 @@ impl Reflect for Combinational {
             Self::Buffer(c) => c.name(),
         }
     }
+}
+
+pub struct CombinationalCounts {
+    pub nands: usize,
+    pub buffers: usize,
+}
+
+pub fn count_combinational(components: &[Combinational]) -> CombinationalCounts {
+    let mut counts = CombinationalCounts { nands: 0, buffers: 0 };
+    for comp in components {
+        match comp {
+            Combinational::Nand(_)   => counts.nands += 1,
+            Combinational::Buffer(_) => counts.buffers += 1,
+        }
+    }
+    counts
 }
 
 // - Registers (Sequential)
@@ -116,6 +131,23 @@ impl<Width: Nat> Component for Sequential<Width> {
 
 pub type Sequential16 = Sequential<N16>;
 
+pub struct SequentialCounts {
+    pub nands: usize,
+    pub buffers: usize,
+    pub registers: usize,
+}
+
+pub fn count_sequential<W: Nat>(components: &[Sequential<W>]) -> SequentialCounts {
+    let mut counts = SequentialCounts { nands: 0, buffers: 0, registers: 0 };
+    for comp in components {
+        match comp {
+            Sequential::Nand(_)     => counts.nands += 1,
+            Sequential::Buffer(_)   => counts.buffers += 1,
+            Sequential::Register(_) => counts.registers += 1,
+        }
+    }
+    counts
+}
 
 // - Memory and I/O (Computational)
 
@@ -277,6 +309,35 @@ pub type ROM16           = ROM<N16, N16>;
 pub type Serial16        = Serial<N16>;
 pub type MemorySystem16  = MemorySystem<N16, N16>;
 pub type Computational16 = Computational<N16, N16>;
+
+pub struct ComputationalCounts {
+    pub nands: usize,
+    pub buffers: usize,
+    pub registers: usize,
+    pub rams: usize,
+    pub roms: usize,
+    pub serials: usize,
+    pub memory_systems: usize,
+}
+
+pub fn count_computational<A: Nat, D: Nat>(components: &[Computational<A, D>]) -> ComputationalCounts {
+    let mut counts = ComputationalCounts {
+        nands: 0, buffers: 0, registers: 0,
+        rams: 0, roms: 0, serials: 0, memory_systems: 0,
+    };
+    for comp in components {
+        match comp {
+            Computational::Nand(_)         => counts.nands += 1,
+            Computational::Buffer(_)       => counts.buffers += 1,
+            Computational::Register(_)     => counts.registers += 1,
+            Computational::RAM(_)          => counts.rams += 1,
+            Computational::ROM(_)          => counts.roms += 1,
+            Computational::Serial(_)       => counts.serials += 1,
+            Computational::MemorySystem(_) => counts.memory_systems += 1,
+        }
+    }
+    counts
+}
 
 impl<A: Nat, D: Nat> From<Combinational> for Computational<A, D> {
     fn from(c: Combinational) -> Self {

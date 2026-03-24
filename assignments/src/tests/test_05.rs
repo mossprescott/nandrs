@@ -2,7 +2,7 @@ use crate::project_05::{CPU, Computer, Decode, flatten, flatten_for_simulation, 
 use crate::project_06::parse_statement;
 use simulator::declare::{Chip as _, IC};
 use simulator::simulate::{simulate, ChipState, MemoryMap};
-use simulator::component::{Computational, Computational16, MemorySystem16};
+use simulator::component::{Computational, Computational16, MemorySystem16, count_computational};
 use simulator::nat::N16;
 use simulator::{print_graph, print_ic_graph};
 use simulator::word::Word16;
@@ -125,9 +125,8 @@ fn decode_strict_truth_table() {
 
 #[test]
 fn decode_optimal() {
-    let components = flatten(Decode::chip()).components;
-    let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
-    assert_eq!(nands, 17);
+    let chip = flatten(Decode::chip());
+    assert_eq!(count_computational(&chip.components).nands, 17);
 }
 
 #[test]
@@ -167,11 +166,10 @@ fn cpu_behavior() {
 fn cpu_optimal() {
     // PyNand has 1099 nands and 48 dffs
     // TODO: actually what?
-    let components = flatten(CPU::chip()).components;
-    let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
-    let registers = components.iter().filter(|c| matches!(c, Computational::Register(_))).count();
-    assert_eq!(nands, 1186);
-    assert_eq!(registers, 3);
+    let chip = flatten(CPU::chip());
+    let counts = count_computational(&chip.components);
+    assert_eq!(counts.nands, 1186);
+    assert_eq!(counts.registers, 3);
 }
 
 fn add_program() -> Vec<Word16> {
@@ -407,35 +405,26 @@ fn computer_read_keyboard() {
 
 #[test]
 fn computer_optimal() {
-    let components: Vec<Computational16> = flatten(Computer::chip()).components;
-    let nands   = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
-    let buffers = components.iter().filter(|c| matches!(c, Computational::Buffer(_))).count();
-    let registers = components.iter().filter(|c| matches!(c, Computational::Register(_))).count();
-    let roms   = components.iter().filter(|c| matches!(c, Computational::ROM(_))).count();
-    let memsys = components.iter().filter(|c| matches!(c, Computational::MemorySystem(_))).count();
-    assert_eq!(nands,  1186);
-    assert_eq!(registers, 3);
-    assert_eq!(roms,      1);
-    assert_eq!(memsys,    1);
-    assert_eq!(components.len(), nands + buffers + registers + roms + memsys);  // No unexpected component types
+    let chip = flatten(Computer::chip());
+    let counts = count_computational(&chip.components);
+    assert_eq!(counts.nands,  1186);
+    assert_eq!(counts.registers, 3);
+    assert_eq!(counts.roms,      1);
+    assert_eq!(counts.memory_systems, 1);
+    assert_eq!(chip.components.len(), counts.nands + counts.buffers + counts.registers + counts.roms + counts.memory_systems);
 }
 
 /// Component counts when flattened for simulation (with native Adder/Mux).
 #[test]
 fn computer_graph_for_simulation() {
-    use simulator::simulate::native::Simulational as S;
-    let components: Vec<S<N16, N16>> = flatten_for_simulation(Computer::chip()).components;
-    let memsys    = components.iter().filter(|c| matches!(c, S::Primitive(Computational::MemorySystem(_)))).count();
-    let roms      = components.iter().filter(|c| matches!(c, S::Primitive(Computational::ROM(_)))).count();
-    let nands     = components.iter().filter(|c| matches!(c, S::Primitive(Computational::Nand(_)))).count();
-    let registers = components.iter().filter(|c| matches!(c, S::Primitive(Computational::Register(_)))).count();
-    let muxes     = components.iter().filter(|c| matches!(c, S::Mux(_) | S::Mux1(_))).count();
-    let adders    = components.iter().filter(|c| matches!(c, S::Adder(_))).count();
-    let buffers   = components.iter().filter(|c| matches!(c, S::Primitive(Computational::Buffer(_)))).count();
-    assert_eq!(nands,   168);
-    assert_eq!(registers, 3);
-    assert_eq!(roms,      1);
-    assert_eq!(memsys,    1);
-    assert_eq!(muxes,    16);
-    assert_eq!(adders,   31);
+    use simulator::simulate::native::count_simulational;
+    let chip = flatten_for_simulation(Computer::chip());
+    let counts = count_simulational(&chip.components);
+    assert_eq!(counts.primitive.nands,        168);
+    assert_eq!(counts.primitive.registers,      3);
+    assert_eq!(counts.primitive.roms,           1);
+    assert_eq!(counts.primitive.memory_systems, 1);
+    assert_eq!(counts.muxes,                   15);
+    assert_eq!(counts.mux1s,                    1);
+    assert_eq!(counts.adders,                  31);
 }

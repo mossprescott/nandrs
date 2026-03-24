@@ -2,7 +2,7 @@ use simulator::{Input1, Output, Reflect, print_graph, Component, IC};
 use simulator::Chip as _;
 use simulator::eval::eval;
 use simulator::nat::{N1, N16};
-use simulator::component::Combinational;
+use simulator::component::{Combinational, count_combinational};
 use simulator::word::Word;
 use std::collections::HashMap;
 use crate::project_01::{flatten, Nand, Not, And, Or, Xor, Mux, Dmux, Not16, And16, Mux16};
@@ -44,7 +44,8 @@ fn not_truth_table() {
 
 #[test]
 fn not_optimal() {
-    assert_eq!(flatten(Not::chip()).components.len(), 1);
+    let chip = flatten(Not::chip());
+    assert_eq!(count_combinational(&chip.components).nands, 1);
 }
 
 #[test]
@@ -58,7 +59,8 @@ fn and_truth_table() {
 
 #[test]
 fn and_optimal() {
-    assert_eq!(flatten(And::chip()).components.len(), 2);
+    let chip = flatten(And::chip());
+    assert_eq!(count_combinational(&chip.components).nands, 2);
 }
 
 #[test]
@@ -72,7 +74,8 @@ fn or_truth_table() {
 
 #[test]
 fn or_optimal() {
-    assert_eq!(flatten(Or::chip()).components.len(), 3);
+    let chip = flatten(Or::chip());
+    assert_eq!(count_combinational(&chip.components).nands, 3);
 }
 
 #[test]
@@ -86,7 +89,8 @@ fn xor_truth_table() {
 
 #[test]
 fn xor_optimal() {
-    assert_eq!(flatten(Xor::chip()).components.len(), 4);
+    let chip = flatten(Xor::chip());
+    assert_eq!(count_combinational(&chip.components).nands, 4);
 }
 
 #[test]
@@ -106,10 +110,8 @@ fn mux_truth_table() {
 
 #[test]
 fn mux_optimal() {
-    let mux = Mux::chip();
-    let ic = mux.expand().unwrap();
-    let chip: Vec<_> = ic.components.into_iter().flat_map(|c| flatten(c).components).collect();
-    assert_eq!(chip.len(), 4);
+    let chip = flatten(Mux::chip());
+    assert_eq!(count_combinational(&chip.components).nands, 4);
 }
 
 #[test]
@@ -127,7 +129,8 @@ fn dmux_truth_table() {
 
 #[test]
 fn dmux_optimal() {
-    assert_eq!(flatten(Dmux::chip()).components.len(), 5);
+    let chip = flatten(Dmux::chip());
+    assert_eq!(count_combinational(&chip.components).nands, 5);
 }
 
 #[test]
@@ -141,7 +144,8 @@ fn not16_truth_table() {
 
 #[test]
 fn not16_optimal() {
-    assert_eq!(flatten(Not16::chip()).components.len(), 16);
+    let chip = flatten(Not16::chip());
+    assert_eq!(count_combinational(&chip.components).nands, 16);
 }
 
 #[test]
@@ -155,7 +159,8 @@ fn and16_truth_table() {
 
 #[test]
 fn and16_optimal() {
-    assert_eq!(flatten(And16::chip()).components.len(), 32);
+    let chip = flatten(And16::chip());
+    assert_eq!(count_combinational(&chip.components).nands, 32);
 }
 
 // #[test]
@@ -184,7 +189,8 @@ fn mux16_truth_table() {
 
 #[test]
 fn mux16_optimal() {
-    assert_eq!(flatten(Mux16::chip()).components.len(), 49);
+    let chip = flatten(Mux16::chip());
+    assert_eq!(count_combinational(&chip.components).nands, 49);
 }
 
 #[test]

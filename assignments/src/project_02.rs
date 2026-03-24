@@ -104,7 +104,7 @@ pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Combination
 /// Like `flatten`, but replaces HalfAdder/FullAdder with native Adder and Mux/Mux16 with
 /// native Mux for efficient simulation.
 ///
-/// Note: this is pinned to N16, just so it can rewrite the Mux16 compoennt as a native Mux.
+/// Note: this is pinned to N16, just so it can rewrite the Mux16 component as a native Mux.
 pub fn flatten_for_simulation<C>(chip: C) -> IC<native::Simulational<N16, N16>>
 where
     C: Reflect + Into<Project02Component>,

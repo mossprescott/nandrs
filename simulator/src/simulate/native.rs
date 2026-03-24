@@ -2,7 +2,7 @@
 /// "native" in that the simulator implements them directly for performance reasons.
 
 use crate::{Component, IC, Input, Input1, Output, OutputBus, Reflect, Chip, Interface};
-use crate::component::Computational;
+use crate::component::{Computational, ComputationalCounts};
 use crate::declare::BusRef;
 use crate::nat::{Nat, N1, IsGreater};
 
@@ -110,4 +110,38 @@ impl<A: Nat, D: Nat> From<Mux<N1>> for Simulational<A, D> {
 
 impl<A: Nat, D: Nat> From<Adder> for Simulational<A, D> {
     fn from(c: Adder) -> Self { Simulational::Adder(c) }
+}
+
+pub struct SimulationalCounts {
+    pub primitive: ComputationalCounts,
+    pub muxes: usize,
+    pub mux1s: usize,
+    pub adders: usize,
+}
+
+pub fn count_simulational<A: Nat, D: Nat>(components: &[Simulational<A, D>]) -> SimulationalCounts {
+    let mut counts = SimulationalCounts {
+        primitive: ComputationalCounts {
+            nands: 0, buffers: 0, registers: 0,
+            rams: 0, roms: 0, serials: 0, memory_systems: 0,
+        },
+        muxes: 0, mux1s: 0, adders: 0,
+    };
+    for comp in components {
+        match comp {
+            Simulational::Primitive(p) => match p {
+                Computational::Nand(_)         => counts.primitive.nands += 1,
+                Computational::Buffer(_)       => counts.primitive.buffers += 1,
+                Computational::Register(_)     => counts.primitive.registers += 1,
+                Computational::RAM(_)          => counts.primitive.rams += 1,
+                Computational::ROM(_)          => counts.primitive.roms += 1,
+                Computational::Serial(_)       => counts.primitive.serials += 1,
+                Computational::MemorySystem(_) => counts.primitive.memory_systems += 1,
+            },
+            Simulational::Mux(_)   => counts.muxes += 1,
+            Simulational::Mux1(_)  => counts.mux1s += 1,
+            Simulational::Adder(_) => counts.adders += 1,
+        }
+    }
+    counts
 }

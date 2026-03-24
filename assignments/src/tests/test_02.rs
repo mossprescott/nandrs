@@ -1,5 +1,5 @@
 use simulator::{Component, print_graph, print_ic_graph, Chip as _};
-use simulator::component::Combinational;
+use simulator::component::{Combinational, count_combinational};
 use simulator::eval::eval;
 use simulator::nat::{N1, N16};
 use simulator::word::Word;
@@ -39,7 +39,8 @@ fn half_adder_truth_table() {
 
 #[test]
 fn half_adder_optimal() {
-    assert_eq!(flatten_nands(HalfAdder::chip()).components.len(), 5);
+    let chip = flatten_nands(HalfAdder::chip());
+    assert_eq!(count_combinational(&chip.components).nands, 5);
 }
 
 #[test]
@@ -60,7 +61,8 @@ fn full_adder_truth_table() {
 
 #[test]
 fn full_adder_optimal() {
-    assert_eq!(flatten_nands(FullAdder::chip()).components.len(), 9);
+    let chip = flatten_nands(FullAdder::chip());
+    assert_eq!(count_combinational(&chip.components).nands, 9);
 }
 
 #[test]
@@ -80,10 +82,9 @@ fn inc16_truth_table() {
 
 #[test]
 fn inc16_optimal() {
-    let components = flatten(Inc16::chip()).components;
-    let nands = components.iter().filter(|c| matches!(c, Combinational::Nand(_))).count();
+    let chip = flatten(Inc16::chip());
     // Not(1) for bit 0, plus 15 FullAdders × 9 nands each for the carry chain
-    assert_eq!(nands, 1 + 15 * 9);
+    assert_eq!(count_combinational(&chip.components).nands, 1 + 15 * 9);
 }
 
 #[test]
@@ -106,10 +107,9 @@ fn add16_truth_table() {
 
 #[test]
 fn add16_optimal() {
-    let components = flatten(Add16::chip()).components;
-    let nands = components.iter().filter(|c| matches!(c, Combinational::Nand(_))).count();
+    let chip = flatten(Add16::chip());
     // 16 FullAdders × 9 nands each
-    assert_eq!(nands, 16 * 9);
+    assert_eq!(count_combinational(&chip.components).nands, 16 * 9);
 }
 
 #[test]
@@ -129,10 +129,11 @@ fn zero16_truth_table() {
 
 #[test]
 fn zero16_optimal() {
+    let chip = flatten(Zero16::chip());
     // negate each bit: 16
     // and-tree: 2*(8+4+2+1) = 30
     // two nots because we use 16-way nand for "realism"
-    assert_eq!(flatten(Zero16::chip()).components.len(), 48);
+    assert_eq!(count_combinational(&chip.components).nands, 48);
 }
 
 #[test]
@@ -153,9 +154,8 @@ fn neg16_truth_table() {
 
 #[test]
 fn neg16_optimal() {
-    let components = flatten(Neg16::chip()).components;
-    let nands = components.iter().filter(|c| matches!(c, Combinational::Nand(_))).count();
-    assert_eq!(nands, 0);
+    let chip = flatten(Neg16::chip());
+    assert_eq!(count_combinational(&chip.components).nands, 0);
 }
 
 #[test]
@@ -206,9 +206,8 @@ fn alu_truth_table() {
 
 #[test]
 fn alu_optimal() {
-    let components = flatten(ALU::chip()).components;
-    let nands = components.iter().filter(|c| matches!(c, Combinational::Nand(_))).count();
-    assert_eq!(nands, 720);
+    let chip = flatten(ALU::chip());
+    assert_eq!(count_combinational(&chip.components).nands, 720);
 }
 
 
