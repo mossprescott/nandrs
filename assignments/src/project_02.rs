@@ -5,7 +5,7 @@ use simulator::declare::{Interface, BusRef};
 use simulator::Reflect as _;
 use simulator::Chip as _;
 use simulator::component::Combinational;
-use simulator::nat::Nat;
+use simulator::nat::{Nat, N16};
 use simulator::simulate::native;
 use crate::project_01::{Project01Component, Nand, Buffer, Mux16, Not16, And16, Not, Xor, And, Or, Mux};
 
@@ -101,15 +101,15 @@ pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Combination
     }
 }
 
-/// Like `flatten`, but replaces HalfAdder/FullAdder with native Adder components for efficient
-/// simulation.
-pub fn flatten_for_simulation<C, A, D>(chip: C) -> IC<native::Simulational<A, D>>
+/// Like `flatten`, but replaces HalfAdder/FullAdder with native Adder and Mux/Mux16 with
+/// native Mux for efficient simulation.
+///
+/// Note: this is pinned to N16, just so it can rewrite the Mux16 compoennt as a native Mux.
+pub fn flatten_for_simulation<C>(chip: C) -> IC<native::Simulational<N16, N16>>
 where
     C: Reflect + Into<Project02Component>,
-    A: Nat,
-    D: Nat,
 {
-    fn go<A: Nat, D: Nat>(comp: Project02Component) -> Vec<native::Simulational<A, D>> {
+    fn go(comp: Project02Component) -> Vec<native::Simulational<N16, N16>> {
         match comp {
             Project02Component::HalfAdder(c) => vec![
                 native::Adder {
@@ -120,6 +120,16 @@ where
                 native::Adder {
                     a: c.a, b: c.b, c: c.c, sum: c.sum, carry: c.carry,
                 }.into()
+            ],
+            Project02Component::Project01(Project01Component::Mux(c)) => vec![
+                native::Simulational::Mux1(native::Mux {
+                    a0: c.a0, a1: c.a1, sel: c.sel, out: c.out,
+                })
+            ],
+            Project02Component::Project01(Project01Component::Mux16(c)) => vec![
+                native::Simulational::Mux(native::Mux {
+                    a0: c.a0, a1: c.a1, sel: c.sel, out: c.out,
+                })
             ],
             _ => match comp.expand() {
                 None => match comp {

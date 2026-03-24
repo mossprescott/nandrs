@@ -9,7 +9,7 @@ use simulator::simulate::{MemoryMap, synthesize, ChipWiring};
 use crate::project_02::{flatten, flatten_for_simulation, Inc16, Add16, Zero16};
 
 fn synth<C: Reflect + Clone + Into<crate::project_02::Project02Component>>(chip: C) -> ChipWiring<N16> {
-    let flat = flatten_for_simulation::<_, N16, N16>(chip);
+    let flat = flatten_for_simulation(chip);
     synthesize(&flat, MemoryMap::new(vec![]))
 }
 

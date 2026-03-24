@@ -1,10 +1,10 @@
-use crate::project_05::{CPU, Computer, Decode, flatten, SCREEN_BASE, KEYBOARD, find_ram, find_screen, find_rom, find_keyboard, memory_system};
+use crate::project_05::{CPU, Computer, Decode, flatten, flatten_for_simulation, SCREEN_BASE, KEYBOARD, find_ram, find_screen, find_rom, find_keyboard, memory_system};
 use crate::project_06::parse_statement;
 use simulator::declare::{Chip as _, IC};
 use simulator::simulate::{simulate, ChipState, MemoryMap};
 use simulator::component::{Computational, Computational16, MemorySystem16};
 use simulator::nat::N16;
-use simulator::print_graph;
+use simulator::{print_graph, print_ic_graph};
 use simulator::word::Word16;
 
 /// Mostly this is testing the simulator's handling of the memory mapping we specified.
@@ -235,6 +235,30 @@ pub fn computer_max_behavior() {
     println!("{}", print_graph(&chip));
 
     let flat = flatten(chip);
+
+    println!("{}", print_ic_graph(&flat));
+
+    let state = simulate(&flat, memory_system());
+
+    let rom = find_rom(&state);
+
+    let pgm = max_program();
+    rom.flash(pgm.clone());
+
+    test_computer_max_behavior(state, pgm.len() as u64);
+}
+
+#[test]
+pub fn computer_max_behavior_fast() {
+    let chip = Computer::chip();
+
+    // When it breaks, it's nice to see what it tried to do
+    println!("{}", print_graph(&chip));
+
+    let flat = flatten_for_simulation(Computer::chip());
+
+    println!("{}", print_ic_graph(&flat));
+
     let state = simulate(&flat, memory_system());
 
     let rom = find_rom(&state);
@@ -383,13 +407,35 @@ fn computer_read_keyboard() {
 
 #[test]
 fn computer_optimal() {
-    let components = flatten(Computer::chip()).components;
-    let memsys = components.iter().filter(|c| matches!(c, Computational::MemorySystem(_))).count();
-    let roms   = components.iter().filter(|c| matches!(c, Computational::ROM(_))).count();
-    let nands  = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
+    let components: Vec<Computational16> = flatten(Computer::chip()).components;
+    let nands   = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
+    let buffers = components.iter().filter(|c| matches!(c, Computational::Buffer(_))).count();
     let registers = components.iter().filter(|c| matches!(c, Computational::Register(_))).count();
-    assert_eq!(memsys,  1);
-    assert_eq!(roms,    1);
-    assert_eq!(nands, 1186);
+    let roms   = components.iter().filter(|c| matches!(c, Computational::ROM(_))).count();
+    let memsys = components.iter().filter(|c| matches!(c, Computational::MemorySystem(_))).count();
+    assert_eq!(nands,  1186);
     assert_eq!(registers, 3);
+    assert_eq!(roms,      1);
+    assert_eq!(memsys,    1);
+    assert_eq!(components.len(), nands + buffers + registers + roms + memsys);  // No unexpected component types
+}
+
+/// Component counts when flattened for simulation (with native Adder/Mux).
+#[test]
+fn computer_graph_for_simulation() {
+    use simulator::simulate::native::Simulational as S;
+    let components: Vec<S<N16, N16>> = flatten_for_simulation(Computer::chip()).components;
+    let memsys    = components.iter().filter(|c| matches!(c, S::Primitive(Computational::MemorySystem(_)))).count();
+    let roms      = components.iter().filter(|c| matches!(c, S::Primitive(Computational::ROM(_)))).count();
+    let nands     = components.iter().filter(|c| matches!(c, S::Primitive(Computational::Nand(_)))).count();
+    let registers = components.iter().filter(|c| matches!(c, S::Primitive(Computational::Register(_)))).count();
+    let muxes     = components.iter().filter(|c| matches!(c, S::Mux(_) | S::Mux1(_))).count();
+    let adders    = components.iter().filter(|c| matches!(c, S::Adder(_))).count();
+    let buffers   = components.iter().filter(|c| matches!(c, S::Primitive(Computational::Buffer(_)))).count();
+    assert_eq!(nands,   168);
+    assert_eq!(registers, 3);
+    assert_eq!(roms,      1);
+    assert_eq!(memsys,    1);
+    assert_eq!(muxes,    16);
+    assert_eq!(adders,   31);
 }
