@@ -112,8 +112,11 @@ where
     fn go(comp: Project02Component) -> Vec<native::Simulational<N16, N16>> {
         match comp {
             Project02Component::HalfAdder(c) => vec![
+                // Tricky: the simulator looks for the carry chain to always pass the carry bit in
+                // c, s it's important for the zero bit to got to b here, even though in principle
+                // it doesn't matter.
                 native::Adder {
-                    a: c.a, b: c.b, c: fixed(0), sum: c.sum, carry: c.carry,
+                    a: c.a, b: fixed(0), c: c.b, sum: c.sum, carry: c.carry,
                 }.into()
             ],
             Project02Component::FullAdder(c) => vec![
