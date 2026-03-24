@@ -368,8 +368,8 @@ pub fn flatten<C: Reflect + Into<DoubleComponent>>(chip: C) -> IC<Computational1
 /// Like `flatten`, but uses native Mux/Adder components for efficient simulation.
 pub fn flatten_for_simulation<C: Reflect + Into<DoubleComponent>>(
     chip: C,
-) -> IC<simulator::simulate::native::Simulational<N16, N16>> {
-    use simulator::simulate::native::Simulational;
+) -> IC<simulator::component::native::Simulational<N16, N16>> {
+    use simulator::component::native::Simulational;
     fn go(comp: DoubleComponent) -> Vec<Simulational<N16, N16>> {
         // Delegate Project05 subtrees immediately, so their interception logic handles Mux/Adder:
         if let DoubleComponent::Project05(p) = comp {

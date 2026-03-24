@@ -420,7 +420,7 @@ fn computer_optimal() {
 /// Component counts when flattened for simulation (with native Adder/Mux).
 #[test]
 fn computer_graph_for_simulation() {
-    use simulator::simulate::native::count_simulational;
+    use simulator::component::native::count_simulational;
     let chip = flatten_for_simulation(Computer::chip());
     let counts = count_simulational(&chip.components);
     assert_eq!(counts.primitive.nands, 168);

@@ -8,7 +8,7 @@ use simulator::Reflect as _;
 use simulator::component::Combinational;
 use simulator::declare::{BusRef, Interface};
 use simulator::nat::{N16, Nat};
-use simulator::simulate::native;
+use simulator::component::native;
 use simulator::{
     self, Chip, Component, IC, Input1, Input16, Output, Output16, Reflect, expand, fixed,
 };

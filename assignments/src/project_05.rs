@@ -11,9 +11,10 @@ use simulator::component::{
 };
 use simulator::declare::{BusRef, Interface};
 use simulator::nat::N16;
+use simulator::component::native;
 use simulator::simulate::{
     BusResident, ChipState, MemoryMap, RAMHandle, RAMMap, ROMHandle, ROMMap, RegionMap,
-    SerialHandle, SerialMap, native,
+    SerialHandle, SerialMap,
 };
 use simulator::word::Word16;
 use simulator::{

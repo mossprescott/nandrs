@@ -1,9 +1,9 @@
 mod eval;
 mod memory;
-pub mod native;
 mod synth;
 mod wiring;
 
+use crate::component::native;
 use crate::nat::Nat;
 use crate::word::Storable;
 

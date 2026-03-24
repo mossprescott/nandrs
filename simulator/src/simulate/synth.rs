@@ -3,7 +3,7 @@ use std::collections::hash_map::Entry;
 use std::fmt;
 use std::marker::PhantomData;
 
-use super::native::Simulational;
+use crate::component::native::Simulational;
 use crate::component::Computational;
 use crate::declare::{BusRef, IC, Reflect as _};
 use crate::nat::Nat;
