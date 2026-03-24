@@ -1,182 +1,11 @@
+//! Computational primitives: `RAM`, `ROM`, `Serial`, and `MemorySystem`, plus the `Computational`
+//! enum combining them with all sequential and combinational components.
+
 use crate::declare::BusRef;
 use crate::nat::{N16, Nat};
-use crate::{Chip, Component, IC, Input, Input1, Interface, Output, OutputBus, Reflect};
+use crate::{Chip, Component, IC, Input, Input1, Interface, OutputBus, Reflect};
 
-// - Nand (Combinational)
-
-/// The single primitive: true if either input is false.
-#[derive(Clone, Reflect, Chip)]
-pub struct Nand {
-    pub a: Input1,
-    pub b: Input1,
-    pub out: Output,
-}
-
-/// "Gate" that just connects its input to its output without modifying it. For our purposes,
-/// this is useful for connecting an input directly to an output in an IC.
-#[derive(Clone, Reflect)]
-pub struct Buffer {
-    pub a: Input1,
-    pub out: Output,
-}
-
-/// Nothing to expand; Buffer is primitive.
-impl Component for Buffer {
-    type Target = Buffer;
-
-    fn expand(&self) -> Option<IC<Buffer>> {
-        None
-    }
-}
-
-/// Type of components that participate in "combinational" circuits:
-/// - most importantly `Nand`
-/// - `Buffer` for pass-through connections
-pub enum Combinational {
-    Nand(Nand),
-    Buffer(Buffer),
-}
-
-impl From<Nand> for Combinational {
-    fn from(c: Nand) -> Self {
-        Combinational::Nand(c)
-    }
-}
-impl From<Buffer> for Combinational {
-    fn from(c: Buffer) -> Self {
-        Combinational::Buffer(c)
-    }
-}
-
-impl Reflect for Combinational {
-    fn reflect(&self) -> Interface {
-        match self {
-            Self::Nand(c) => c.reflect(),
-            Self::Buffer(c) => c.reflect(),
-        }
-    }
-    fn name(&self) -> String {
-        match self {
-            Self::Nand(c) => c.name(),
-            Self::Buffer(c) => c.name(),
-        }
-    }
-}
-
-pub struct CombinationalCounts {
-    pub nands: usize,
-    pub buffers: usize,
-}
-
-pub fn count_combinational(components: &[Combinational]) -> CombinationalCounts {
-    let mut counts = CombinationalCounts {
-        nands: 0,
-        buffers: 0,
-    };
-    for comp in components {
-        match comp {
-            Combinational::Nand(_) => counts.nands += 1,
-            Combinational::Buffer(_) => counts.buffers += 1,
-        }
-    }
-    counts
-}
-
-// - Registers (Sequential)
-
-#[derive(Clone, Reflect, Chip)]
-pub struct Register<Width: Nat> {
-    pub data_in: Input<Width>,
-    pub write: Input1,
-    pub data_out: OutputBus<Width>,
-}
-
-/// Nothing to expand; Register is primitive for the simulator we envisage.
-impl<Width: Nat> Component for Register<Width> {
-    type Target = Register<Width>;
-
-    fn expand(&self) -> Option<IC<Register<Width>>> {
-        None
-    }
-}
-
-pub type Register16 = Register<N16>;
-
-/// Type of components that participate in "sequential" circuits of a defined width: Combinational
-/// and `Register<Width>`.
-#[derive(Clone)]
-pub enum Sequential<Width: Nat> {
-    Nand(Nand),
-    Buffer(Buffer),
-    Register(Register<Width>),
-}
-
-impl<Width: Nat> From<Nand> for Sequential<Width> {
-    fn from(c: Nand) -> Self {
-        Sequential::Nand(c)
-    }
-}
-impl<Width: Nat> From<Buffer> for Sequential<Width> {
-    fn from(c: Buffer) -> Self {
-        Sequential::Buffer(c)
-    }
-}
-impl<Width: Nat> From<Register<Width>> for Sequential<Width> {
-    fn from(c: Register<Width>) -> Self {
-        Sequential::Register(c)
-    }
-}
-
-impl<Width: Nat + Clone> Reflect for Sequential<Width> {
-    fn reflect(&self) -> Interface {
-        match self {
-            Self::Nand(c) => c.reflect(),
-            Self::Buffer(c) => c.reflect(),
-            Self::Register(c) => c.reflect(),
-        }
-    }
-    fn name(&self) -> String {
-        match self {
-            Self::Nand(c) => c.name(),
-            Self::Buffer(c) => c.name(),
-            Self::Register(c) => c.name(),
-        }
-    }
-}
-
-impl<Width: Nat> Component for Sequential<Width> {
-    type Target = Self;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        None
-    }
-}
-
-pub type Sequential16 = Sequential<N16>;
-
-pub struct SequentialCounts {
-    pub nands: usize,
-    pub buffers: usize,
-    pub registers: usize,
-}
-
-pub fn count_sequential<W: Nat>(components: &[Sequential<W>]) -> SequentialCounts {
-    let mut counts = SequentialCounts {
-        nands: 0,
-        buffers: 0,
-        registers: 0,
-    };
-    for comp in components {
-        match comp {
-            Sequential::Nand(_) => counts.nands += 1,
-            Sequential::Buffer(_) => counts.buffers += 1,
-            Sequential::Register(_) => counts.registers += 1,
-        }
-    }
-    counts
-}
-
-// - Memory and I/O (Computational)
+use super::{Buffer, Combinational, Nand, Register, Sequential};
 
 /// Simple, writable memory. The simulator supplies an implementation when it finds one of these.
 #[derive(Clone, Reflect)]
@@ -292,8 +121,6 @@ impl<A: Nat, D: Nat> Component for MemorySystem<A, D> {
     }
 }
 
-// - Computational
-
 /// Type of components that participate in computers, including logic, registers, memory, and I/O.
 #[derive(Clone)]
 pub enum Computational<A: Nat, D: Nat> {
@@ -342,6 +169,25 @@ impl<A: Nat, D: Nat> Component for Computational<A, D> {
     }
 }
 
+impl<A: Nat, D: Nat> From<Combinational> for Computational<A, D> {
+    fn from(c: Combinational) -> Self {
+        match c {
+            Combinational::Nand(n) => Computational::Nand(n),
+            Combinational::Buffer(b) => Computational::Buffer(b),
+        }
+    }
+}
+
+impl<A: Nat, D: Nat> From<Sequential<D>> for Computational<A, D> {
+    fn from(s: Sequential<D>) -> Self {
+        match s {
+            Sequential::Nand(n) => Computational::Nand(n),
+            Sequential::Buffer(n) => Computational::Buffer(n),
+            Sequential::Register(r) => Computational::Register(r),
+        }
+    }
+}
+
 pub type RAM16 = RAM<N16, N16>;
 pub type ROM16 = ROM<N16, N16>;
 pub type Serial16 = Serial<N16>;
@@ -382,23 +228,4 @@ pub fn count_computational<A: Nat, D: Nat>(
         }
     }
     counts
-}
-
-impl<A: Nat, D: Nat> From<Combinational> for Computational<A, D> {
-    fn from(c: Combinational) -> Self {
-        match c {
-            Combinational::Nand(n) => Computational::Nand(n),
-            Combinational::Buffer(b) => Computational::Buffer(b),
-        }
-    }
-}
-
-impl<A: Nat, D: Nat> From<Sequential<D>> for Computational<A, D> {
-    fn from(s: Sequential<D>) -> Self {
-        match s {
-            Sequential::Nand(n) => Computational::Nand(n),
-            Sequential::Buffer(n) => Computational::Buffer(n),
-            Sequential::Register(r) => Computational::Register(r),
-        }
-    }
 }
