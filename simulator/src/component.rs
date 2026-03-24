@@ -13,7 +13,7 @@ pub struct Nand {
 }
 
 /// "Gate" that just connects its input to its output without modifying it. For our purposes,
-/// this is useful for connecting an input directly to an ouput in an IC.
+/// this is useful for connecting an input directly to an output in an IC.
 #[derive(Clone, Reflect)]
 pub struct Buffer {
     pub a: Input1,
@@ -151,7 +151,7 @@ pub fn count_sequential<W: Nat>(components: &[Sequential<W>]) -> SequentialCount
 
 // - Memory and I/O (Computational)
 
-/// Simple, writable memory. The simulator supplies an implmentation when it finds one of these.
+/// Simple, writable memory. The simulator supplies an implementation when it finds one of these.
 #[derive(Clone, Reflect)]
 pub struct RAM<A: Nat, D: Nat> {
     /// Capacity of the RAM in words; <= 2^address_bits. Valid addresses are 0 to size-1.
@@ -165,7 +165,7 @@ pub struct RAM<A: Nat, D: Nat> {
     pub data_out: OutputBus<D>,
 }
 
-// Note: this is not the Chip trait, du to the extra arg.
+// Note: this is not the Chip trait, due to the extra arg.
 impl<A: Nat, D: Nat> RAM<A, D> {
     pub fn chip(size: usize) -> Self {
         RAM { size, addr: Input::new(), write: Input::new(), data_in: Input::new(), data_out: OutputBus::<D>::new() }
@@ -181,7 +181,7 @@ impl<A: Nat, D: Nat> Component for RAM<A, D> {
     }
 }
 
-/// Simple, read-only memory. The simulator supplies an implmentation when it finds one of these.
+/// Simple, read-only memory. The simulator supplies an implementation when it finds one of these.
 #[derive(Clone, Reflect)]
 pub struct ROM<A: Nat, D: Nat> {
     /// Capacity of the ROM in words; <= 2^address_bits. Valid addresses are 0 to size-1.
@@ -192,7 +192,7 @@ pub struct ROM<A: Nat, D: Nat> {
     pub out: OutputBus<D>,
 }
 
-// Note: this is not the Chip trait, du to the extra arg.
+// Note: this is not the Chip trait, due to the extra arg.
 impl<A: Nat, D: Nat> ROM<A, D> {
     pub fn chip(size: usize) -> Self {
         ROM { size: size, addr: Input::<A>::new(), out: OutputBus::<D>::new() }

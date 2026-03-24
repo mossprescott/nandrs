@@ -113,7 +113,7 @@ where
         match comp {
             Project02Component::HalfAdder(c) => vec![
                 // Tricky: the simulator looks for the carry chain to always pass the carry bit in
-                // c, s it's important for the zero bit to got to b here, even though in principle
+                // c, so it's important for the zero bit to go to b here, even though in principle
                 // it doesn't matter.
                 native::Adder {
                     a: c.a, b: fixed(0), c: c.b, sum: c.sum, carry: c.carry,
@@ -282,7 +282,7 @@ impl Component for Add16 {
 }
 
 /// True if any of the 16 bits is false, as if they were all fed into a big 16-input Nand gate —
-/// which is a thing which exists — but here implemented with a series of discreet Ands.
+/// which is a thing which exists — but here implemented with a series of discrete Ands.
 ///
 /// Note: the simulator will recognize a series of Ands like this and reduce it to a single
 /// operation.
