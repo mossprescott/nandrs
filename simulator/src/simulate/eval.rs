@@ -2,16 +2,16 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::device::MemoryDevice as _;
+use crate::device::{self, MemoryDevice as _};
 use crate::nat::{N1, Nat};
 use crate::word::{Storable, StorableFor, Word};
 
 use super::memory::RegionMap;
 use super::{ChipWiring, wiring};
 
-type DeviceRAM<A, D> = Rc<RefCell<crate::device::RAM<A, D>>>;
-type DeviceROM<A, D> = Rc<RefCell<crate::device::ROM<A, D>>>;
-type DeviceSerial<D> = Rc<RefCell<crate::device::Serial<D>>>;
+type DeviceRAM<A, D> = Rc<RefCell<device::RAM<A, D>>>;
+type DeviceROM<A, D> = Rc<RefCell<device::ROM<A, D>>>;
+type DeviceSerial<D> = Rc<RefCell<device::Serial<D>>>;
 
 /// A device that can appear as a region within a MemorySystem's address space.
 enum MSRegion<A: Nat + Storable, D: Nat + Storable> {
@@ -20,8 +20,8 @@ enum MSRegion<A: Nat + Storable, D: Nat + Storable> {
     Serial(DeviceSerial<D>),
 }
 
-impl<A: Nat + Storable, D: Nat + Storable> crate::device::MemoryDevice<A, D> for MSRegion<A, D> {
-    fn set_addr(&mut self, addr: Word<A>) -> Result<(), crate::device::Error> {
+impl<A: Nat + Storable, D: Nat + Storable> device::MemoryDevice<A, D> for MSRegion<A, D> {
+    fn set_addr(&mut self, addr: Word<A>) -> Result<(), device::Error> {
         match self {
             MSRegion::RAM(d) => d.borrow_mut().set_addr(addr),
             MSRegion::ROM(d) => d.borrow_mut().set_addr(addr),
@@ -32,34 +32,32 @@ impl<A: Nat + Storable, D: Nat + Storable> crate::device::MemoryDevice<A, D> for
         match self {
             MSRegion::RAM(d) => d.borrow_mut().ticktock(),
             MSRegion::ROM(d) => d.borrow_mut().ticktock(),
-            MSRegion::Serial(d) => <crate::device::Serial<D> as crate::device::MemoryDevice<
-                A,
-                D,
-            >>::ticktock(&mut *d.borrow_mut()),
+            MSRegion::Serial(d) => {
+                <device::Serial<D> as device::MemoryDevice<A, D>>::ticktock(&mut *d.borrow_mut())
+            }
         }
     }
-    fn read(&self) -> Result<Word<D>, crate::device::Error> {
+    fn read(&self) -> Result<Word<D>, device::Error> {
         match self {
             MSRegion::RAM(d) => d.borrow().read(),
             MSRegion::ROM(d) => d.borrow().read(),
             MSRegion::Serial(d) => {
-                <crate::device::Serial<D> as crate::device::MemoryDevice<A, D>>::read(&*d.borrow())
+                <device::Serial<D> as device::MemoryDevice<A, D>>::read(&*d.borrow())
             }
         }
     }
-    fn write(&mut self, word: Word<D>) -> Result<(), crate::device::Error> {
+    fn write(&mut self, word: Word<D>) -> Result<(), device::Error> {
         match self {
             MSRegion::RAM(d) => d.borrow_mut().write(word),
             MSRegion::ROM(d) => d.borrow_mut().write(word),
-            MSRegion::Serial(d) => <crate::device::Serial<D> as crate::device::MemoryDevice<
-                A,
-                D,
-            >>::write(&mut *d.borrow_mut(), word),
+            MSRegion::Serial(d) => {
+                <device::Serial<D> as device::MemoryDevice<A, D>>::write(&mut *d.borrow_mut(), word)
+            }
         }
     }
 }
 
-type MSDevice<A, D> = crate::device::MemorySystem<A, MSRegion<A, D>>;
+type MSDevice<A, D> = device::MemorySystem<A, MSRegion<A, D>>;
 
 /// Runtime state of a simulated chip, and access to its inputs and outputs.
 ///
@@ -101,13 +99,13 @@ pub fn initialize<A: Nat + Storable, D: Nat + Storable>(wiring: ChipWiring<D>) -
     let ram_devices: Vec<DeviceRAM<A, D>> = wiring
         .ram_specs
         .iter()
-        .map(|s| Rc::new(RefCell::new(crate::device::RAM::new(s.size))))
+        .map(|s| Rc::new(RefCell::new(device::RAM::new(s.size))))
         .collect();
 
     let rom_devices: Vec<DeviceROM<A, D>> = wiring
         .rom_specs
         .iter()
-        .map(|s| Rc::new(RefCell::new(crate::device::ROM::new(s.size))))
+        .map(|s| Rc::new(RefCell::new(device::ROM::new(s.size))))
         .collect();
 
     let mut ms_bus_residents: Vec<BusResident<A, D>> = Vec::new();
@@ -115,39 +113,36 @@ pub fn initialize<A: Nat + Storable, D: Nat + Storable>(wiring: ChipWiring<D>) -
         .ms_specs
         .iter()
         .map(|spec| {
-            let mut overlays: Vec<crate::device::Overlay<A, MSRegion<A, D>>> = Vec::new();
+            let mut overlays: Vec<device::Overlay<A, MSRegion<A, D>>> = Vec::new();
             for region in &spec.regions {
                 match region {
                     RegionMap::RAM(r) => {
-                        let ram: DeviceRAM<A, D> =
-                            Rc::new(RefCell::new(crate::device::RAM::new(r.size)));
+                        let ram: DeviceRAM<A, D> = Rc::new(RefCell::new(device::RAM::new(r.size)));
                         ms_bus_residents.push(BusResident::RAM(RAMHandle {
                             base: r.base,
                             inner: Rc::clone(&ram),
                         }));
-                        overlays.push(crate::device::Overlay {
+                        overlays.push(device::Overlay {
                             base: Word::new(r.base as u64),
                             device: MSRegion::RAM(ram),
                         });
                     }
                     RegionMap::ROM(r) => {
-                        let rom: DeviceROM<A, D> =
-                            Rc::new(RefCell::new(crate::device::ROM::new(r.size)));
+                        let rom: DeviceROM<A, D> = Rc::new(RefCell::new(device::ROM::new(r.size)));
                         ms_bus_residents.push(BusResident::ROM(ROMHandle {
                             inner: Rc::clone(&rom),
                         }));
-                        overlays.push(crate::device::Overlay {
+                        overlays.push(device::Overlay {
                             base: Word::new(r.base as u64),
                             device: MSRegion::ROM(rom),
                         });
                     }
                     RegionMap::Serial(s) => {
-                        let serial: DeviceSerial<D> =
-                            Rc::new(RefCell::new(crate::device::Serial::new()));
+                        let serial: DeviceSerial<D> = Rc::new(RefCell::new(device::Serial::new()));
                         ms_bus_residents.push(BusResident::Serial(SerialHandle {
                             inner: Rc::clone(&serial),
                         }));
-                        overlays.push(crate::device::Overlay {
+                        overlays.push(device::Overlay {
                             base: Word::new(s.base as u64),
                             device: MSRegion::Serial(serial),
                         });
@@ -161,7 +156,7 @@ pub fn initialize<A: Nat + Storable, D: Nat + Storable>(wiring: ChipWiring<D>) -
     let serial_devices: Vec<DeviceSerial<D>> = wiring
         .serial_specs
         .iter()
-        .map(|_| Rc::new(RefCell::new(crate::device::Serial::new())))
+        .map(|_| Rc::new(RefCell::new(device::Serial::new())))
         .collect();
 
     let mut bus_residents: Vec<BusResident<A, D>> = Vec::new();
@@ -269,11 +264,10 @@ impl<A: Nat + Storable, D: Nat + Storable> ChipState<A, D> {
                 wiring::ComponentWiring::Serial(s) => {
                     if read_bit(&self.wire_state, s.write) {
                         let word: Word<D> = Word::new(self.wire_state[s.data_in.0 as usize]);
-                        let _ =
-                            <crate::device::Serial<D> as crate::device::MemoryDevice<A, D>>::write(
-                                &mut *self.serial_devices[s.device_slot].borrow_mut(),
-                                word,
-                            );
+                        let _ = <device::Serial<D> as device::MemoryDevice<A, D>>::write(
+                            &mut *self.serial_devices[s.device_slot].borrow_mut(),
+                            word,
+                        );
                     }
                 }
                 _ => {}
@@ -353,7 +347,7 @@ impl<A: Nat + Storable, D: Nat + Storable> ChipState<A, D> {
                 }
                 wiring::ComponentWiring::Serial(s) => {
                     self.wire_state[s.out.0 as usize] =
-                        <crate::device::Serial<D> as crate::device::MemoryDevice<A, D>>::read(
+                        <device::Serial<D> as device::MemoryDevice<A, D>>::read(
                             &*self.serial_devices[s.device_slot].borrow(),
                         )
                         .map(|w| w.unsigned())
@@ -486,7 +480,7 @@ pub enum BusResident<A: Nat + Storable, D: Nat + Storable> {
 #[derive(Clone)]
 pub struct RAMHandle<A: Nat + Storable, D: Nat + Storable> {
     pub base: usize,
-    inner: Rc<RefCell<crate::device::RAM<A, D>>>,
+    inner: Rc<RefCell<device::RAM<A, D>>>,
 }
 
 impl<A: Nat + Storable, D: Nat + Storable> RAMHandle<A, D> {
@@ -507,7 +501,7 @@ impl<A: Nat + Storable, D: Nat + Storable> RAMHandle<A, D> {
 /// A clonable handle to a ROM instance in the simulated circuit.
 #[derive(Clone)]
 pub struct ROMHandle<A: Nat + Storable, D: Nat + Storable> {
-    inner: Rc<RefCell<crate::device::ROM<A, D>>>,
+    inner: Rc<RefCell<device::ROM<A, D>>>,
 }
 
 impl<A: Nat + Storable, D: Nat + Storable> ROMHandle<A, D> {
@@ -522,7 +516,7 @@ impl<A: Nat + Storable, D: Nat + Storable> ROMHandle<A, D> {
 /// A clonable handle to a Serial I/O device in the simulated circuit.
 #[derive(Clone)]
 pub struct SerialHandle<D: Nat + Storable> {
-    inner: Rc<RefCell<crate::device::Serial<D>>>,
+    inner: Rc<RefCell<device::Serial<D>>>,
 }
 
 impl<D: Nat + Storable> SerialHandle<D> {
