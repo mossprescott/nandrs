@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::device::MemoryDevice as _;
-use crate::nat::Nat;
-use crate::word::{Storable, Word};
+use crate::nat::{N1, Nat};
+use crate::word::{Storable, StorableFor, Word};
 
 use super::memory::RegionMap;
 use super::{ChipWiring, wiring};
@@ -92,6 +92,9 @@ pub struct ChipState<A: Nat + Storable, D: Nat + Storable> {
 }
 
 /// Allocate simulation state (RAM/ROM buffers, registers) and run an initial evaluation.
+///
+/// Note: all memory (Registers and RAMs) is initialized to 0; this might not always be a valid
+/// state, depending on the chip. See `reset()`.
 pub fn initialize<A: Nat + Storable, D: Nat + Storable>(wiring: ChipWiring<D>) -> ChipState<A, D> {
     let n_wires = wiring.n_wires;
 
@@ -361,6 +364,18 @@ impl<A: Nat + Storable, D: Nat + Storable> ChipState<A, D> {
         }
 
         eval_logic(&mut self.wire_state, &self.wiring.component_wiring);
+    }
+}
+
+impl<A: Nat + Storable, D: Nat + StorableFor<N1>> ChipState<A, D> {
+    /// If there is an input called "reset", assert it for one cycle to put the chip into a known
+    /// state.
+    pub fn reset(&mut self) {
+        if self.wiring.input_wiring.contains_key("reset") {
+            self.set("reset", true.into());
+            self.ticktock();
+            self.set("reset", false.into());
+        }
     }
 }
 

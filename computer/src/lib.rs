@@ -83,6 +83,9 @@ pub fn run(
         }
     };
 
+    state.reset();
+    cycle += 1;
+
     if args.verbose {
         print_state(state.get("pc"), cycle);
     } else if args.trace {

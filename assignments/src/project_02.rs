@@ -6,9 +6,9 @@ use crate::project_01::{
 use simulator::Chip as _;
 use simulator::Reflect as _;
 use simulator::component::Combinational;
+use simulator::component::native;
 use simulator::declare::{BusRef, Interface};
 use simulator::nat::{N16, Nat};
-use simulator::component::native;
 use simulator::{
     self, Chip, Component, IC, Input1, Input16, Output, Output16, Reflect, expand, fixed,
 };

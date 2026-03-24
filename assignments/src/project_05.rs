@@ -5,13 +5,13 @@ use crate::project_02::{ALU, Project02Component};
 use crate::project_03::{PC, Project03Component};
 use simulator::Chip as _;
 use simulator::Reflect as _;
+use simulator::component::native;
 use simulator::component::{
     Buffer, Computational, Computational16, MemorySystem16, Nand, RAM16, ROM16, Register16,
     Sequential,
 };
 use simulator::declare::{BusRef, Interface};
 use simulator::nat::N16;
-use simulator::component::native;
 use simulator::simulate::{
     BusResident, ChipState, MemoryMap, RAMHandle, RAMMap, ROMHandle, ROMMap, RegionMap,
     SerialHandle, SerialMap,

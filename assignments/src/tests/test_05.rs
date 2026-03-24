@@ -272,9 +272,10 @@ pub fn test_computer_max_behavior(mut state: ChipState<N16, N16>, max_iter: u64)
     ram.poke(1, 3u16.into());
     ram.poke(2, 5u16.into());
 
+    state.reset();
+
     // TODO: make the looping prologue automatic and factor this out
     for _ in 0..max_iter {
-        println!("PC: {}", state.get("pc"));
         state.ticktock();
         if state.get("pc").unsigned() > max_iter {
             break;
@@ -283,13 +284,11 @@ pub fn test_computer_max_behavior(mut state: ChipState<N16, N16>, max_iter: u64)
 
     assert_eq!(ram.peek(3), 5u16.into());
 
-    state.set("reset", true.into());
-    state.ticktock();
-    state.set("reset", false.into());
-
     // Max in RAM[1]:
     ram.poke(1, 23456u16.into());
     ram.poke(2, 12345u16.into());
+
+    state.reset();
 
     for _ in 0..max_iter {
         state.ticktock();
