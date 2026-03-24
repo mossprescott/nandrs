@@ -34,7 +34,7 @@ use assignments::project_01::Mux16;
 /// a second ROM which we'll load with the same binary.
 use assignments::project_01::{And, Not, Or};
 use assignments::project_02::FullAdder;
-use assignments::project_02::{ALU, Inc16, Zero16};
+use assignments::project_02::{ALU, Inc16};
 use assignments::project_05::{self, Decode, Project05Component};
 use simulator::component::{Buffer, Computational16, MemorySystem16, ROM16, Register16};
 use simulator::declare::{BusRef, Interface};
@@ -177,13 +177,8 @@ impl Component for CPU {
         // === D register (write_d already gated with is_c in Decode) ===
         reg_d: Register16 { data_in: this.mem_data_out.into(), write: decode.write_d.into(), data_out: reg_d_out },
 
-        // Detect the invalid state of the PC at start: both addrs 0
-        // Equally-good tests would be: pc0 == pc1; what else?
-        invalid_pc: Zero16 { a:this.pc1.into(), out: Output::new() },
-        do_reset: Or { a: this.reset, b: invalid_pc.out.into(), out: Output::new() },
-
         pc: DoublePC {
-            reset: do_reset.out.into(),
+            reset: this.reset,
             addr:  reg_a_out.into(),
             load:  do_jmp.out.into(),
             skip:  do_skip.out.into(),
@@ -438,7 +433,7 @@ mod test {
             .count();
         assert_eq!(memsys, 1);
         assert_eq!(roms, 2); // Compare to 1
-        assert_eq!(nands, 1436); // Compare to 1126
+        assert_eq!(nands, 1385); // Compare to 1126
         assert_eq!(registers, 4); // Compare to 3
     }
 }
