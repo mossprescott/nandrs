@@ -15,8 +15,18 @@ fn main() {
     // 80s beige: warm, slightly creamy — like an old IBM/Commodore chassis.
     const BEIGE: [u8; 3] = [0xC8, 0xB8, 0x98];
 
-    let row: Vec<u8> = BEIGE.iter().cycle().take((W * 3) as usize).cloned().collect();
-    let data: Vec<u8> = row.iter().cycle().take((W * H * 3) as usize).cloned().collect();
+    let row: Vec<u8> = BEIGE
+        .iter()
+        .cycle()
+        .take((W * 3) as usize)
+        .cloned()
+        .collect();
+    let data: Vec<u8> = row
+        .iter()
+        .cycle()
+        .take((W * H * 3) as usize)
+        .cloned()
+        .collect();
 
     let file = std::fs::File::create(&path).expect("failed to create bezel.png");
     let mut enc = png::Encoder::new(file, W, H);

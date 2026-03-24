@@ -1,5 +1,5 @@
 use crate::nat::Nat;
-use crate::word::{Word, Storable};
+use crate::word::{Storable, Word};
 
 pub enum Error {
     AddressOutOfRange(usize),
@@ -42,7 +42,12 @@ pub struct ROM<A: Nat + Storable, D: Nat + Storable> {
 
 impl<A: Nat + Storable, D: Nat + Storable> ROM<A, D> {
     pub fn new(size: usize) -> Self {
-        ROM { size, data: vec![Word::new(0); size].into_boxed_slice(), addr: Word::new(0), valid: true }
+        ROM {
+            size,
+            data: vec![Word::new(0); size].into_boxed_slice(),
+            addr: Word::new(0),
+            valid: true,
+        }
     }
 
     /// For "external" users (not the simulation); overwrite the contents of the ROM
@@ -77,7 +82,11 @@ impl<A: Nat + Storable, D: Nat + Storable> MemoryDevice<A, D> for ROM<A, D> {
     fn ticktock(&mut self) {}
 
     fn read(&self) -> Result<Word<D>, Error> {
-        if self.valid { Ok(self.data[self.addr.unsigned() as usize]) } else { Err(Error::AddressOutOfRange(0)) }
+        if self.valid {
+            Ok(self.data[self.addr.unsigned() as usize])
+        } else {
+            Err(Error::AddressOutOfRange(0))
+        }
     }
 
     fn write(&mut self, _word: Word<D>) -> Result<(), Error> {
@@ -99,7 +108,13 @@ pub struct RAM<A: Nat + Storable, D: Nat + Storable> {
 
 impl<A: Nat + Storable, D: Nat + Storable> RAM<A, D> {
     pub fn new(size: usize) -> Self {
-        RAM { size, data: vec![Word::new(0); size].into_boxed_slice(), addr: Word::new(0), next_addr: Word::new(0), valid: false }
+        RAM {
+            size,
+            data: vec![Word::new(0); size].into_boxed_slice(),
+            addr: Word::new(0),
+            next_addr: Word::new(0),
+            valid: false,
+        }
     }
 
     /// For "external" users (not the simulation); modify the contents of a location immediately.
@@ -143,7 +158,11 @@ impl<A: Nat + Storable, D: Nat + Storable> MemoryDevice<A, D> for RAM<A, D> {
     }
 
     fn read(&self) -> Result<Word<D>, Error> {
-        if self.valid { Ok(self.data[self.addr.unsigned() as usize]) } else { Err(Error::AddressOutOfRange(0)) }
+        if self.valid {
+            Ok(self.data[self.addr.unsigned() as usize])
+        } else {
+            Err(Error::AddressOutOfRange(0))
+        }
     }
 
     fn write(&mut self, word: Word<D>) -> Result<(), Error> {
@@ -175,7 +194,9 @@ pub struct MemorySystem<A: Nat + Storable, T> {
     pub devices: Vec<Overlay<A, T>>,
 }
 
-impl<A: Nat + Storable, D: Nat + Storable, T: MemoryDevice<A, D>> MemoryDevice<A, D> for MemorySystem<A, T> {
+impl<A: Nat + Storable, D: Nat + Storable, T: MemoryDevice<A, D>> MemoryDevice<A, D>
+    for MemorySystem<A, T>
+{
     /// Forward the address to every device (base-adjusted). Each device records whether it's valid.
     fn set_addr(&mut self, addr: Word<A>) -> Result<(), Error> {
         for overlay in &mut self.devices {
@@ -235,21 +256,29 @@ impl<D: Nat + Storable> Serial<D> {
         Serial {
             read_val: Word::new(0),
             write_val: Word::new(0),
-            written: false
+            written: false,
         }
     }
 
     /// Push a value from the outside world for the chip to read.
-    pub fn push(&mut self, val: Word<D>) { self.read_val = val; }
+    pub fn push(&mut self, val: Word<D>) {
+        self.read_val = val;
+    }
 
     /// Pull the last value written by the chip (or 0 if nothing was written).
-    pub fn pull(&self) -> Word<D> { self.write_val }
+    pub fn pull(&self) -> Word<D> {
+        self.write_val
+    }
 
     /// Check whether the chip wrote during the last cycle.
-    pub fn was_written(&self) -> bool { self.written }
+    pub fn was_written(&self) -> bool {
+        self.written
+    }
 
     /// Clear the written flag (call after pulling).
-    pub fn clear(&mut self) { self.written = false; }
+    pub fn clear(&mut self) {
+        self.written = false;
+    }
 }
 
 impl<A: Nat + Storable, D: Nat + Storable> MemoryDevice<A, D> for Serial<D> {

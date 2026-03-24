@@ -1,15 +1,15 @@
 use crate::project_03::{PC, flatten};
-use simulator::declare::{Chip as _};
 use simulator::component::{Sequential, count_sequential};
+use simulator::declare::Chip as _;
 use simulator::nat::N16;
-use simulator::simulate::{MemoryMap, simulate};
 use simulator::print_graph;
+use simulator::simulate::{MemoryMap, simulate};
 
 #[test]
 fn pc_behavior() {
     let chip = PC::chip();
 
-     // When it breaks, it's nice to see what it tried to do
+    // When it breaks, it's nice to see what it tried to do
     print!("{}", print_graph(&chip));
 
     let chip = flatten(chip);
@@ -53,15 +53,15 @@ fn pc_behavior() {
     assert_eq!(state.get("out"), 0x1234u16.into());
 
     state.ticktock();
-    assert_eq!(state.get("out"), 0x1234u16.into());  // Load still in effect
+    assert_eq!(state.get("out"), 0x1234u16.into()); // Load still in effect
 
     state.set("load", false.into());
     state.ticktock();
-    assert_eq!(state.get("out"), 0x1235u16.into());  // addr ignored now, back to inc
+    assert_eq!(state.get("out"), 0x1235u16.into()); // addr ignored now, back to inc
 
     // Pull the ejection switch:
 
-    state.set("load", true.into());  // Will be ignored while reset is asserted
+    state.set("load", true.into()); // Will be ignored while reset is asserted
     state.set("reset", true.into());
 
     state.ticktock();

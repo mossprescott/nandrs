@@ -1,3 +1,4 @@
+use assignments::project_01::Mux16;
 /// Alternate Hack CPU implementation, attempting to dispatch 2 Hack instructions per cycle
 /// (sometimes).
 ///
@@ -31,17 +32,17 @@
 /// To execute 2 instructions, we need to feed 2 instructions into the CPU on each cycle. Since we
 /// don't have a dual-ported or double-clocked ROM in this project, we'll just fake it by wiring up
 /// a second ROM which we'll load with the same binary.
-
-use assignments::project_01::{And, Or, Not};
+use assignments::project_01::{And, Not, Or};
+use assignments::project_02::FullAdder;
 use assignments::project_02::{ALU, Inc16, Zero16};
 use assignments::project_05::{self, Decode, Project05Component};
-use simulator::{self, Component, IC, Input1, Input16, Output, Output16, Reflect, Chip, expand, fixed};
-use simulator::declare::{Interface, BusRef};
-use simulator::component::{Buffer, Computational16, MemorySystem16, Register16, ROM16};
-use assignments::project_01::Mux16;
-use assignments::project_02::FullAdder;
+use simulator::component::{Buffer, Computational16, MemorySystem16, ROM16, Register16};
+use simulator::declare::{BusRef, Interface};
 use simulator::nat::N16;
-use simulator::simulate::{ChipState, BusResident, ROMHandle};
+use simulator::simulate::{BusResident, ChipState, ROMHandle};
+use simulator::{
+    self, Chip, Component, IC, Input1, Input16, Output, Output16, Reflect, expand, fixed,
+};
 
 /// CPU which (potentially) decodes and executes a pair of instructions in each cycle.
 #[derive(Clone, Reflect, Chip)]
@@ -192,7 +193,6 @@ impl Component for CPU {
     }}
 }
 
-
 #[derive(Clone, Reflect, Chip)]
 pub struct Computer {
     /// A way to force the CPU to return to a known state (i.e. jump to address 0)
@@ -334,21 +334,41 @@ impl<C: Into<Project05Component>> From<C> for DoubleComponent {
         DoubleComponent::Project05(c.into())
     }
 }
-impl From<CPU>      for DoubleComponent { fn from(c: CPU)      -> Self { DoubleComponent::CPU(c)      } }
-impl From<Computer> for DoubleComponent { fn from(c: Computer) -> Self { DoubleComponent::Computer(c) } }
-impl From<DoublePC> for DoubleComponent { fn from(c: DoublePC) -> Self { DoubleComponent::DoublePC(c) } }
-impl From<Inc2>     for DoubleComponent { fn from(c: Inc2)     -> Self { DoubleComponent::Inc2(c) } }
+impl From<CPU> for DoubleComponent {
+    fn from(c: CPU) -> Self {
+        DoubleComponent::CPU(c)
+    }
+}
+impl From<Computer> for DoubleComponent {
+    fn from(c: Computer) -> Self {
+        DoubleComponent::Computer(c)
+    }
+}
+impl From<DoublePC> for DoubleComponent {
+    fn from(c: DoublePC) -> Self {
+        DoubleComponent::DoublePC(c)
+    }
+}
+impl From<Inc2> for DoubleComponent {
+    fn from(c: Inc2) -> Self {
+        DoubleComponent::Inc2(c)
+    }
+}
 
 impl Component for DoubleComponent {
     type Target = DoubleComponent;
 
     fn expand(&self) -> Option<IC<DoubleComponent>> {
         match self {
-            DoubleComponent::Project05(c) => c.expand().map(|ic| IC { name: ic.name, intf: ic.intf, components: ic.components.into_iter().map(Into::into).collect() }),
-            DoubleComponent::CPU(c)       => c.expand(),
-            DoubleComponent::Computer(c)  => c.expand(),
-            DoubleComponent::DoublePC(c)  => c.expand(),
-            DoubleComponent::Inc2(c)      => c.expand(),
+            DoubleComponent::Project05(c) => c.expand().map(|ic| IC {
+                name: ic.name,
+                intf: ic.intf,
+                components: ic.components.into_iter().map(Into::into).collect(),
+            }),
+            DoubleComponent::CPU(c) => c.expand(),
+            DoubleComponent::Computer(c) => c.expand(),
+            DoubleComponent::DoublePC(c) => c.expand(),
+            DoubleComponent::Inc2(c) => c.expand(),
         }
     }
 }
@@ -357,27 +377,35 @@ impl Reflect for DoubleComponent {
     fn reflect(&self) -> simulator::Interface {
         match self {
             DoubleComponent::Project05(c) => c.reflect(),
-            DoubleComponent::CPU(c)       => c.reflect(),
-            DoubleComponent::Computer(c)  => c.reflect(),
-            DoubleComponent::DoublePC(c)  => c.reflect(),
-            DoubleComponent::Inc2(c)      => c.reflect(),
+            DoubleComponent::CPU(c) => c.reflect(),
+            DoubleComponent::Computer(c) => c.reflect(),
+            DoubleComponent::DoublePC(c) => c.reflect(),
+            DoubleComponent::Inc2(c) => c.reflect(),
         }
     }
     fn name(&self) -> String {
         match self {
             DoubleComponent::Project05(c) => c.name(),
-            DoubleComponent::CPU(c)       => c.name(),
-            DoubleComponent::Computer(c)  => c.name(),
-            DoubleComponent::DoublePC(c)  => c.name(),
-            DoubleComponent::Inc2(c)      => c.name(),
+            DoubleComponent::CPU(c) => c.name(),
+            DoubleComponent::Computer(c) => c.name(),
+            DoubleComponent::DoublePC(c) => c.name(),
+            DoubleComponent::Inc2(c) => c.name(),
         }
     }
 }
 
 /// Find the two ROMs (rom0 at pc, rom1 at pc+1) in the chip state.
 pub fn find_roms(state: &ChipState<N16, N16>) -> (ROMHandle<N16, N16>, ROMHandle<N16, N16>) {
-    let roms: Vec<_> = state.bus_residents().iter()
-        .filter_map(|r| if let BusResident::ROM(h) = r { Some(h.clone()) } else { None })
+    let roms: Vec<_> = state
+        .bus_residents()
+        .iter()
+        .filter_map(|r| {
+            if let BusResident::ROM(h) = r {
+                Some(h.clone())
+            } else {
+                None
+            }
+        })
         .collect();
     assert_eq!(roms.len(), 2, "expected 2 ROMs, found {}", roms.len());
     (roms[0].clone(), roms[1].clone())
@@ -388,9 +416,7 @@ pub fn flatten<C: Reflect + Into<DoubleComponent>>(chip: C) -> IC<Computational1
     fn go(comp: DoubleComponent) -> Vec<Computational16> {
         match comp.expand() {
             None => match comp {
-                DoubleComponent::Project05(p) =>
-                    project_05::flatten(p)
-                        .components,
+                DoubleComponent::Project05(p) => project_05::flatten(p).components,
                 _ => panic!("Did not reduce to primitive: {:?}", comp.name()),
             },
             Some(ic) => ic.components.into_iter().flat_map(go).collect(),
@@ -404,7 +430,9 @@ pub fn flatten<C: Reflect + Into<DoubleComponent>>(chip: C) -> IC<Computational1
 }
 
 /// Like `flatten`, but uses native Mux/Adder components for efficient simulation.
-pub fn flatten_for_simulation<C: Reflect + Into<DoubleComponent>>(chip: C) -> IC<simulator::simulate::native::Simulational<N16, N16>> {
+pub fn flatten_for_simulation<C: Reflect + Into<DoubleComponent>>(
+    chip: C,
+) -> IC<simulator::simulate::native::Simulational<N16, N16>> {
     use simulator::simulate::native::Simulational;
     fn go(comp: DoubleComponent) -> Vec<Simulational<N16, N16>> {
         // Delegate Project05 subtrees immediately, so their interception logic handles Mux/Adder:
@@ -456,13 +484,25 @@ mod test {
     #[test]
     fn computer_optimal() {
         let components = flatten(Computer::chip()).components;
-        let memsys = components.iter().filter(|c| matches!(c, Computational::MemorySystem(_))).count();
-        let roms   = components.iter().filter(|c| matches!(c, Computational::ROM(_))).count();
-        let nands  = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
-        let registers = components.iter().filter(|c| matches!(c, Computational::Register(_))).count();
-        assert_eq!(memsys,    1);
-        assert_eq!(roms,      2); // Compare to 1
-        assert_eq!(nands,  1436); // Compare to 1126
+        let memsys = components
+            .iter()
+            .filter(|c| matches!(c, Computational::MemorySystem(_)))
+            .count();
+        let roms = components
+            .iter()
+            .filter(|c| matches!(c, Computational::ROM(_)))
+            .count();
+        let nands = components
+            .iter()
+            .filter(|c| matches!(c, Computational::Nand(_)))
+            .count();
+        let registers = components
+            .iter()
+            .filter(|c| matches!(c, Computational::Register(_)))
+            .count();
+        assert_eq!(memsys, 1);
+        assert_eq!(roms, 2); // Compare to 1
+        assert_eq!(nands, 1436); // Compare to 1126
         assert_eq!(registers, 4); // Compare to 3
     }
 }

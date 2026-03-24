@@ -1,7 +1,6 @@
+use crate::project_05::{KEYBOARD, SCREEN_BASE};
 /// HACK Assembly translation
-
 use std::collections::HashMap;
-use crate::project_05::{SCREEN_BASE, KEYBOARD};
 
 #[derive(Debug, PartialEq)]
 pub struct Label(String);
@@ -42,10 +41,18 @@ impl Statement {
     pub fn raw(&self) -> Option<u16> {
         match self {
             Statement::Literal(x) => {
-                if *x <= 0x7fff { Some(*x) } else { None }
+                if *x <= 0x7fff {
+                    Some(*x)
+                } else {
+                    None
+                }
             }
             Statement::Instruction(x) => {
-                if *x > 0x7fff { Some(*x) } else { None }
+                if *x > 0x7fff {
+                    Some(*x)
+                } else {
+                    None
+                }
             }
             _ => None,
         }
@@ -63,7 +70,9 @@ impl Statement {
 /// - hex constants: "@0x007f"
 fn is_valid_symbol(s: &str) -> bool {
     !s.is_empty()
-        && s.chars().next().map_or(false, |c| c.is_alphabetic() || c == '_')
+        && s.chars()
+            .next()
+            .map_or(false, |c| c.is_alphabetic() || c == '_')
         && !s.chars().any(|c| c.is_whitespace())
 }
 
@@ -76,7 +85,7 @@ pub fn parse_statement(line: &str) -> Option<Statement> {
 
     // Label: (name)
     if line.starts_with('(') && line.ends_with(')') {
-        let name = &line[1..line.len()-1];
+        let name = &line[1..line.len() - 1];
         return if is_valid_symbol(name) {
             Some(Statement::Label(Label(name.to_string())))
         } else {
@@ -95,7 +104,9 @@ pub fn parse_statement(line: &str) -> Option<Statement> {
         }
         // Decimal literal: starts with a digit, must be in 15-bit range
         if rest.chars().next().unwrap().is_ascii_digit() {
-            return rest.parse::<u16>().ok()
+            return rest
+                .parse::<u16>()
+                .ok()
                 .filter(|&n| n <= 0x7fff)
                 .map(Statement::Literal);
         }
@@ -109,29 +120,31 @@ pub fn parse_statement(line: &str) -> Option<Statement> {
 
     // C-instruction: [dest=]comp[;jump]
     let (dest, rest) = if let Some(eq) = line.find('=') {
-        (&line[..eq], &line[eq+1..])
+        (&line[..eq], &line[eq + 1..])
     } else {
         ("", line)
     };
     let (comp, jump) = if let Some(semi) = rest.find(';') {
-        (&rest[..semi], &rest[semi+1..])
-    } else if matches!(rest, "JGT"|"JEQ"|"JGE"|"JLT"|"JNE"|"JLE"|"JMP") {
+        (&rest[..semi], &rest[semi + 1..])
+    } else if matches!(rest, "JGT" | "JEQ" | "JGE" | "JLT" | "JNE" | "JLE" | "JMP") {
         ("0", rest)
     } else {
         (rest, "")
     };
 
     // dest bits: d1=write_a (bit 5), d2=write_d (bit 4), d3=write_m (bit 3)
-    let dest_bits: u16 = dest.chars().fold(0, |acc, c| acc | match c {
-        'A' => 0b100,
-        'D' => 0b010,
-        'M' => 0b001,
-        _   => 0,
+    let dest_bits: u16 = dest.chars().fold(0, |acc, c| {
+        acc | match c {
+            'A' => 0b100,
+            'D' => 0b010,
+            'M' => 0b001,
+            _ => 0,
+        }
     });
 
     // jump bits
     let jump_bits: u16 = match jump {
-        ""    => 0b000,
+        "" => 0b000,
         "JGT" => 0b001,
         "JEQ" => 0b010,
         "JGE" => 0b011,
@@ -139,20 +152,20 @@ pub fn parse_statement(line: &str) -> Option<Statement> {
         "JNE" => 0b101,
         "JLE" => 0b110,
         "JMP" => 0b111,
-        _     => return None,
+        _ => return None,
     };
 
     // comp: (a-bit, cccccc)
     let (a_bit, comp_bits): (u16, u16) = match comp {
-        "0"   => (0, 0b101010),
-        "1"   => (0, 0b111111),
-        "-1"  => (0, 0b111010),
-        "D"   => (0, 0b001100),
-        "A"   => (0, 0b110000),
-        "!D"  => (0, 0b001101),
-        "!A"  => (0, 0b110001),
-        "-D"  => (0, 0b001111),
-        "-A"  => (0, 0b110011),
+        "0" => (0, 0b101010),
+        "1" => (0, 0b111111),
+        "-1" => (0, 0b111010),
+        "D" => (0, 0b001100),
+        "A" => (0, 0b110000),
+        "!D" => (0, 0b001101),
+        "!A" => (0, 0b110001),
+        "-D" => (0, 0b001111),
+        "-A" => (0, 0b110011),
         "D+1" => (0, 0b011111),
         "A+1" => (0, 0b110111),
         "D-1" => (0, 0b001110),
@@ -162,9 +175,9 @@ pub fn parse_statement(line: &str) -> Option<Statement> {
         "A-D" => (0, 0b000111),
         "D&A" | "A&D" => (0, 0b000000),
         "D|A" | "A|D" => (0, 0b010101),
-        "M"   => (1, 0b110000),
-        "!M"  => (1, 0b110001),
-        "-M"  => (1, 0b110011),
+        "M" => (1, 0b110000),
+        "!M" => (1, 0b110001),
+        "-M" => (1, 0b110011),
         "M+1" => (1, 0b110111),
         "M-1" => (1, 0b110010),
         "D+M" | "M+D" => (1, 0b000010),
@@ -172,13 +185,13 @@ pub fn parse_statement(line: &str) -> Option<Statement> {
         "M-D" => (1, 0b000111),
         "D&M" | "M&D" => (1, 0b000000),
         "D|M" | "M|D" => (1, 0b010101),
-        _     => return None,
+        _ => return None,
     };
 
     let bits = 0b111_0_000000_000_000_u16
-        | (a_bit     << 12)
-        | (comp_bits <<  6)
-        | (dest_bits <<  3)
+        | (a_bit << 12)
+        | (comp_bits << 6)
+        | (dest_bits << 3)
         | jump_bits;
 
     Some(Statement::Instruction(bits))
@@ -193,14 +206,16 @@ pub struct Program {
 pub fn assemble(src: &str) -> Program {
     // Predefined symbols
     let mut symbols: HashMap<String, u16> = HashMap::new();
-    for i in 0u16..=15 { symbols.insert(format!("R{i}"), i); }
-    symbols.insert("SP".into(),     0);
-    symbols.insert("LCL".into(),    1);
-    symbols.insert("ARG".into(),    2);
-    symbols.insert("THIS".into(),   3);
-    symbols.insert("THAT".into(),   4);
+    for i in 0u16..=15 {
+        symbols.insert(format!("R{i}"), i);
+    }
+    symbols.insert("SP".into(), 0);
+    symbols.insert("LCL".into(), 1);
+    symbols.insert("ARG".into(), 2);
+    symbols.insert("THIS".into(), 3);
+    symbols.insert("THAT".into(), 4);
     symbols.insert("SCREEN".into(), SCREEN_BASE);
-    symbols.insert("KBD".into(),    KEYBOARD);
+    symbols.insert("KBD".into(), KEYBOARD);
 
     let stmts: Vec<Statement> = src.lines().filter_map(parse_statement).collect();
 
@@ -213,7 +228,9 @@ pub fn assemble(src: &str) -> Program {
                 symbols.insert(name.clone(), rom_addr);
                 labels.insert(name.clone(), rom_addr);
             }
-            _ => { rom_addr += 1; }
+            _ => {
+                rom_addr += 1;
+            }
         }
     }
 
@@ -240,4 +257,3 @@ pub fn assemble(src: &str) -> Program {
         symbols: labels,
     }
 }
-

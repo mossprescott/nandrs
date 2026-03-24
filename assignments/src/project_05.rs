@@ -1,16 +1,24 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use simulator::{self, Component, IC, Input1, Input16, Output, Output16, Reflect, Chip, expand, fixed};
-use simulator::declare::{Interface, BusRef};
-use simulator::Reflect as _;
+use crate::project_01::{And, Mux16, Not, Or, Project01Component};
+use crate::project_02::{ALU, Project02Component};
+use crate::project_03::{PC, Project03Component};
 use simulator::Chip as _;
-use simulator::component::{Buffer, Nand, Register16, RAM16, ROM16, MemorySystem16, Sequential, Computational, Computational16};
+use simulator::Reflect as _;
+use simulator::component::{
+    Buffer, Computational, Computational16, MemorySystem16, Nand, RAM16, ROM16, Register16,
+    Sequential,
+};
+use simulator::declare::{BusRef, Interface};
 use simulator::nat::N16;
-use simulator::simulate::{ChipState, BusResident, ROMHandle, RAMHandle, SerialHandle, MemoryMap, RegionMap, RAMMap, ROMMap, SerialMap, native};
+use simulator::simulate::{
+    BusResident, ChipState, MemoryMap, RAMHandle, RAMMap, ROMHandle, ROMMap, RegionMap,
+    SerialHandle, SerialMap, native,
+};
 use simulator::word::Word16;
-use crate::project_01::{Project01Component, Not, And, Or, Mux16};
-use crate::project_02::{Project02Component, ALU};
-use crate::project_03::{Project03Component, PC};
+use simulator::{
+    self, Chip, Component, IC, Input1, Input16, Output, Output16, Reflect, expand, fixed,
+};
 
 #[derive(Clone)]
 pub enum Project05Component {
@@ -32,23 +40,47 @@ impl<C: Into<Project03Component>> From<C> for Project05Component {
         Project05Component::Project03(c.into())
     }
 }
-impl From<ROM16>              for Project05Component { fn from(c: ROM16)              -> Self { Project05Component::ROM(c)           } }
-impl From<MemorySystem16>     for Project05Component { fn from(c: MemorySystem16)     -> Self { Project05Component::MemorySystem(c)  } }
-impl From<Decode>             for Project05Component { fn from(c: Decode)             -> Self { Project05Component::Decode(c)        } }
-impl From<CPU>                for Project05Component { fn from(c: CPU)                -> Self { Project05Component::CPU(c)           } }
-impl From<Computer>           for Project05Component { fn from(c: Computer)           -> Self { Project05Component::Computer(c)      } }
+impl From<ROM16> for Project05Component {
+    fn from(c: ROM16) -> Self {
+        Project05Component::ROM(c)
+    }
+}
+impl From<MemorySystem16> for Project05Component {
+    fn from(c: MemorySystem16) -> Self {
+        Project05Component::MemorySystem(c)
+    }
+}
+impl From<Decode> for Project05Component {
+    fn from(c: Decode) -> Self {
+        Project05Component::Decode(c)
+    }
+}
+impl From<CPU> for Project05Component {
+    fn from(c: CPU) -> Self {
+        Project05Component::CPU(c)
+    }
+}
+impl From<Computer> for Project05Component {
+    fn from(c: Computer) -> Self {
+        Project05Component::Computer(c)
+    }
+}
 
 impl Component for Project05Component {
     type Target = Project05Component;
 
     fn expand(&self) -> Option<IC<Project05Component>> {
         match self {
-            Project05Component::Project03(c)    => c.expand().map(|ic| IC { name: ic.name, intf: ic.intf, components: ic.components.into_iter().map(Into::into).collect() }),
-            Project05Component::ROM(c)          => c.expand().map(|_| unreachable!()),
+            Project05Component::Project03(c) => c.expand().map(|ic| IC {
+                name: ic.name,
+                intf: ic.intf,
+                components: ic.components.into_iter().map(Into::into).collect(),
+            }),
+            Project05Component::ROM(c) => c.expand().map(|_| unreachable!()),
             Project05Component::MemorySystem(c) => c.expand().map(|_| unreachable!()),
-            Project05Component::Decode(c)       => c.expand(),
-            Project05Component::CPU(c)          => c.expand(),
-            Project05Component::Computer(c)     => c.expand(),
+            Project05Component::Decode(c) => c.expand(),
+            Project05Component::CPU(c) => c.expand(),
+            Project05Component::Computer(c) => c.expand(),
         }
     }
 }
@@ -56,22 +88,22 @@ impl Component for Project05Component {
 impl Reflect for Project05Component {
     fn reflect(&self) -> simulator::Interface {
         match self {
-            Project05Component::Project03(c)    => c.reflect(),
-            Project05Component::ROM(c)          => c.reflect(),
+            Project05Component::Project03(c) => c.reflect(),
+            Project05Component::ROM(c) => c.reflect(),
             Project05Component::MemorySystem(c) => c.reflect(),
-            Project05Component::Decode(c)       => c.reflect(),
-            Project05Component::CPU(c)          => c.reflect(),
-            Project05Component::Computer(c)     => c.reflect(),
+            Project05Component::Decode(c) => c.reflect(),
+            Project05Component::CPU(c) => c.reflect(),
+            Project05Component::Computer(c) => c.reflect(),
         }
     }
     fn name(&self) -> String {
         match self {
-            Project05Component::Project03(c)    => c.name(),
-            Project05Component::ROM(c)          => c.name(),
+            Project05Component::Project03(c) => c.name(),
+            Project05Component::ROM(c) => c.name(),
             Project05Component::MemorySystem(c) => c.name(),
-            Project05Component::Decode(c)       => c.name(),
-            Project05Component::CPU(c)          => c.name(),
-            Project05Component::Computer(c)     => c.name(),
+            Project05Component::Decode(c) => c.name(),
+            Project05Component::CPU(c) => c.name(),
+            Project05Component::Computer(c) => c.name(),
         }
     }
 }
@@ -81,16 +113,16 @@ pub fn flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Computation
     fn go(comp: Project05Component) -> Vec<Computational16> {
         match comp.expand() {
             None => match comp {
-                Project05Component::Project03(p) =>
-                    crate::project_03::flatten(p)
-                        .components.into_iter()
-                        .map(|s| match s {
-                            Sequential::Nand(n)     => Computational::Nand(n),
-                            Sequential::Buffer(c)   => Computational::Buffer(c),
-                            Sequential::Register(r) => Computational::Register(r),
-                        })
-                        .collect(),
-                Project05Component::ROM(r)          => vec![Computational::ROM(r)],
+                Project05Component::Project03(p) => crate::project_03::flatten(p)
+                    .components
+                    .into_iter()
+                    .map(|s| match s {
+                        Sequential::Nand(n) => Computational::Nand(n),
+                        Sequential::Buffer(c) => Computational::Buffer(c),
+                        Sequential::Register(r) => Computational::Register(r),
+                    })
+                    .collect(),
+                Project05Component::ROM(r) => vec![Computational::ROM(r)],
                 Project05Component::MemorySystem(m) => vec![Computational::MemorySystem(m)],
                 _ => panic!("Did not reduce to primitive: {:?}", comp.name()),
             },
@@ -105,16 +137,22 @@ pub fn flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Computation
 }
 
 /// Like `flatten`, but replaces FullAdder with native Adder for efficient simulation.
-pub fn flatten_for_simulation<C: Reflect + Into<Project05Component>>(chip: C) -> IC<native::Simulational<N16, N16>> {
+pub fn flatten_for_simulation<C: Reflect + Into<Project05Component>>(
+    chip: C,
+) -> IC<native::Simulational<N16, N16>> {
     fn go(comp: Project05Component) -> Vec<native::Simulational<N16, N16>> {
         // Delegate to lower-level flatten_for_simulation as soon as possible:
         match comp {
-            Project05Component::Project03(Project03Component::Project02(p)) =>
-                return crate::project_02::flatten_for_simulation(p).components,
-            Project05Component::Project03(Project03Component::Register16(r)) =>
-                return vec![Computational::Register(r).into()],
-            Project05Component::ROM(r)          => return vec![Computational::ROM(r).into()],
-            Project05Component::MemorySystem(m) => return vec![Computational::MemorySystem(m).into()],
+            Project05Component::Project03(Project03Component::Project02(p)) => {
+                return crate::project_02::flatten_for_simulation(p).components;
+            }
+            Project05Component::Project03(Project03Component::Register16(r)) => {
+                return vec![Computational::Register(r).into()];
+            }
+            Project05Component::ROM(r) => return vec![Computational::ROM(r).into()],
+            Project05Component::MemorySystem(m) => {
+                return vec![Computational::MemorySystem(m).into()];
+            }
             _ => {}
         }
         match comp.expand() {
@@ -129,9 +167,9 @@ pub fn flatten_for_simulation<C: Reflect + Into<Project05Component>>(chip: C) ->
     }
 }
 
-pub const RAM_BASE:    u16 = 0 * 1024;
+pub const RAM_BASE: u16 = 0 * 1024;
 pub const SCREEN_BASE: u16 = 16 * 1024;
-pub const KEYBOARD:    u16 = 24 * 1024;
+pub const KEYBOARD: u16 = 24 * 1024;
 
 /// Our MemorySystem: Main RAM (16KB), screen buffer (8KB), and I/O, starting from address 0.
 ///
@@ -143,16 +181,16 @@ pub fn memory_system() -> MemoryMap {
             // Main memory:
             RegionMap::RAM(RAMMap {
                 size: (SCREEN_BASE - RAM_BASE) as usize,
-                base: RAM_BASE as usize
+                base: RAM_BASE as usize,
             }),
             // Screen buffer:
             RegionMap::RAM(RAMMap {
                 size: (KEYBOARD - SCREEN_BASE) as usize,
-                base: SCREEN_BASE as usize
+                base: SCREEN_BASE as usize,
             }),
             // "Keyboard":
             RegionMap::Serial(SerialMap {
-                base: KEYBOARD as usize
+                base: KEYBOARD as usize,
             }),
         ],
     }
@@ -160,30 +198,66 @@ pub fn memory_system() -> MemoryMap {
 
 /// Access the main RAM region (base address 0) of the MemorySystem.
 pub fn find_ram(state: &ChipState<N16, N16>) -> RAMHandle<N16, N16> {
-    state.bus_residents().iter()
-        .find_map(|r| if let BusResident::RAM(h) = r { if h.base == 0 { Some(h.clone()) } else { None } } else { None })
+    state
+        .bus_residents()
+        .iter()
+        .find_map(|r| {
+            if let BusResident::RAM(h) = r {
+                if h.base == 0 { Some(h.clone()) } else { None }
+            } else {
+                None
+            }
+        })
         .expect("no RAM region at base 0")
 }
 
 /// Access the screen RAM region (base address 16384) of the MemorySystem.
 pub fn find_screen(state: &ChipState<N16, N16>) -> RAMHandle<N16, N16> {
-    state.bus_residents().iter()
-        .find_map(|r| if let BusResident::RAM(h) = r { if h.base == SCREEN_BASE as usize { Some(h.clone()) } else { None } } else { None })
+    state
+        .bus_residents()
+        .iter()
+        .find_map(|r| {
+            if let BusResident::RAM(h) = r {
+                if h.base == SCREEN_BASE as usize {
+                    Some(h.clone())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
         .expect("no RAM region at SCREEN_BASE")
 }
 
 /// Access the serial interface which is normally used to provide keyboard input to the CPU,
 /// assuming a normal MemorySystem is present. Otherwise panic.
 pub fn find_keyboard(state: &ChipState<N16, N16>) -> SerialHandle<N16> {
-    state.bus_residents().iter()
-        .find_map(|r| if let BusResident::Serial(h) = r { Some(h.clone()) } else { None })
+    state
+        .bus_residents()
+        .iter()
+        .find_map(|r| {
+            if let BusResident::Serial(h) = r {
+                Some(h.clone())
+            } else {
+                None
+            }
+        })
         .expect("no Serial device found")
 }
 
 /// Access the ROM, assuming a normal MemorySystem is present. Otherwise panic.
 pub fn find_rom(state: &ChipState<N16, N16>) -> ROMHandle<N16, N16> {
-    state.bus_residents().iter()
-        .find_map(|r| if let BusResident::ROM(h) = r { Some(h.clone()) } else { None })
+    state
+        .bus_residents()
+        .iter()
+        .find_map(|r| {
+            if let BusResident::ROM(h) = r {
+                Some(h.clone())
+            } else {
+                None
+            }
+        })
         .expect("no ROM found")
 }
 
@@ -213,7 +287,7 @@ pub struct Decode {
     pub nx: Output,
     pub zy: Output,
     pub ny: Output,
-    pub f:  Output,
+    pub f: Output,
     pub no: Output,
 
     /// If true, write ALU output to the A register (where it will appear in the next cycle).

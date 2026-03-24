@@ -1,8 +1,7 @@
-use crate::{Chip, Component, Input, Input1, Output, OutputBus, Reflect, expand, fixed};
-use crate::declare::{Interface, BusRef};
-use crate::component::{Buffer, Nand, Register, Sequential, Combinational};
+use crate::component::{Buffer, Combinational, Nand, Register, Sequential};
+use crate::declare::{BusRef, Interface};
 use crate::nat::{N1, N8};
-
+use crate::{Chip, Component, Input, Input1, Output, OutputBus, Reflect, expand, fixed};
 
 /// Really just about trivial component for testing the expand! macro.
 #[derive(Reflect, Chip)]
@@ -37,14 +36,16 @@ fn test_expand_not() {
     let out = ic.intf.outputs["out"];
 
     assert_eq!(ic.components.len(), 1);
-    let Combinational::Nand(ref nand) = ic.components[0] else { panic!("expected Nand") };
+    let Combinational::Nand(ref nand) = ic.components[0] else {
+        panic!("expected Nand")
+    };
 
-    let nand_a   = BusRef::from_input(nand.a);
-    let nand_b   = BusRef::from_input(nand.b);
+    let nand_a = BusRef::from_input(nand.a);
+    let nand_b = BusRef::from_input(nand.b);
     let nand_out = BusRef::from_output(nand.out);
 
-    assert_eq!(nand_a.id,   a.id);
-    assert_eq!(nand_b.id,   a.id);  // b is tied to a (it's a NOT: a NAND a)
+    assert_eq!(nand_a.id, a.id);
+    assert_eq!(nand_b.id, a.id); // b is tied to a (it's a NOT: a NAND a)
     assert_eq!(nand_out.id, out.id);
 }
 
@@ -88,18 +89,22 @@ fn test_expand_and() {
     let out = ic.intf.outputs["out"];
 
     assert_eq!(ic.components.len(), 2);
-    let Combinational::Nand(ref nand) = ic.components[0] else { panic!("expected Nand") };
-    let nand_a   = BusRef::from_input(nand.a);
-    let nand_b   = BusRef::from_input(nand.b);
+    let Combinational::Nand(ref nand) = ic.components[0] else {
+        panic!("expected Nand")
+    };
+    let nand_a = BusRef::from_input(nand.a);
+    let nand_b = BusRef::from_input(nand.b);
     let nand_out = BusRef::from_output(nand.out);
 
-    let Combinational::Nand(ref not) = ic.components[1] else { panic!("expected Nand") };
-    let not_a   = BusRef::from_input(not.a);
-    let not_b   = BusRef::from_input(not.b);
+    let Combinational::Nand(ref not) = ic.components[1] else {
+        panic!("expected Nand")
+    };
+    let not_a = BusRef::from_input(not.a);
+    let not_b = BusRef::from_input(not.b);
     let not_out = BusRef::from_output(not.out);
 
-    assert_eq!(nand_a.id,   a.id);
-    assert_eq!(nand_b.id,   b.id);
+    assert_eq!(nand_a.id, a.id);
+    assert_eq!(nand_b.id, b.id);
 
     assert_eq!(not_a.id, nand_out.id);
     assert_eq!(not_b.id, nand_out.id);
@@ -176,4 +181,3 @@ fn test_expand_flip_flop() {
     assert_eq!(ic.components.len(), 3);
     // TODO: verify wiring...
 }
-

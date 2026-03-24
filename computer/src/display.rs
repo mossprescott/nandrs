@@ -1,14 +1,13 @@
 use std::time::Duration;
 
-use simulator::simulate::RAMHandle;
 use simulator::nat::N16;
+use simulator::simulate::RAMHandle;
 
 pub const WIDTH: usize = 512;
 pub const HEIGHT: usize = 256;
 pub const BEZEL: usize = 20;
-pub const FRAME_TIME: Duration = Duration::from_millis(1000/120);
+pub const FRAME_TIME: Duration = Duration::from_millis(1000 / 120);
 const BEZEL_PNG: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/bezel.png");
-
 
 const WHITE_PIXEL: u32 = 0xFFFFFF;
 const BLACK_PIXEL: u32 = 0x000000;
@@ -29,7 +28,9 @@ pub fn render_screen(screen: &RAMHandle<N16, N16>, pixels: &mut [u32], scale: us
     // Set only the black pixels.
     for word_idx in 0..(WIDTH / 16 * HEIGHT) {
         let word = screen.peek(word_idx as u64).unsigned() as u16;
-        if word == 0 { continue; }
+        if word == 0 {
+            continue;
+        }
         let row = word_idx / (WIDTH / 16);
         let col_word = word_idx % (WIDTH / 16);
         let mut bits = word;
@@ -47,8 +48,8 @@ pub fn render_screen(screen: &RAMHandle<N16, N16>, pixels: &mut [u32], scale: us
 }
 
 pub fn load_bezel(scale: usize) -> Vec<u32> {
-    let file = std::fs::File::open(BEZEL_PNG)
-        .unwrap_or_else(|e| panic!("cannot open {BEZEL_PNG}: {e}"));
+    let file =
+        std::fs::File::open(BEZEL_PNG).unwrap_or_else(|e| panic!("cannot open {BEZEL_PNG}: {e}"));
     let decoder = png::Decoder::new(file);
     let mut reader = decoder.read_info().expect("png read_info");
     let mut buf = vec![0u8; reader.output_buffer_size()];
@@ -57,7 +58,7 @@ pub fn load_bezel(scale: usize) -> Vec<u32> {
     let src_w = info.width as usize;
     let src_h = info.height as usize;
     let bpp = match info.color_type {
-        png::ColorType::Rgb  => 3,
+        png::ColorType::Rgb => 3,
         png::ColorType::Rgba => 4,
         _ => panic!("unsupported bezel PNG color type"),
     };
@@ -67,7 +68,8 @@ pub fn load_bezel(scale: usize) -> Vec<u32> {
     for sy in 0..src_h {
         for sx in 0..src_w {
             let i = (sy * src_w + sx) * bpp;
-            let c = ((bytes[i] as u32) << 16) | ((bytes[i+1] as u32) << 8) | (bytes[i+2] as u32);
+            let c =
+                ((bytes[i] as u32) << 16) | ((bytes[i + 1] as u32) << 8) | (bytes[i + 2] as u32);
             for dy in 0..scale {
                 for dx in 0..scale {
                     out[(sy * scale + dy) * dst_w + sx * scale + dx] = c;
@@ -104,12 +106,22 @@ const FONT: [([u8; 9], char); 17] = [
 
 fn glyph(ch: char) -> [u8; 9] {
     for &(bits, c) in &FONT {
-        if c == ch { return bits; }
+        if c == ch {
+            return bits;
+        }
     }
     [0; 9]
 }
 
-pub fn draw_text(pixels: &mut [u32], win_width: usize, x: usize, y: usize, scale: usize, text: &str, color: u32) {
+pub fn draw_text(
+    pixels: &mut [u32],
+    win_width: usize,
+    x: usize,
+    y: usize,
+    scale: usize,
+    text: &str,
+    color: u32,
+) {
     let mut cx = x;
     for ch in text.chars() {
         let g = glyph(ch);

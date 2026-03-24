@@ -1,7 +1,7 @@
-use crate::component::{Register16, Sequential16, RAM16, Serial16, Computational16};
+use crate::component::{Computational16, RAM16, Register16, Sequential16, Serial16};
 use crate::declare::{Chip as _, IC, Reflect as _};
 use crate::nat::N16;
-use crate::simulate::{simulate, BusResident, MemoryMap};
+use crate::simulate::{BusResident, MemoryMap, simulate};
 
 #[test]
 fn register_behavior() {
@@ -95,8 +95,16 @@ fn serial_behavior() {
     };
     let mut state = simulate(&chip, MemoryMap::new(vec![]));
 
-    let handle = state.bus_residents().iter()
-        .find_map(|r| if let BusResident::Serial(h) = r { Some(h.clone()) } else { None })
+    let handle = state
+        .bus_residents()
+        .iter()
+        .find_map(|r| {
+            if let BusResident::Serial(h) = r {
+                Some(h.clone())
+            } else {
+                None
+            }
+        })
         .expect("no serial device");
 
     // Initially reads 0.

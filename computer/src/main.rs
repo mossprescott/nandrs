@@ -5,11 +5,11 @@ use clap::Parser;
 use assignments::project_02::Project02Component;
 use assignments::project_03::Project03Component;
 use assignments::project_05::{self, Computer, Project05Component, find_rom, memory_system};
-use assignments::project_06::{assemble, Program};
-use simulator::{Component, IC, flatten, print_ic_graph};
+use assignments::project_06::{Program, assemble};
 use simulator::declare::Chip as _;
-use simulator::simulate::{synthesize, initialize};
+use simulator::simulate::{initialize, synthesize};
 use simulator::word::Word16;
+use simulator::{Component, IC, flatten, print_ic_graph};
 
 use computer::cli::Args;
 use computer::disasm::disassemble;
@@ -24,7 +24,11 @@ fn main() {
     });
 
     let program = assemble(&src);
-    println!("Loaded {} instructions from {}", program.instructions.len(), args.path);
+    println!(
+        "Loaded {} instructions from {}",
+        program.instructions.len(),
+        args.path
+    );
 
     let computer = Computer::chip();
     if args.print {
@@ -32,7 +36,10 @@ fn main() {
         println!("{}", print_ic_graph(&simple));
     }
 
-    let Program { instructions, symbols } = program;
+    let Program {
+        instructions,
+        symbols,
+    } = program;
 
     let wiring = if args.precise {
         let chip = project_05::flatten(computer);
@@ -54,7 +61,8 @@ fn main() {
     find_rom(&state).flash(instructions.iter().map(|&v| Word16::from(v)).collect());
 
     let fmt_instr = |pc: Word16| -> String {
-        instructions.get(pc.unsigned() as usize)
+        instructions
+            .get(pc.unsigned() as usize)
             .map(|&i| disassemble(i))
             .unwrap_or("?".to_string())
     };
@@ -68,8 +76,9 @@ fn main() {
 /// the Computational primitives.
 fn simplify<C: Into<Project05Component>>(chip: C) -> IC<Project05Component> {
     flatten(chip.into(), "simple", &|c| match c {
-        Project05Component::Project03(Project03Component::Project02(Project02Component::Project01(_)))
-            => None,
+        Project05Component::Project03(Project03Component::Project02(
+            Project02Component::Project01(_),
+        )) => None,
         Project05Component::Project03(Project03Component::Project02(ref p2)) => match p2 {
             Project02Component::ALU(_) => c.expand(),
             _ => None,

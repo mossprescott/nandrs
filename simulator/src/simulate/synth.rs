@@ -3,19 +3,19 @@ use std::collections::hash_map::Entry;
 use std::fmt;
 use std::marker::PhantomData;
 
+use super::native::Simulational;
 use crate::component::Computational;
 use crate::declare::{BusRef, IC, Reflect as _};
 use crate::nat::Nat;
-use super::native::Simulational;
-use crate::word::{Word, Storable};
+use crate::word::{Storable, Word};
 
-use super::wiring::{self, Indexes, WireID, WireIndex, WireRef};
 use super::memory::{MemoryMap, RegionMap};
+use super::wiring::{self, Indexes, WireID, WireIndex, WireRef};
 
 /// Static, synthesized description of the circuit's wiring. Computed once and never mutated.
 pub struct ChipWiring<Width: Storable> {
     pub(super) component_wiring: Vec<wiring::ComponentWiring>,
-    pub(super) input_wiring:  HashMap<String, wiring::WireRef>,
+    pub(super) input_wiring: HashMap<String, wiring::WireRef>,
     pub(super) output_wiring: HashMap<String, wiring::WireRef>,
     pub(super) const_wiring: Vec<wiring::ConstWiring>,
     pub(super) n_wires: usize,
@@ -33,16 +33,22 @@ pub struct ChipWiring<Width: Storable> {
 }
 
 /// Descriptor for a standalone RAM component.
-pub struct RAMSpec { pub size: usize }
+pub struct RAMSpec {
+    pub size: usize,
+}
 
 /// Descriptor for a ROM component.
-pub struct ROMSpec { pub size: usize }
+pub struct ROMSpec {
+    pub size: usize,
+}
 
 /// Descriptor for a Serial I/O component.
 pub struct SerialSpec;
 
 /// Descriptor for a MemorySystem component, including its region layout.
-pub struct MemorySystemSpec { pub regions: Vec<RegionMap> }
+pub struct MemorySystemSpec {
+    pub regions: Vec<RegionMap>,
+}
 
 fn fmt_bit(b: wiring::BitRef) -> impl fmt::Display {
     struct D(wiring::BitRef);
@@ -60,30 +66,46 @@ fn fmt_wire(wr: wiring::WireRef) -> impl fmt::Display {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             if self.0.width == 1 {
                 write!(f, "w{}[{}]", self.0.id.0, self.0.offset)
-            }
-            else {
-                write!(f, "w{}[{}..{}]", self.0.id.0, self.0.offset, self.0.offset + self.0.width)
+            } else {
+                write!(
+                    f,
+                    "w{}[{}..{}]",
+                    self.0.id.0,
+                    self.0.offset,
+                    self.0.offset + self.0.width
+                )
             }
         }
     }
     D(wr)
 }
 
-fn fmt_component_tree(f: &mut fmt::Formatter<'_>, comp: &wiring::ComponentWiring, indent: &str) -> fmt::Result {
+fn fmt_component_tree(
+    f: &mut fmt::Formatter<'_>,
+    comp: &wiring::ComponentWiring,
+    indent: &str,
+) -> fmt::Result {
     match comp {
-        wiring::ComponentWiring::Nand(n) if n.a == n.b =>
-            writeln!(f, "not   a={} out={}",
-                fmt_bit(n.a), fmt_bit(n.out)),
-        wiring::ComponentWiring::Nand(n) =>
-            writeln!(f, "nand  a={} b={} out={}",
-                fmt_bit(n.a), fmt_bit(n.b), fmt_bit(n.out)),
+        wiring::ComponentWiring::Nand(n) if n.a == n.b => {
+            writeln!(f, "not   a={} out={}", fmt_bit(n.a), fmt_bit(n.out))
+        }
+        wiring::ComponentWiring::Nand(n) => writeln!(
+            f,
+            "nand  a={} b={} out={}",
+            fmt_bit(n.a),
+            fmt_bit(n.b),
+            fmt_bit(n.out)
+        ),
         wiring::ComponentWiring::Mux(m) => {
-            writeln!(f, "mux   sel={} out=w{}[..]",
-                fmt_bit(m.sel), m.out.0)?;
+            writeln!(f, "mux   sel={} out=w{}[..]", fmt_bit(m.sel), m.out.0)?;
             let c0 = count_components(&m.branch0);
             let c1 = count_components(&m.branch1);
             if c0.adders.0 > 0 {
-                writeln!(f, "{indent}     a0=w{}[..] ({} gates, {} adders)", m.a0.0, c0.gates.0, c0.adders.0)?;
+                writeln!(
+                    f,
+                    "{indent}     a0=w{}[..] ({} gates, {} adders)",
+                    m.a0.0, c0.gates.0, c0.adders.0
+                )?;
             } else {
                 writeln!(f, "{indent}     a0=w{}[..] ({} gates)", m.a0.0, c0.gates.0)?;
             }
@@ -93,7 +115,11 @@ fn fmt_component_tree(f: &mut fmt::Formatter<'_>, comp: &wiring::ComponentWiring
                 fmt_component_tree(f, op, &inner)?;
             }
             if c1.adders.0 > 0 {
-                writeln!(f, "{indent}     a1=w{}[..] ({} gates, {} adders)", m.a1.0, c1.gates.0, c1.adders.0)?;
+                writeln!(
+                    f,
+                    "{indent}     a1=w{}[..] ({} gates, {} adders)",
+                    m.a1.0, c1.gates.0, c1.adders.0
+                )?;
             } else {
                 writeln!(f, "{indent}     a1=w{}[..] ({} gates)", m.a1.0, c1.gates.0)?;
             }
@@ -103,76 +129,126 @@ fn fmt_component_tree(f: &mut fmt::Formatter<'_>, comp: &wiring::ComponentWiring
             }
             Ok(())
         }
-        wiring::ComponentWiring::Adder(a) =>
-            writeln!(f, "adder a={} b={} c={} sum={} carry={}",
-                fmt_bit(a.a), fmt_bit(a.b), fmt_bit(a.c), fmt_bit(a.sum), fmt_bit(a.carry)),
+        wiring::ComponentWiring::Adder(a) => writeln!(
+            f,
+            "adder a={} b={} c={} sum={} carry={}",
+            fmt_bit(a.a),
+            fmt_bit(a.b),
+            fmt_bit(a.c),
+            fmt_bit(a.sum),
+            fmt_bit(a.carry)
+        ),
 
-        wiring::ComponentWiring::Register(r) =>
-            writeln!(f, "reg   write={} in=w{}[..] out=w{}[..]",
-                fmt_bit(r.write), r.data_in.0, r.data_out.0),
+        wiring::ComponentWiring::Register(r) => writeln!(
+            f,
+            "reg   write={} in=w{}[..] out=w{}[..]",
+            fmt_bit(r.write),
+            r.data_in.0,
+            r.data_out.0
+        ),
 
-        wiring::ComponentWiring::RAM(r) =>
-            writeln!(f, "ram[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
-                r.device_slot, r.addr.0, fmt_bit(r.write), r.data_in.0, r.out.0),
-        wiring::ComponentWiring::ROM(r) =>
-            writeln!(f, "rom[{}]  addr=w{}[..] out=w{}[..]",
-                r.device_slot, r.addr.0, r.out.0),
-        wiring::ComponentWiring::Serial(s) =>
-            writeln!(f, "serial[{}]  write={} in=w{}[..] out=w{}[..]",
-                s.device_slot, fmt_bit(s.write), s.data_in.0, s.out.0),
-        wiring::ComponentWiring::MemorySystem(m) =>
-            writeln!(f, "mem[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
-                m.device_slot, m.addr.0, fmt_bit(m.write), m.data_in.0, m.out.0),
+        wiring::ComponentWiring::RAM(r) => writeln!(
+            f,
+            "ram[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
+            r.device_slot,
+            r.addr.0,
+            fmt_bit(r.write),
+            r.data_in.0,
+            r.out.0
+        ),
+        wiring::ComponentWiring::ROM(r) => writeln!(
+            f,
+            "rom[{}]  addr=w{}[..] out=w{}[..]",
+            r.device_slot, r.addr.0, r.out.0
+        ),
+        wiring::ComponentWiring::Serial(s) => writeln!(
+            f,
+            "serial[{}]  write={} in=w{}[..] out=w{}[..]",
+            s.device_slot,
+            fmt_bit(s.write),
+            s.data_in.0,
+            s.out.0
+        ),
+        wiring::ComponentWiring::MemorySystem(m) => writeln!(
+            f,
+            "mem[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
+            m.device_slot,
+            m.addr.0,
+            fmt_bit(m.write),
+            m.data_in.0,
+            m.out.0
+        ),
 
         // synthetic:
-        wiring::ComponentWiring::And(n) =>
-            writeln!(f, "and   a={} b={} out={}",
-                fmt_bit(n.a), fmt_bit(n.b), fmt_bit(n.out)),
+        wiring::ComponentWiring::And(n) => writeln!(
+            f,
+            "and   a={} b={} out={}",
+            fmt_bit(n.a),
+            fmt_bit(n.b),
+            fmt_bit(n.out)
+        ),
 
-        wiring::ComponentWiring::ParallelNand(n) if n.a == n.b =>
-            writeln!(f, "not(many) a=w{}[..] out=w{}[..]",
-                n.a.0, n.out.0),
-        wiring::ComponentWiring::ParallelNand(n) =>
-            writeln!(f, "nand(many) a=w{}[..] b=w{}[..] out=w{}[..]",
-                n.a.0, n.b.0, n.out.0),
+        wiring::ComponentWiring::ParallelNand(n) if n.a == n.b => {
+            writeln!(f, "not(many) a=w{}[..] out=w{}[..]", n.a.0, n.out.0)
+        }
+        wiring::ComponentWiring::ParallelNand(n) => writeln!(
+            f,
+            "nand(many) a=w{}[..] b=w{}[..] out=w{}[..]",
+            n.a.0, n.b.0, n.out.0
+        ),
 
-        wiring::ComponentWiring::RippleAdder(a) =>
-            writeln!(f, "adder(ripple) a=w{}[{}..{}] b=w{}[..] out=w{}[{}..{}] carry_in={} carry_out={}",
-                a.a.0, a.offset, a.offset + a.width, a.b.0, a.out.0, a.offset, a.offset + a.width,
-                fmt_bit(a.carry_in), fmt_bit(a.carry_out)),
+        wiring::ComponentWiring::RippleAdder(a) => writeln!(
+            f,
+            "adder(ripple) a=w{}[{}..{}] b=w{}[..] out=w{}[{}..{}] carry_in={} carry_out={}",
+            a.a.0,
+            a.offset,
+            a.offset + a.width,
+            a.b.0,
+            a.out.0,
+            a.offset,
+            a.offset + a.width,
+            fmt_bit(a.carry_in),
+            fmt_bit(a.carry_out)
+        ),
 
-        wiring::ComponentWiring::ManyWayAnd(m) =>
-            writeln!(f, "and(many-way) a=w{}[..] mask={:#06x} out={}",
-                m.a.0, m.mask, fmt_bit(m.out)),
-
+        wiring::ComponentWiring::ManyWayAnd(m) => writeln!(
+            f,
+            "and(many-way) a=w{}[..] mask={:#06x} out={}",
+            m.a.0,
+            m.mask,
+            fmt_bit(m.out)
+        ),
     }
 }
 
 /// Counts for gates and adders in a component list, recursing into mux branches.
 /// Each field is (total, min) where min assumes the cheaper branch at each mux.
 struct ComponentCounts {
-    gates:  (u32, u32),
+    gates: (u32, u32),
     adders: (u32, u32),
 }
 
 fn count_components(components: &[wiring::ComponentWiring]) -> ComponentCounts {
-    let mut gates  = (0u32, 0u32);
+    let mut gates = (0u32, 0u32);
     let mut adders = (0u32, 0u32);
     for comp in components {
         match comp {
-            wiring::ComponentWiring::Nand(_) | wiring::ComponentWiring::And(_)
-                | wiring::ComponentWiring::ParallelNand(_)
-                | wiring::ComponentWiring::ManyWayAnd(_) => {
-                gates.0 += 1; gates.1 += 1;
+            wiring::ComponentWiring::Nand(_)
+            | wiring::ComponentWiring::And(_)
+            | wiring::ComponentWiring::ParallelNand(_)
+            | wiring::ComponentWiring::ManyWayAnd(_) => {
+                gates.0 += 1;
+                gates.1 += 1;
             }
             wiring::ComponentWiring::Adder(_) | wiring::ComponentWiring::RippleAdder(_) => {
-                adders.0 += 1; adders.1 += 1;
+                adders.0 += 1;
+                adders.1 += 1;
             }
             wiring::ComponentWiring::Mux(m) => {
                 let c0 = count_components(&m.branch0);
                 let c1 = count_components(&m.branch1);
-                gates.0  += c0.gates.0  + c1.gates.0;
-                gates.1  += c0.gates.1.min(c1.gates.1);
+                gates.0 += c0.gates.0 + c1.gates.0;
+                gates.1 += c0.gates.1.min(c1.gates.1);
                 adders.0 += c0.adders.0 + c1.adders.0;
                 adders.1 += c0.adders.1.min(c1.adders.1);
             }
@@ -188,7 +264,7 @@ impl<Width: Storable> fmt::Display for ChipWiring<Width> {
         let mut registers = 0u32;
         for comp in &self.component_wiring {
             match comp {
-                wiring::ComponentWiring::Mux(_)      => muxes += 1,
+                wiring::ComponentWiring::Mux(_) => muxes += 1,
                 wiring::ComponentWiring::Register(_) => registers += 1,
                 _ => {}
             }
@@ -211,8 +287,12 @@ impl<Width: Storable> fmt::Display for ChipWiring<Width> {
                 writeln!(f)?;
             }
         }
-        if muxes > 0 { writeln!(f, "  muxes:     {}", muxes)?; }
-        if registers > 0 { writeln!(f, "  registers: {}", registers)?; }
+        if muxes > 0 {
+            writeln!(f, "  muxes:     {}", muxes)?;
+        }
+        if registers > 0 {
+            writeln!(f, "  registers: {}", registers)?;
+        }
         for (i, s) in self.ram_specs.iter().enumerate() {
             writeln!(f, "  ram[{}]:    {} words", i, s.size)?;
         }
@@ -226,8 +306,12 @@ impl<Width: Storable> fmt::Display for ChipWiring<Width> {
             writeln!(f, "  memory[{}]:", i)?;
             for r in &ms.regions {
                 match r {
-                    RegionMap::RAM(m)    => writeln!(f, "    RAM: {} words @ 0x{:04x}", m.size, m.base)?,
-                    RegionMap::ROM(m)    => writeln!(f, "    ROM: {} words @ 0x{:04x}", m.size, m.base)?,
+                    RegionMap::RAM(m) => {
+                        writeln!(f, "    RAM: {} words @ 0x{:04x}", m.size, m.base)?
+                    }
+                    RegionMap::ROM(m) => {
+                        writeln!(f, "    ROM: {} words @ 0x{:04x}", m.size, m.base)?
+                    }
                     RegionMap::Serial(m) => writeln!(f, "    Serial @ 0x{:04x}", m.base)?,
                 }
             }
@@ -245,7 +329,12 @@ impl<Width: Storable> fmt::Display for ChipWiring<Width> {
         }
 
         for cw in &self.const_wiring {
-            writeln!(f, "  const: w{} = {}", cw.out.0, Word::<Width>::new(cw.value))?;
+            writeln!(
+                f,
+                "  const: w{} = {}",
+                cw.out.0,
+                Word::<Width>::new(cw.value)
+            )?;
         }
 
         for (i, comp) in self.component_wiring.iter().enumerate() {
@@ -275,14 +364,14 @@ impl<Width: Storable> ChipWiring<Width> {
         let mut c = OpCounts::default();
         for comp in &self.component_wiring {
             match comp {
-                wiring::ComponentWiring::Nand(_)         => c.nands += 1,
-                wiring::ComponentWiring::And(_)          => c.ands += 1,
-                wiring::ComponentWiring::Adder(_)        => c.adders += 1,
-                wiring::ComponentWiring::Mux(_)          => c.muxes += 1,
+                wiring::ComponentWiring::Nand(_) => c.nands += 1,
+                wiring::ComponentWiring::And(_) => c.ands += 1,
+                wiring::ComponentWiring::Adder(_) => c.adders += 1,
+                wiring::ComponentWiring::Mux(_) => c.muxes += 1,
                 wiring::ComponentWiring::ParallelNand(_) => c.parallel_nands += 1,
-                wiring::ComponentWiring::RippleAdder(_)  => c.ripple_adders += 1,
-                wiring::ComponentWiring::ManyWayAnd(_)   => c.many_way_ands += 1,
-                wiring::ComponentWiring::Register(_)     => c.registers += 1,
+                wiring::ComponentWiring::RippleAdder(_) => c.ripple_adders += 1,
+                wiring::ComponentWiring::ManyWayAnd(_) => c.many_way_ands += 1,
+                wiring::ComponentWiring::Register(_) => c.registers += 1,
                 _ => {}
             }
         }
@@ -297,11 +386,15 @@ impl<Width: Storable> ChipWiring<Width> {
 ///
 /// Note: currently 16-bit words are assumed, but up to 64-bits wouldn't be a problem if the type
 /// was generalized.
-pub fn synthesize<C, A: Nat + Storable + Clone, D: Nat + Storable + Clone>(chip: &IC<C>, memory_map: MemoryMap) -> ChipWiring<D>
+pub fn synthesize<C, A: Nat + Storable + Clone, D: Nat + Storable + Clone>(
+    chip: &IC<C>,
+    memory_map: MemoryMap,
+) -> ChipWiring<D>
 where
     C: Clone + crate::Reflect + Into<Simulational<A, D>>,
 {
-    let components: Vec<Simulational<A, D>> = chip.components.iter().cloned().map(Into::into).collect();
+    let components: Vec<Simulational<A, D>> =
+        chip.components.iter().cloned().map(Into::into).collect();
     let mut memory_map = Some(memory_map);
 
     // Build map of wires that have been connected directly to some existing wire; when the Buffer's
@@ -348,16 +441,19 @@ where
                     }
                 }
                 wire_indexes.insert(id, index);
-            }
-            else if let Entry::Vacant(e) = wire_indexes.entry(id) {
+            } else if let Entry::Vacant(e) = wire_indexes.entry(id) {
                 e.insert(WireIndex(next_index as u32));
                 next_index += 1;
             }
         };
 
         let intf = chip.reflect();
-        for b in intf.inputs.values()  { assign(WireID::from(b)); }
-        for b in intf.outputs.values() { assign(WireID::from(b)); }
+        for b in intf.inputs.values() {
+            assign(WireID::from(b));
+        }
+        for b in intf.outputs.values() {
+            assign(WireID::from(b));
+        }
         for comp in &components {
             match comp {
                 Simulational::Primitive(Computational::Nand(c)) => {
@@ -430,7 +526,7 @@ where
     let mut ram_specs: Vec<RAMSpec> = Vec::new();
     let mut rom_specs: Vec<ROMSpec> = Vec::new();
     let mut serial_specs: Vec<SerialSpec> = Vec::new();
-    let mut ms_specs: Vec<MemorySystemSpec>  = Vec::new();
+    let mut ms_specs: Vec<MemorySystemSpec> = Vec::new();
 
     let ref_for = |b: &BusRef| {
         let id = &WireID::from(b);
@@ -439,8 +535,7 @@ where
                 id: wire_indexes[src],
                 offset: *offset as u8,
             }
-        }
-        else {
+        } else {
             wiring::BitRef {
                 id: wire_indexes[id],
                 offset: b.offset as u8,
@@ -448,133 +543,150 @@ where
         }
     };
 
-    let const_wiring: Vec<wiring::ConstWiring> = components.iter().flat_map(|comp| {
-        comp.reflect().inputs.values().filter_map(|busref| {
-            busref.fixed.map(|value| wiring::ConstWiring {
-                value,
-                out: wire_indexes[&WireID::from(busref)],
-            })
-        }).collect::<Vec<_>>()
-    }).collect();
+    let const_wiring: Vec<wiring::ConstWiring> = components
+        .iter()
+        .flat_map(|comp| {
+            comp.reflect()
+                .inputs
+                .values()
+                .filter_map(|busref| {
+                    busref.fixed.map(|value| wiring::ConstWiring {
+                        value,
+                        out: wire_indexes[&WireID::from(busref)],
+                    })
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect();
 
-    let component_wiring: Vec<wiring::ComponentWiring> = components.iter().enumerate().flat_map(|(idx, comp)| {
-        use wiring::ComponentWiring as CW;
-        match comp {
-            Simulational::Primitive(Computational::Nand(c)) => {
-                let intf = c.reflect();
-                Some(CW::Nand(wiring::NandWiring {
-                    a:   ref_for(&intf.inputs["a"]),
-                    b:   ref_for(&intf.inputs["b"]),
-                    out: ref_for(&intf.outputs["out"]),
-                }))
-            }
-            Simulational::Primitive(Computational::Buffer(c)) => {
-                if sub_bus_buffers.contains(&idx) {
-                    // Sub-bus buffer: emit And(x,x) as a single-bit copy.
+    let component_wiring: Vec<wiring::ComponentWiring> = components
+        .iter()
+        .enumerate()
+        .flat_map(|(idx, comp)| {
+            use wiring::ComponentWiring as CW;
+            match comp {
+                Simulational::Primitive(Computational::Nand(c)) => {
                     let intf = c.reflect();
-                    let a = ref_for(&intf.inputs["a"]);
-                    let out = ref_for(&intf.outputs["out"]);
-                    Some(CW::And(wiring::AndWiring { a, b: a, out }))
-                } else {
-                    None // Full-bus buffer: handled by rename
+                    Some(CW::Nand(wiring::NandWiring {
+                        a: ref_for(&intf.inputs["a"]),
+                        b: ref_for(&intf.inputs["b"]),
+                        out: ref_for(&intf.outputs["out"]),
+                    }))
+                }
+                Simulational::Primitive(Computational::Buffer(c)) => {
+                    if sub_bus_buffers.contains(&idx) {
+                        // Sub-bus buffer: emit And(x,x) as a single-bit copy.
+                        let intf = c.reflect();
+                        let a = ref_for(&intf.inputs["a"]);
+                        let out = ref_for(&intf.outputs["out"]);
+                        Some(CW::And(wiring::AndWiring { a, b: a, out }))
+                    } else {
+                        None // Full-bus buffer: handled by rename
+                    }
+                }
+                Simulational::Mux(c) => {
+                    let intf = c.reflect();
+                    Some(CW::Mux(wiring::MuxWiring {
+                        sel: ref_for(&intf.inputs["sel"]),
+                        a0: wire_indexes[&WireID::from(&intf.inputs["a0"])],
+                        a1: wire_indexes[&WireID::from(&intf.inputs["a1"])],
+                        out: wire_indexes[&WireID::from(&intf.outputs["out"])],
+                        branch0: Vec::new(),
+                        branch1: Vec::new(),
+                    }))
+                }
+                Simulational::Mux1(c) => {
+                    let intf = c.reflect();
+                    Some(CW::Mux(wiring::MuxWiring {
+                        sel: ref_for(&intf.inputs["sel"]),
+                        a0: wire_indexes[&WireID::from(&intf.inputs["a0"])],
+                        a1: wire_indexes[&WireID::from(&intf.inputs["a1"])],
+                        out: wire_indexes[&WireID::from(&intf.outputs["out"])],
+                        branch0: Vec::new(),
+                        branch1: Vec::new(),
+                    }))
+                }
+                Simulational::Adder(c) => {
+                    let intf = c.reflect();
+                    Some(CW::Adder(wiring::AdderWiring {
+                        a: ref_for(&intf.inputs["a"]),
+                        b: ref_for(&intf.inputs["b"]),
+                        c: ref_for(&intf.inputs["c"]),
+                        sum: ref_for(&intf.outputs["sum"]),
+                        carry: ref_for(&intf.outputs["carry"]),
+                    }))
+                }
+                Simulational::Primitive(Computational::Register(c)) => {
+                    let intf = c.reflect();
+                    Some(CW::Register(wiring::RegisterWiring {
+                        write: ref_for(&intf.inputs["write"]),
+                        data_in: wire_indexes[&WireID::from(&intf.inputs["data_in"])],
+                        data_out: wire_indexes[&WireID::from(&intf.outputs["data_out"])],
+                    }))
+                }
+                Simulational::Primitive(Computational::RAM(c)) => {
+                    let slot = ram_specs.len();
+                    ram_specs.push(RAMSpec { size: c.size });
+
+                    let intf = c.reflect();
+                    Some(CW::RAM(wiring::RAMWiring {
+                        device_slot: slot,
+                        out: wire_indexes[&WireID::from(&intf.outputs["data_out"])],
+                        addr: wire_indexes[&WireID::from(&intf.inputs["addr"])],
+                        write: ref_for(&intf.inputs["write"]),
+                        data_in: wire_indexes[&WireID::from(&intf.inputs["data_in"])],
+                    }))
+                }
+                Simulational::Primitive(Computational::ROM(c)) => {
+                    let slot = rom_specs.len();
+                    rom_specs.push(ROMSpec { size: c.size });
+
+                    let intf = c.reflect();
+                    Some(CW::ROM(wiring::ROMWiring {
+                        device_slot: slot,
+                        out: wire_indexes[&WireID::from(&intf.outputs["out"])],
+                        addr: wire_indexes[&WireID::from(&intf.inputs["addr"])],
+                    }))
+                }
+                Simulational::Primitive(Computational::Serial(c)) => {
+                    let slot = serial_specs.len();
+                    serial_specs.push(SerialSpec);
+
+                    let intf = c.reflect();
+                    Some(CW::Serial(wiring::SerialWiring {
+                        device_slot: slot,
+                        out: wire_indexes[&WireID::from(&intf.outputs["data_out"])],
+                        write: ref_for(&intf.inputs["write"]),
+                        data_in: wire_indexes[&WireID::from(&intf.inputs["data_in"])],
+                    }))
+                }
+                Simulational::Primitive(Computational::MemorySystem(c)) => {
+                    let slot = ms_specs.len();
+                    let regions = memory_map
+                        .take()
+                        .expect("only one MemorySystem supported")
+                        .regions;
+                    ms_specs.push(MemorySystemSpec { regions });
+
+                    let intf = c.reflect();
+                    Some(CW::MemorySystem(wiring::MemorySystemWiring {
+                        device_slot: slot,
+                        out: wire_indexes[&WireID::from(&intf.outputs["data_out"])],
+                        addr: wire_indexes[&WireID::from(&intf.inputs["addr"])],
+                        write: ref_for(&intf.inputs["write"]),
+                        data_in: wire_indexes[&WireID::from(&intf.inputs["data_in"])],
+                    }))
                 }
             }
-            Simulational::Mux(c)          => {
-                let intf = c.reflect();
-                Some(CW::Mux(wiring::MuxWiring {
-                    sel: ref_for(&intf.inputs["sel"]),
-                    a0:  wire_indexes[&WireID::from(&intf.inputs["a0"])],
-                    a1:  wire_indexes[&WireID::from(&intf.inputs["a1"])],
-                    out: wire_indexes[&WireID::from(&intf.outputs["out"])],
-                    branch0: Vec::new(),
-                    branch1: Vec::new(),
-                }))
-            }
-            Simulational::Mux1(c)         => {
-                let intf = c.reflect();
-                Some(CW::Mux(wiring::MuxWiring {
-                    sel: ref_for(&intf.inputs["sel"]),
-                    a0:  wire_indexes[&WireID::from(&intf.inputs["a0"])],
-                    a1:  wire_indexes[&WireID::from(&intf.inputs["a1"])],
-                    out: wire_indexes[&WireID::from(&intf.outputs["out"])],
-                    branch0: Vec::new(),
-                    branch1: Vec::new(),
-                }))
-            }
-            Simulational::Adder(c) => {
-                let intf = c.reflect();
-                Some(CW::Adder(wiring::AdderWiring {
-                    a:     ref_for(&intf.inputs["a"]),
-                    b:     ref_for(&intf.inputs["b"]),
-                    c:     ref_for(&intf.inputs["c"]),
-                    sum:   ref_for(&intf.outputs["sum"]),
-                    carry: ref_for(&intf.outputs["carry"]),
-                }))
-            }
-            Simulational::Primitive(Computational::Register(c))     => {
-                let intf = c.reflect();
-                Some(CW::Register(wiring::RegisterWiring  {
-                    write:    ref_for(&intf.inputs["write"]),
-                    data_in:  wire_indexes[&WireID::from(&intf.inputs["data_in"])],
-                    data_out: wire_indexes[&WireID::from(&intf.outputs["data_out"])],
-                }))
-            }
-            Simulational::Primitive(Computational::RAM(c))          => {
-                let slot = ram_specs.len();
-                ram_specs.push(RAMSpec { size: c.size });
-
-                let intf = c.reflect();
-                Some(CW::RAM(wiring::RAMWiring {
-                    device_slot: slot,
-                    out:     wire_indexes[&WireID::from(&intf.outputs["data_out"])],
-                    addr:    wire_indexes[&WireID::from(&intf.inputs["addr"])],
-                    write:   ref_for(&intf.inputs["write"]),
-                    data_in: wire_indexes[&WireID::from(&intf.inputs["data_in"])],
-                }))
-            }
-            Simulational::Primitive(Computational::ROM(c))          => {
-                let slot = rom_specs.len();
-                rom_specs.push(ROMSpec { size: c.size });
-
-                let intf = c.reflect();
-                Some(CW::ROM(wiring::ROMWiring{
-                    device_slot: slot,
-                    out:  wire_indexes[&WireID::from(&intf.outputs["out"])],
-                    addr: wire_indexes[&WireID::from(&intf.inputs["addr"])],
-                }))
-            }
-            Simulational::Primitive(Computational::Serial(c)) => {
-                let slot = serial_specs.len();
-                serial_specs.push(SerialSpec);
-
-                let intf = c.reflect();
-                Some(CW::Serial(wiring::SerialWiring {
-                    device_slot: slot,
-                    out:     wire_indexes[&WireID::from(&intf.outputs["data_out"])],
-                    write:   ref_for(&intf.inputs["write"]),
-                    data_in: wire_indexes[&WireID::from(&intf.inputs["data_in"])],
-                }))
-            }
-            Simulational::Primitive(Computational::MemorySystem(c)) => {
-                let slot = ms_specs.len();
-                let regions = memory_map.take().expect("only one MemorySystem supported").regions;
-                ms_specs.push(MemorySystemSpec { regions });
-
-                let intf = c.reflect();
-                Some(CW::MemorySystem(wiring::MemorySystemWiring {
-                    device_slot: slot,
-                    out:     wire_indexes[&WireID::from(&intf.outputs["data_out"])],
-                    addr:    wire_indexes[&WireID::from(&intf.inputs["addr"])],
-                    write:   ref_for(&intf.inputs["write"]),
-                    data_in: wire_indexes[&WireID::from(&intf.inputs["data_in"])],
-                }))
-            }
-        }
-    }).collect();
+        })
+        .collect();
 
     // Peephole: collapse nand+not into and.
     let mut component_wiring = component_wiring;
-    let output_wires: Vec<wiring::WireIndex> = chip.reflect().outputs.values()
+    let output_wires: Vec<wiring::WireIndex> = chip
+        .reflect()
+        .outputs
+        .values()
         .map(|b| wire_indexes[&WireID::from(b)])
         .collect();
     peephole_nand_not(&mut component_wiring, &output_wires);
@@ -585,7 +697,8 @@ where
     // Coalesce bit-parallel operations into single word-wide ops.
     coalesce_parallel_nands(&mut component_wiring);
     coalesce_many_way_ands(&mut component_wiring);
-    let zero_wires: std::collections::HashSet<wiring::WireIndex> = const_wiring.iter()
+    let zero_wires: std::collections::HashSet<wiring::WireIndex> = const_wiring
+        .iter()
         .filter(|c| c.value == 0)
         .map(|c| c.out)
         .collect();
@@ -599,25 +712,28 @@ where
 
     let to_wr = |(name, b): (&String, &BusRef)| {
         if let Some((offset, _, _)) = renamed.get(&WireID::from(b)) {
-           (name.clone(),
-            WireRef {
-                id: wire_indexes[&WireID::from(b)],
-                offset: *offset as u8,
-                width: b.width as u8
-            })
-       }
-        else {
-            (name.clone(),
-            WireRef {
-                id: wire_indexes[&WireID::from(b)],
-                offset: b.offset as u8,
-                width: b.width as u8
-            })
+            (
+                name.clone(),
+                WireRef {
+                    id: wire_indexes[&WireID::from(b)],
+                    offset: *offset as u8,
+                    width: b.width as u8,
+                },
+            )
+        } else {
+            (
+                name.clone(),
+                WireRef {
+                    id: wire_indexes[&WireID::from(b)],
+                    offset: b.offset as u8,
+                    width: b.width as u8,
+                },
+            )
         }
     };
     ChipWiring {
         component_wiring,
-        input_wiring:  intf.inputs.iter().map(to_wr).collect(),
+        input_wiring: intf.inputs.iter().map(to_wr).collect(),
         output_wiring: intf.outputs.iter().map(to_wr).collect(),
         const_wiring,
         n_wires,
@@ -631,7 +747,10 @@ where
 
 /// Peephole: replace `nand a,b -> n; nand n,n -> out` with `and a,b -> out`.
 /// The not (self-nand) must be the sole consumer of the nand's output.
-fn peephole_nand_not(components: &mut Vec<wiring::ComponentWiring>, output_wires: &[wiring::WireIndex]) {
+fn peephole_nand_not(
+    components: &mut Vec<wiring::ComponentWiring>,
+    output_wires: &[wiring::WireIndex],
+) {
     use std::collections::{HashMap as Map, HashSet};
     use wiring::ComponentWiring as CW;
 
@@ -646,12 +765,24 @@ fn peephole_nand_not(components: &mut Vec<wiring::ComponentWiring>, output_wires
     for (i, comp) in components.iter().enumerate() {
         match comp {
             CW::Nand(n) => {
-                wire_consumers.entry((n.a.id.0, n.a.offset)).or_default().insert(i);
-                wire_consumers.entry((n.b.id.0, n.b.offset)).or_default().insert(i);
+                wire_consumers
+                    .entry((n.a.id.0, n.a.offset))
+                    .or_default()
+                    .insert(i);
+                wire_consumers
+                    .entry((n.b.id.0, n.b.offset))
+                    .or_default()
+                    .insert(i);
             }
             CW::And(n) => {
-                wire_consumers.entry((n.a.id.0, n.a.offset)).or_default().insert(i);
-                wire_consumers.entry((n.b.id.0, n.b.offset)).or_default().insert(i);
+                wire_consumers
+                    .entry((n.a.id.0, n.a.offset))
+                    .or_default()
+                    .insert(i);
+                wire_consumers
+                    .entry((n.b.id.0, n.b.offset))
+                    .or_default()
+                    .insert(i);
             }
             CW::ParallelNand(n) => {
                 bus_consumed.insert(n.a.0);
@@ -660,27 +791,48 @@ fn peephole_nand_not(components: &mut Vec<wiring::ComponentWiring>, output_wires
             CW::RippleAdder(a) => {
                 bus_consumed.insert(a.a.0);
                 bus_consumed.insert(a.b.0);
-                wire_consumers.entry((a.carry_in.id.0, a.carry_in.offset)).or_default().insert(i);
+                wire_consumers
+                    .entry((a.carry_in.id.0, a.carry_in.offset))
+                    .or_default()
+                    .insert(i);
             }
             CW::ManyWayAnd(m) => {
                 bus_consumed.insert(m.a.0);
             }
             CW::Mux(m) => {
-                wire_consumers.entry((m.sel.id.0, m.sel.offset)).or_default().insert(i);
+                wire_consumers
+                    .entry((m.sel.id.0, m.sel.offset))
+                    .or_default()
+                    .insert(i);
                 bus_consumed.insert(m.a0.0);
                 bus_consumed.insert(m.a1.0);
             }
             CW::Adder(a) => {
-                wire_consumers.entry((a.a.id.0, a.a.offset)).or_default().insert(i);
-                wire_consumers.entry((a.b.id.0, a.b.offset)).or_default().insert(i);
-                wire_consumers.entry((a.c.id.0, a.c.offset)).or_default().insert(i);
+                wire_consumers
+                    .entry((a.a.id.0, a.a.offset))
+                    .or_default()
+                    .insert(i);
+                wire_consumers
+                    .entry((a.b.id.0, a.b.offset))
+                    .or_default()
+                    .insert(i);
+                wire_consumers
+                    .entry((a.c.id.0, a.c.offset))
+                    .or_default()
+                    .insert(i);
             }
             CW::Register(r) => {
-                wire_consumers.entry((r.write.id.0, r.write.offset)).or_default().insert(i);
+                wire_consumers
+                    .entry((r.write.id.0, r.write.offset))
+                    .or_default()
+                    .insert(i);
                 bus_consumed.insert(r.data_in.0);
             }
             CW::RAM(r) => {
-                wire_consumers.entry((r.write.id.0, r.write.offset)).or_default().insert(i);
+                wire_consumers
+                    .entry((r.write.id.0, r.write.offset))
+                    .or_default()
+                    .insert(i);
                 bus_consumed.insert(r.data_in.0);
                 bus_consumed.insert(r.addr.0);
             }
@@ -688,11 +840,17 @@ fn peephole_nand_not(components: &mut Vec<wiring::ComponentWiring>, output_wires
                 bus_consumed.insert(r.addr.0);
             }
             CW::Serial(s) => {
-                wire_consumers.entry((s.write.id.0, s.write.offset)).or_default().insert(i);
+                wire_consumers
+                    .entry((s.write.id.0, s.write.offset))
+                    .or_default()
+                    .insert(i);
                 bus_consumed.insert(s.data_in.0);
             }
             CW::MemorySystem(m) => {
-                wire_consumers.entry((m.write.id.0, m.write.offset)).or_default().insert(i);
+                wire_consumers
+                    .entry((m.write.id.0, m.write.offset))
+                    .or_default()
+                    .insert(i);
                 bus_consumed.insert(m.data_in.0);
                 bus_consumed.insert(m.addr.0);
             }
@@ -705,7 +863,9 @@ fn peephole_nand_not(components: &mut Vec<wiring::ComponentWiring>, output_wires
     for (i, comp) in components.iter().enumerate() {
         if let CW::Nand(n) = comp {
             let key = (n.out.id.0, n.out.offset);
-            if bus_consumed.contains(&n.out.id.0) { continue; }
+            if bus_consumed.contains(&n.out.id.0) {
+                continue;
+            }
             if let Some(consumers) = wire_consumers.get(&key) {
                 if consumers.len() == 1 {
                     nand_by_out.insert(key, i);
@@ -718,15 +878,29 @@ fn peephole_nand_not(components: &mut Vec<wiring::ComponentWiring>, output_wires
     // Replace the pair with a single And gate.
     let mut to_remove: HashSet<usize> = HashSet::new();
     for i in 0..components.len() {
-        if to_remove.contains(&i) { continue; }
-        let CW::Nand(not_gate) = &components[i] else { continue };
-        if not_gate.a != not_gate.b { continue; }
+        if to_remove.contains(&i) {
+            continue;
+        }
+        let CW::Nand(not_gate) = &components[i] else {
+            continue;
+        };
+        if not_gate.a != not_gate.b {
+            continue;
+        }
         let key = (not_gate.a.id.0, not_gate.a.offset);
-        let Some(&nand_idx) = nand_by_out.get(&key) else { continue };
-        if nand_idx == i { continue; }
-        if to_remove.contains(&nand_idx) { continue; }
+        let Some(&nand_idx) = nand_by_out.get(&key) else {
+            continue;
+        };
+        if nand_idx == i {
+            continue;
+        }
+        if to_remove.contains(&nand_idx) {
+            continue;
+        }
         // nand_idx may have already been converted to And by a prior iteration.
-        let CW::Nand(nand_gate) = &components[nand_idx] else { continue };
+        let CW::Nand(nand_gate) = &components[nand_idx] else {
+            continue;
+        };
         let and = wiring::AndWiring {
             a: nand_gate.a,
             b: nand_gate.b,
@@ -746,7 +920,10 @@ fn peephole_nand_not(components: &mut Vec<wiring::ComponentWiring>, output_wires
 
 /// Remove gates (Nand/And) whose output wire has no consumers at all.
 /// Iterates to a fixed point, since removing a gate may leave its inputs' producers dead too.
-fn eliminate_dead_gates(components: &mut Vec<wiring::ComponentWiring>, output_wires: &[wiring::WireIndex]) {
+fn eliminate_dead_gates(
+    components: &mut Vec<wiring::ComponentWiring>,
+    output_wires: &[wiring::WireIndex],
+) {
     use std::collections::HashSet;
     use wiring::ComponentWiring as CW;
 
@@ -832,7 +1009,9 @@ fn eliminate_dead_gates(components: &mut Vec<wiring::ComponentWiring>, output_wi
             }
         });
 
-        if components.len() == before { break; }
+        if components.len() == before {
+            break;
+        }
     }
 }
 
@@ -848,7 +1027,11 @@ fn coalesce_parallel_nands(components: &mut Vec<wiring::ComponentWiring>) {
     // Key: (a wire, b wire, out wire). Gates with the same key and aligned offsets can merge.
     type GroupKey = (u32, u32, u32);
 
-    fn aligned_key(a: &wiring::BitRef, b: &wiring::BitRef, out: &wiring::BitRef) -> Option<GroupKey> {
+    fn aligned_key(
+        a: &wiring::BitRef,
+        b: &wiring::BitRef,
+        out: &wiring::BitRef,
+    ) -> Option<GroupKey> {
         if a.offset == b.offset && b.offset == out.offset {
             Some((a.id.0, b.id.0, out.id.0))
         } else {
@@ -857,7 +1040,10 @@ fn coalesce_parallel_nands(components: &mut Vec<wiring::ComponentWiring>) {
     }
 
     #[derive(PartialEq, Clone, Copy)]
-    enum RunKind { Nand, And }
+    enum RunKind {
+        Nand,
+        And,
+    }
 
     let mut result: Vec<CW> = Vec::with_capacity(components.len());
     let mut i = 0;
@@ -865,7 +1051,7 @@ fn coalesce_parallel_nands(components: &mut Vec<wiring::ComponentWiring>) {
         // Try to start a group of consecutive gates of the same kind with matching key.
         let (kind, key) = match &components[i] {
             CW::Nand(n) => (RunKind::Nand, aligned_key(&n.a, &n.b, &n.out)),
-            CW::And(n)  => (RunKind::And,  aligned_key(&n.a, &n.b, &n.out)),
+            CW::And(n) => (RunKind::And, aligned_key(&n.a, &n.b, &n.out)),
             _ => (RunKind::Nand, None),
         };
         if let Some(k) = key {
@@ -874,28 +1060,36 @@ fn coalesce_parallel_nands(components: &mut Vec<wiring::ComponentWiring>) {
             while i < components.len() {
                 let next = match (&components[i], kind) {
                     (CW::Nand(n), RunKind::Nand) => aligned_key(&n.a, &n.b, &n.out),
-                    (CW::And(n),  RunKind::And)  => aligned_key(&n.a, &n.b, &n.out),
+                    (CW::And(n), RunKind::And) => aligned_key(&n.a, &n.b, &n.out),
                     _ => None,
                 };
-                if next == Some(k) { i += 1; } else { break; }
+                if next == Some(k) {
+                    i += 1;
+                } else {
+                    break;
+                }
             }
             let run_len = i - start;
             if run_len >= 2 {
                 let (a_id, b_id, out_id) = match &components[start] {
                     CW::Nand(n) => (n.a.id, n.b.id, n.out.id),
-                    CW::And(n)  => (n.a.id, n.b.id, n.out.id),
+                    CW::And(n) => (n.a.id, n.b.id, n.out.id),
                     _ => unreachable!(),
                 };
                 // Nand(a, b) -> out
                 result.push(CW::ParallelNand(wiring::ParallelNandWiring {
-                    a: a_id, b: b_id, out: out_id,
+                    a: a_id,
+                    b: b_id,
+                    out: out_id,
                 }));
                 if kind == RunKind::And {
                     // Not(out) -> out  (invert in place to complete the And)
                     // Note: the "out" wire is being overwritten here, which isn't something that happens
                     // anywhere else, but should be fine.
                     result.push(CW::ParallelNand(wiring::ParallelNandWiring {
-                        a: out_id, b: out_id, out: out_id,
+                        a: out_id,
+                        b: out_id,
+                        out: out_id,
                     }));
                 }
             } else {
@@ -926,7 +1120,9 @@ fn coalesce_many_way_ands(components: &mut Vec<wiring::ComponentWiring>) {
         }
     }
 
-    if and_by_out.is_empty() { return; }
+    if and_by_out.is_empty() {
+        return;
+    }
 
     // For each And output, count how many distinct And gates consume it.
     // A node with fan-out > 1 among And gates can't be cleanly claimed by one tree.
@@ -958,11 +1154,26 @@ fn coalesce_many_way_ands(components: &mut Vec<wiring::ComponentWiring>) {
                 leaves.push(bit);
                 return true;
             }
-            let CW::And(a) = &components[idx] else { unreachable!() };
+            let CW::And(a) = &components[idx] else {
+                unreachable!()
+            };
             let (a_bit, b_bit) = (a.a, a.b);
             tree_nodes.push(idx);
-            collect_tree(a_bit, and_by_out, and_consumers, components, tree_nodes, leaves)
-                && collect_tree(b_bit, and_by_out, and_consumers, components, tree_nodes, leaves)
+            collect_tree(
+                a_bit,
+                and_by_out,
+                and_consumers,
+                components,
+                tree_nodes,
+                leaves,
+            ) && collect_tree(
+                b_bit,
+                and_by_out,
+                and_consumers,
+                components,
+                tree_nodes,
+                leaves,
+            )
         } else {
             // Leaf: not produced by an And in our index.
             leaves.push(bit);
@@ -974,8 +1185,12 @@ fn coalesce_many_way_ands(components: &mut Vec<wiring::ComponentWiring>) {
     let mut is_interior: HashSet<usize> = HashSet::new();
     for comp in components.iter() {
         if let CW::And(a) = comp {
-            if let Some(&idx) = and_by_out.get(&a.a) { is_interior.insert(idx); }
-            if let Some(&idx) = and_by_out.get(&a.b) { is_interior.insert(idx); }
+            if let Some(&idx) = and_by_out.get(&a.a) {
+                is_interior.insert(idx);
+            }
+            if let Some(&idx) = and_by_out.get(&a.b) {
+                is_interior.insert(idx);
+            }
         }
     }
 
@@ -983,7 +1198,9 @@ fn coalesce_many_way_ands(components: &mut Vec<wiring::ComponentWiring>) {
     let mut replacements: HashMap<usize, wiring::ManyWayAndWiring> = HashMap::new();
 
     for (i, comp) in components.iter().enumerate() {
-        if claimed[i] || is_interior.contains(&i) { continue; }
+        if claimed[i] || is_interior.contains(&i) {
+            continue;
+        }
         let CW::And(root) = comp else { continue };
 
         let mut tree_nodes = Vec::new();
@@ -992,16 +1209,40 @@ fn coalesce_many_way_ands(components: &mut Vec<wiring::ComponentWiring>) {
 
         let a_bit = root.a;
         let b_bit = root.b;
-        if !collect_tree(a_bit, &and_by_out, &and_consumers, components, &mut tree_nodes, &mut leaves) { continue; }
-        if !collect_tree(b_bit, &and_by_out, &and_consumers, components, &mut tree_nodes, &mut leaves) { continue; }
+        if !collect_tree(
+            a_bit,
+            &and_by_out,
+            &and_consumers,
+            components,
+            &mut tree_nodes,
+            &mut leaves,
+        ) {
+            continue;
+        }
+        if !collect_tree(
+            b_bit,
+            &and_by_out,
+            &and_consumers,
+            components,
+            &mut tree_nodes,
+            &mut leaves,
+        ) {
+            continue;
+        }
 
         // All leaves must reference the same WireIndex.
-        if leaves.is_empty() { continue; }
+        if leaves.is_empty() {
+            continue;
+        }
         let source_wire = leaves[0].id;
-        if !leaves.iter().all(|l| l.id == source_wire) { continue; }
+        if !leaves.iter().all(|l| l.id == source_wire) {
+            continue;
+        }
 
         // Need at least 3 source bits (2+ And gates) to be worth coalescing.
-        if leaves.len() < 3 { continue; }
+        if leaves.len() < 3 {
+            continue;
+        }
 
         // Build mask.
         let mut mask: u64 = 0;
@@ -1014,14 +1255,19 @@ fn coalesce_many_way_ands(components: &mut Vec<wiring::ComponentWiring>) {
             claimed[idx] = true;
         }
 
-        replacements.insert(i, wiring::ManyWayAndWiring {
-            a: source_wire,
-            out: root.out,
-            mask,
-        });
+        replacements.insert(
+            i,
+            wiring::ManyWayAndWiring {
+                a: source_wire,
+                out: root.out,
+                mask,
+            },
+        );
     }
 
-    if replacements.is_empty() { return; }
+    if replacements.is_empty() {
+        return;
+    }
 
     // Rebuild: skip claimed And gates, insert ManyWayAnd at root positions.
     let mut result: Vec<CW> = Vec::with_capacity(components.len());
@@ -1076,11 +1322,17 @@ fn coalesce_ripple_adders(
     let mut replacements: HashMap<usize, wiring::RippleAdderWiring> = HashMap::new();
 
     for i in 0..components.len() {
-        if claimed[i] || is_chain_interior[i] { continue; }
-        let CW::Adder(first) = &components[i] else { continue };
+        if claimed[i] || is_chain_interior[i] {
+            continue;
+        }
+        let CW::Adder(first) = &components[i] else {
+            continue;
+        };
 
         // Verify aligned offsets for the head.
-        if first.a.offset != first.sum.offset { continue; }
+        if first.a.offset != first.sum.offset {
+            continue;
+        }
 
         let a_wire = first.a.id;
         let b_wire = first.b.id;
@@ -1093,12 +1345,15 @@ fn coalesce_ripple_adders(
         let mut prev_carry = first.carry;
         let mut step = 1u8;
         loop {
-            let Some(&next) = by_carry_in.get(&prev_carry) else { break };
-            let CW::Adder(a) = &components[next] else { break };
+            let Some(&next) = by_carry_in.get(&prev_carry) else {
+                break;
+            };
+            let CW::Adder(a) = &components[next] else {
+                break;
+            };
             let expected_offset = base_offset.wrapping_add(step);
             // b wires must match, OR all be zero-valued constants.
-            let b_ok = a.b.id == b_wire
-                || (b_is_zero && zero_wires.contains(&a.b.id));
+            let b_ok = a.b.id == b_wire || (b_is_zero && zero_wires.contains(&a.b.id));
             if !b_ok
                 || a.a.id != a_wire
                 || a.sum.id != sum_wire
@@ -1112,24 +1367,31 @@ fn coalesce_ripple_adders(
             step += 1;
         }
 
-        if chain.len() < 2 { continue; }
+        if chain.len() < 2 {
+            continue;
+        }
 
         let last_idx = *chain.last().unwrap();
         for &idx in &chain {
             claimed[idx] = true;
         }
-        replacements.insert(last_idx, wiring::RippleAdderWiring {
-            carry_in: first.c,
-            a: a_wire,
-            b: b_wire,
-            out: sum_wire,
-            carry_out: prev_carry,
-            offset: base_offset,
-            width: chain.len() as u8,
-        });
+        replacements.insert(
+            last_idx,
+            wiring::RippleAdderWiring {
+                carry_in: first.c,
+                a: a_wire,
+                b: b_wire,
+                out: sum_wire,
+                carry_out: prev_carry,
+                offset: base_offset,
+                width: chain.len() as u8,
+            },
+        );
     }
 
-    if replacements.is_empty() { return; }
+    if replacements.is_empty() {
+        return;
+    }
 
     // Rebuild: skip claimed adders, insert RippleAdder at the last position of each chain.
     let mut result: Vec<CW> = Vec::with_capacity(components.len());
@@ -1155,22 +1417,63 @@ fn populate_mux_branches(
 
     // For each wire, which component indices consume it?
     let mut consumers: HashMap<wiring::WireIndex, HashSet<usize>> = HashMap::new();
-    let mut add_consumer = |w: wiring::WireIndex, j: usize| { consumers.entry(w).or_default().insert(j); };
+    let mut add_consumer = |w: wiring::WireIndex, j: usize| {
+        consumers.entry(w).or_default().insert(j);
+    };
     for (j, comp) in components.iter().enumerate() {
         // TODO: user reflect()?
         match comp {
-            CW::Nand(n)         => { add_consumer(n.a.id, j); add_consumer(n.b.id, j); }
-            CW::And(n)          => { add_consumer(n.a.id, j); add_consumer(n.b.id, j); }
-            CW::ParallelNand(n) => { add_consumer(n.a, j); add_consumer(n.b, j); }
-            CW::RippleAdder(a) => { add_consumer(a.a, j); add_consumer(a.b, j); add_consumer(a.carry_in.id, j); }
-            CW::ManyWayAnd(m)   => { add_consumer(m.a, j); }
-            CW::Mux(m)          => { add_consumer(m.sel.id, j); add_consumer(m.a0, j); add_consumer(m.a1, j); }
-            CW::Adder(a)        => { add_consumer(a.a.id, j); add_consumer(a.b.id, j); add_consumer(a.c.id, j); }
-            CW::Register(r)     => { add_consumer(r.write.id, j); add_consumer(r.data_in, j); }
-            CW::RAM(r)          => { add_consumer(r.write.id, j); add_consumer(r.data_in, j); add_consumer(r.addr, j); }
-            CW::ROM(r)          => { add_consumer(r.addr, j); }
-            CW::Serial(s)       => { add_consumer(s.write.id, j); add_consumer(s.data_in, j); }
-            CW::MemorySystem(m) => { add_consumer(m.write.id, j); add_consumer(m.data_in, j); add_consumer(m.addr, j); }
+            CW::Nand(n) => {
+                add_consumer(n.a.id, j);
+                add_consumer(n.b.id, j);
+            }
+            CW::And(n) => {
+                add_consumer(n.a.id, j);
+                add_consumer(n.b.id, j);
+            }
+            CW::ParallelNand(n) => {
+                add_consumer(n.a, j);
+                add_consumer(n.b, j);
+            }
+            CW::RippleAdder(a) => {
+                add_consumer(a.a, j);
+                add_consumer(a.b, j);
+                add_consumer(a.carry_in.id, j);
+            }
+            CW::ManyWayAnd(m) => {
+                add_consumer(m.a, j);
+            }
+            CW::Mux(m) => {
+                add_consumer(m.sel.id, j);
+                add_consumer(m.a0, j);
+                add_consumer(m.a1, j);
+            }
+            CW::Adder(a) => {
+                add_consumer(a.a.id, j);
+                add_consumer(a.b.id, j);
+                add_consumer(a.c.id, j);
+            }
+            CW::Register(r) => {
+                add_consumer(r.write.id, j);
+                add_consumer(r.data_in, j);
+            }
+            CW::RAM(r) => {
+                add_consumer(r.write.id, j);
+                add_consumer(r.data_in, j);
+                add_consumer(r.addr, j);
+            }
+            CW::ROM(r) => {
+                add_consumer(r.addr, j);
+            }
+            CW::Serial(s) => {
+                add_consumer(s.write.id, j);
+                add_consumer(s.data_in, j);
+            }
+            CW::MemorySystem(m) => {
+                add_consumer(m.write.id, j);
+                add_consumer(m.data_in, j);
+                add_consumer(m.addr, j);
+            }
         }
     }
     // Extra consumers (chip outputs) use a sentinel index that will never be claimed.
@@ -1183,15 +1486,15 @@ fn populate_mux_branches(
     let mut producers: HashMap<wiring::WireIndex, Vec<usize>> = HashMap::new();
     for (j, comp) in components.iter().enumerate() {
         match comp {
-            CW::Nand(n)  => producers.entry(n.out.id).or_default().push(j),
-            CW::And(n)   => producers.entry(n.out.id).or_default().push(j),
+            CW::Nand(n) => producers.entry(n.out.id).or_default().push(j),
+            CW::And(n) => producers.entry(n.out.id).or_default().push(j),
             CW::ParallelNand(n) => producers.entry(n.out).or_default().push(j),
             CW::ManyWayAnd(m) => producers.entry(m.out.id).or_default().push(j),
             CW::RippleAdder(a) => {
                 producers.entry(a.out).or_default().push(j);
                 producers.entry(a.carry_out.id).or_default().push(j);
             }
-            CW::Mux(m)   => producers.entry(m.out).or_default().push(j),
+            CW::Mux(m) => producers.entry(m.out).or_default().push(j),
             CW::Adder(a) => {
                 producers.entry(a.sum.id).or_default().push(j);
                 producers.entry(a.carry.id).or_default().push(j);
@@ -1204,17 +1507,17 @@ fn populate_mux_branches(
     fn input_wires(comp: &CW) -> Vec<wiring::WireIndex> {
         // TODO: use reflect()?
         match comp {
-            CW::Nand(n)         => vec![n.a.id, n.b.id],
-            CW::And(n)          => vec![n.a.id, n.b.id],
-            CW::ParallelNand(n)  => vec![n.a, n.b],
+            CW::Nand(n) => vec![n.a.id, n.b.id],
+            CW::And(n) => vec![n.a.id, n.b.id],
+            CW::ParallelNand(n) => vec![n.a, n.b],
             CW::RippleAdder(a) => vec![a.a, a.b, a.carry_in.id],
-            CW::ManyWayAnd(m)   => vec![m.a],
-            CW::Mux(m)          => vec![m.sel.id, m.a0, m.a1],
-            CW::Adder(a)        => vec![a.a.id, a.b.id, a.c.id],
-            CW::Register(r)     => vec![r.write.id, r.data_in],
-            CW::RAM(r)          => vec![r.write.id, r.data_in, r.addr],
-            CW::ROM(r)          => vec![r.addr],
-            CW::Serial(s)       => vec![s.write.id, s.data_in],
+            CW::ManyWayAnd(m) => vec![m.a],
+            CW::Mux(m) => vec![m.sel.id, m.a0, m.a1],
+            CW::Adder(a) => vec![a.a.id, a.b.id, a.c.id],
+            CW::Register(r) => vec![r.write.id, r.data_in],
+            CW::RAM(r) => vec![r.write.id, r.data_in, r.addr],
+            CW::ROM(r) => vec![r.addr],
+            CW::Serial(s) => vec![s.write.id, s.data_in],
             CW::MemorySystem(m) => vec![m.write.id, m.data_in, m.addr],
         }
     }
@@ -1247,7 +1550,9 @@ fn populate_mux_branches(
         // Add initial producers.
         if let Some(prods) = producers.get(&wire) {
             for &j in prods {
-                if !claimed[j] { candidates.insert(j); }
+                if !claimed[j] {
+                    candidates.insert(j);
+                }
             }
         }
 
@@ -1255,20 +1560,29 @@ fn populate_mux_branches(
         loop {
             let mut grew = false;
             // Collect all input wires of current candidates.
-            let input_wires_to_check: Vec<wiring::WireIndex> = candidates.iter()
+            let input_wires_to_check: Vec<wiring::WireIndex> = candidates
+                .iter()
                 .flat_map(|&j| input_wires(&components[j]))
                 .collect();
 
             for w in input_wires_to_check {
-                let Some(wire_consumers) = consumers.get(&w) else { continue };
+                let Some(wire_consumers) = consumers.get(&w) else {
+                    continue;
+                };
                 // All consumers of this wire must be in candidates, or be the mux
                 // consuming on an "ok" port (this branch or sel — NOT the other branch).
                 let all_accounted = wire_consumers.iter().all(|&c| {
-                    if candidates.contains(&c) { return true; }
-                    if c == mux_idx { return mux_ok_wires.contains(&w); }
+                    if candidates.contains(&c) {
+                        return true;
+                    }
+                    if c == mux_idx {
+                        return mux_ok_wires.contains(&w);
+                    }
                     false
                 });
-                if !all_accounted { continue; }
+                if !all_accounted {
+                    continue;
+                }
                 // Add producers of this wire.
                 if let Some(prods) = producers.get(&w) {
                     for &j in prods {
@@ -1278,7 +1592,9 @@ fn populate_mux_branches(
                     }
                 }
             }
-            if !grew { break; }
+            if !grew {
+                break;
+            }
         }
 
         if candidates.is_empty() {
@@ -1296,7 +1612,9 @@ fn populate_mux_branches(
             emitted: &mut HashSet<usize>,
             sorted: &mut Vec<usize>,
         ) {
-            if !emitted.insert(j) { return; }
+            if !emitted.insert(j) {
+                return;
+            }
             // Visit dependencies first.
             let inputs = input_wires(&components[j]);
             for w in inputs {
@@ -1311,7 +1629,14 @@ fn populate_mux_branches(
             sorted.push(j);
         }
         for &j in &candidates {
-            topo_visit(j, &candidates, producers, components, &mut emitted, &mut sorted);
+            topo_visit(
+                j,
+                &candidates,
+                producers,
+                components,
+                &mut emitted,
+                &mut sorted,
+            );
         }
         sorted
     }
@@ -1327,14 +1652,21 @@ fn populate_mux_branches(
         claimed: &mut Vec<bool>,
         assignments: &mut Vec<(usize, Vec<usize>, Vec<usize>)>,
     ) {
-        let m = match &components[mux_idx] { CW::Mux(m) => m, _ => return };
+        let m = match &components[mux_idx] {
+            CW::Mux(m) => m,
+            _ => return,
+        };
         let (a0, a1) = (m.a0, m.a1);
         // For branch0: the mux consuming a wire on a0 is ok; on a1 or sel is NOT ok.
         // sel producers must remain top-level — they're needed before the branch decision.
         let ok_for_b0: HashSet<wiring::WireIndex> = [a0].into();
         let ok_for_b1: HashSet<wiring::WireIndex> = [a1].into();
-        let b0 = collect_branch(a0, mux_idx, &ok_for_b0, consumers, producers, components, claimed);
-        let b1 = collect_branch(a1, mux_idx, &ok_for_b1, consumers, producers, components, claimed);
+        let b0 = collect_branch(
+            a0, mux_idx, &ok_for_b0, consumers, producers, components, claimed,
+        );
+        let b1 = collect_branch(
+            a1, mux_idx, &ok_for_b1, consumers, producers, components, claimed,
+        );
 
         // Mark collected components as claimed.
         for &j in b0.iter().chain(b1.iter()) {
@@ -1362,9 +1694,18 @@ fn populate_mux_branches(
     let mut branch_roots: HashSet<usize> = HashSet::new();
 
     for i in (0..components.len()).rev() {
-        if claimed[i] { continue; }
+        if claimed[i] {
+            continue;
+        }
         if matches!(&components[i], CW::Mux(_)) {
-            collect_mux_branches(i, &consumers, &producers, components, &mut claimed, &mut assignments);
+            collect_mux_branches(
+                i,
+                &consumers,
+                &producers,
+                components,
+                &mut claimed,
+                &mut assignments,
+            );
             branch_roots.insert(i);
             // The mux was marked claimed inside collect_mux_branches so its a0/a1
             // consumers count as claimed. But it stays in the top-level list.
@@ -1396,8 +1737,14 @@ fn populate_mux_branches(
     // Assemble branches. Assignments are ordered inner-first, so when an outer mux
     // clones an inner mux from `extracted`, the inner mux already has its branches set.
     for (orig_idx, b0_indices, b1_indices) in &assignments {
-        let b0: Vec<CW> = b0_indices.iter().map(|&j| extracted[j].clone().unwrap()).collect();
-        let b1: Vec<CW> = b1_indices.iter().map(|&j| extracted[j].clone().unwrap()).collect();
+        let b0: Vec<CW> = b0_indices
+            .iter()
+            .map(|&j| extracted[j].clone().unwrap())
+            .collect();
+        let b1: Vec<CW> = b1_indices
+            .iter()
+            .map(|&j| extracted[j].clone().unwrap())
+            .collect();
 
         if branch_roots.contains(orig_idx) {
             // Top-level mux — update it in the components list

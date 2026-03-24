@@ -2,8 +2,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::nat::{Nat, N1, N16};
-
+use crate::nat::{N1, N16, Nat};
 
 static NEXT_ID: AtomicUsize = AtomicUsize::new(1);
 
@@ -16,7 +15,6 @@ impl WireId {
         WireId(NEXT_ID.fetch_add(1, Ordering::Relaxed))
     }
 }
-
 
 //
 // Input wiring:
@@ -36,27 +34,57 @@ pub struct InputBus<Width: Nat> {
 }
 impl<Width: Nat> InputBus<Width> {
     pub fn new() -> Self {
-        InputBus { width: PhantomData, effective_width: 0, id: WireId::new(), offset: 0 }
+        InputBus {
+            width: PhantomData,
+            effective_width: 0,
+            id: WireId::new(),
+            offset: 0,
+        }
     }
 
     /// Select a single bit from this bus, returning a 1-bit InputBus that shares
     /// the same underlying wire identity but refers only to bit `i`.
     pub fn bit(&self, i: usize) -> Input1 {
-        assert!(i < Width::as_int(), "bit index {} out of range for {}-bit bus", i, Width::as_int());
-        Input::Bus(InputBus { width: PhantomData, effective_width: 0, id: self.id, offset: self.offset + i })
+        assert!(
+            i < Width::as_int(),
+            "bit index {} out of range for {}-bit bus",
+            i,
+            Width::as_int()
+        );
+        Input::Bus(InputBus {
+            width: PhantomData,
+            effective_width: 0,
+            id: self.id,
+            offset: self.offset + i,
+        })
     }
 
     /// Slice `len` bits starting at `offset` from this bus.
     /// The returned bus shares the same wire identity but its BusRef will have width = `len`.
     pub fn mask(&self, offset: usize, len: usize) -> InputBus<Width> {
-        assert!(offset + len <= Width::as_int(), "mask({}, {}) out of range for {}-bit bus", offset, len, Width::as_int());
-        InputBus { width: PhantomData, effective_width: len, id: self.id, offset: self.offset + offset }
+        assert!(
+            offset + len <= Width::as_int(),
+            "mask({}, {}) out of range for {}-bit bus",
+            offset,
+            len,
+            Width::as_int()
+        );
+        InputBus {
+            width: PhantomData,
+            effective_width: len,
+            id: self.id,
+            offset: self.offset + offset,
+        }
     }
 }
 
 /// Copy/Clone need manual impls to avoid requiring `Width: Copy/Clone` (phantom type).
-impl<Width: Nat> Copy  for InputBus<Width> {}
-impl<Width: Nat> Clone for InputBus<Width> { fn clone(&self) -> Self { *self } }
+impl<Width: Nat> Copy for InputBus<Width> {}
+impl<Width: Nat> Clone for InputBus<Width> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
 
 pub enum Input<Width: Nat> {
     /// A constant value, backed by its own WireId so the wire-ref machinery still works.
@@ -65,8 +93,12 @@ pub enum Input<Width: Nat> {
     Bus(InputBus<Width>),
 }
 
-impl<Width: Nat> Copy  for Input<Width> {}
-impl<Width: Nat> Clone for Input<Width> { fn clone(&self) -> Self { *self } }
+impl<Width: Nat> Copy for Input<Width> {}
+impl<Width: Nat> Clone for Input<Width> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
 
 /// The most generic input: a bus that may or may not be connected eventually.
 impl<Width: Nat> Input<Width> {
@@ -82,7 +114,12 @@ impl<Width: Nat> Input<Width> {
     }
 
     pub fn bit(&self, i: usize) -> Input1 {
-        assert!(i < Width::as_int(), "bit index {} out of range for {}-bit input", i, Width::as_int());
+        assert!(
+            i < Width::as_int(),
+            "bit index {} out of range for {}-bit input",
+            i,
+            Width::as_int()
+        );
         match self {
             Input::Bus(bus) => bus.bit(i),
             Input::Fixed(value, _) => fixed((value >> i) & 1),
@@ -116,14 +153,11 @@ pub fn fixed<Width: Nat>(value: u64) -> Input<Width> {
     Input::Fixed(value, WireId::new())
 }
 
-
 /// A simple, single-valued input signal; that is, an incoming 1-bit wire.
 pub type Input1 = Input<N1>;
 
-
 /// A multi-bit input signal; that is, an incoming 16-bit bus.
 pub type Input16 = Input<N16>;
-
 
 //
 // Output wiring:
@@ -140,34 +174,67 @@ pub struct OutputBus<Width: Nat> {
 }
 
 /// Copy/Clone need manual impls to avoid requiring `Width: Copy/Clone` (phantom type).
-impl<Width: Nat> Copy  for OutputBus<Width> {}
-impl<Width: Nat> Clone for OutputBus<Width> { fn clone(&self) -> Self { *self } }
+impl<Width: Nat> Copy for OutputBus<Width> {}
+impl<Width: Nat> Clone for OutputBus<Width> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
 
 impl<Width: Nat> From<OutputBus<Width>> for InputBus<Width> {
     /// Any number of inputs can be fed by the same output.
     fn from(output: OutputBus<Width>) -> Self {
-        InputBus { width: PhantomData, effective_width: 0, id: output.id, offset: output.offset }
+        InputBus {
+            width: PhantomData,
+            effective_width: 0,
+            id: output.id,
+            offset: output.offset,
+        }
     }
 }
 impl<Width: Nat> OutputBus<Width> {
     /// Make a new wire of any width.
     pub fn new<N: Nat>() -> OutputBus<N> {
-        OutputBus { width: PhantomData, id: WireId::new(), offset: 0 }
+        OutputBus {
+            width: PhantomData,
+            id: WireId::new(),
+            offset: 0,
+        }
     }
 
     /// Select a single bit from this output bus, returning a 1-bit OutputBus that
     /// shares the same underlying wire identity but refers only to bit `i`.
     pub fn bit(&self, i: usize) -> Output {
-        assert!(i < Width::as_int(), "bit index {} out of range for {}-bit bus", i, Width::as_int());
-        OutputBus { width: PhantomData, id: self.id, offset: self.offset + i }
+        assert!(
+            i < Width::as_int(),
+            "bit index {} out of range for {}-bit bus",
+            i,
+            Width::as_int()
+        );
+        OutputBus {
+            width: PhantomData,
+            id: self.id,
+            offset: self.offset + i,
+        }
     }
 
     /// Slice `len` bits starting at `offset` from this bus, returning an `InputBus<Width>`
     /// with the same wire identity but a runtime-specified effective width.
     /// Useful for connecting a subset of a wide bus to a narrower address input.
     pub fn mask(&self, offset: usize, len: usize) -> InputBus<Width> {
-        assert!(offset + len <= Width::as_int(), "mask({}, {}) out of range for {}-bit bus", offset, len, Width::as_int());
-        InputBus { width: PhantomData, effective_width: len, id: self.id, offset: self.offset + offset }
+        assert!(
+            offset + len <= Width::as_int(),
+            "mask({}, {}) out of range for {}-bit bus",
+            offset,
+            len,
+            Width::as_int()
+        );
+        InputBus {
+            width: PhantomData,
+            effective_width: len,
+            id: self.id,
+            offset: self.offset + offset,
+        }
     }
 }
 
@@ -221,19 +288,38 @@ pub struct BusRef {
 
 impl BusRef {
     pub fn from_input_bus<W: Nat>(input: InputBus<W>) -> Self {
-        let width = if input.effective_width != 0 { input.effective_width } else { W::as_int() };
-        BusRef { id: input.id, offset: input.offset, width, fixed: None }
+        let width = if input.effective_width != 0 {
+            input.effective_width
+        } else {
+            W::as_int()
+        };
+        BusRef {
+            id: input.id,
+            offset: input.offset,
+            width,
+            fixed: None,
+        }
     }
 
     pub fn from_input<W: Nat>(input: Input<W>) -> Self {
         match input {
             Input::Bus(bus) => Self::from_input_bus(bus),
-            Input::Fixed(value, id) => BusRef { id, offset: 0, width: W::as_int(), fixed: Some(value) },
+            Input::Fixed(value, id) => BusRef {
+                id,
+                offset: 0,
+                width: W::as_int(),
+                fixed: Some(value),
+            },
         }
     }
 
     pub fn from_output<W: Nat>(output: OutputBus<W>) -> Self {
-        BusRef { id: output.id, offset: output.offset, width: W::as_int(), fixed: None }
+        BusRef {
+            id: output.id,
+            offset: output.offset,
+            width: W::as_int(),
+            fixed: None,
+        }
     }
 }
 
@@ -260,7 +346,11 @@ pub struct IC<C> {
 
 impl<C> IC<C> {
     pub fn map<D>(self, f: impl FnMut(C) -> D) -> IC<D> {
-        IC { name: self.name, intf: self.intf, components: self.components.into_iter().map(f).collect() }
+        IC {
+            name: self.name,
+            intf: self.intf,
+            components: self.components.into_iter().map(f).collect(),
+        }
     }
 }
 

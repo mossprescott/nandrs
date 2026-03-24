@@ -1,17 +1,20 @@
 use clap::Parser;
 use std::fs;
 
-use assignments::project_05::memory_system;
-use assignments::project_06::{assemble, Program};
-use computer::cli::Args;
-use computer::disasm::disassemble;
 use assignments::project_02::Project02Component;
 use assignments::project_03::Project03Component;
 use assignments::project_05::Project05Component;
-use double::computer::{Computer, DoubleComponent, find_roms, flatten as flatten_double, flatten_for_simulation as flatten_double_sim};
-use simulator::{Chip, Component, IC, flatten, print_ic_graph};
-use simulator::simulate::{synthesize, initialize};
+use assignments::project_05::memory_system;
+use assignments::project_06::{Program, assemble};
+use computer::cli::Args;
+use computer::disasm::disassemble;
+use double::computer::{
+    Computer, DoubleComponent, find_roms, flatten as flatten_double,
+    flatten_for_simulation as flatten_double_sim,
+};
+use simulator::simulate::{initialize, synthesize};
 use simulator::word::Word16;
+use simulator::{Chip, Component, IC, flatten, print_ic_graph};
 
 fn main() {
     let args = Args::parse();
@@ -22,7 +25,11 @@ fn main() {
     });
 
     let program = assemble(&src);
-    println!("Loaded {} instructions from {}", program.instructions.len(), args.path);
+    println!(
+        "Loaded {} instructions from {}",
+        program.instructions.len(),
+        args.path
+    );
 
     let computer = Computer::chip();
     if args.print {
@@ -30,7 +37,10 @@ fn main() {
         println!("{}", print_ic_graph(&simple));
     }
 
-    let Program { instructions, symbols } = program;
+    let Program {
+        instructions,
+        symbols,
+    } = program;
 
     let wiring = if args.precise {
         let chip = flatten_double(computer);
@@ -56,7 +66,8 @@ fn main() {
     rom1.flash(words);
 
     let fmt_instr = |pc: Word16| -> String {
-        instructions.get(pc.unsigned() as usize)
+        instructions
+            .get(pc.unsigned() as usize)
             .map(|&i| disassemble(i))
             .unwrap_or("?".to_string())
     };
@@ -73,12 +84,14 @@ fn main() {
 fn simplify<C: Into<DoubleComponent>>(chip: C) -> IC<DoubleComponent> {
     flatten(chip.into(), "simple", &|c| match c {
         DoubleComponent::Project05(Project05Component::Project03(
-            Project03Component::Project02(Project02Component::Project01(_)))) => None,
+            Project03Component::Project02(Project02Component::Project01(_)),
+        )) => None,
         DoubleComponent::Project05(Project05Component::Project03(
-            Project03Component::Project02(ref p2))) => match p2 {
-                Project02Component::ALU(_) => c.expand(),
-                _ => None,
-            },
+            Project03Component::Project02(ref p2),
+        )) => match p2 {
+            Project02Component::ALU(_) => c.expand(),
+            _ => None,
+        },
         DoubleComponent::Project05(Project05Component::Project03(ref p3)) => match p3 {
             Project03Component::PC(_) => c.expand(),
             _ => None,

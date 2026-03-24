@@ -1,6 +1,6 @@
-use crate::{Component, IC, Input, Input1, Output, OutputBus, Reflect, Chip, Interface};
 use crate::declare::BusRef;
-use crate::nat::{Nat, N16};
+use crate::nat::{N16, Nat};
+use crate::{Chip, Component, IC, Input, Input1, Interface, Output, OutputBus, Reflect};
 
 // - Nand (Combinational)
 
@@ -37,19 +37,27 @@ pub enum Combinational {
     Buffer(Buffer),
 }
 
-impl From<Nand>   for Combinational { fn from(c: Nand)   -> Self { Combinational::Nand(c)   } }
-impl From<Buffer>  for Combinational { fn from(c: Buffer)  -> Self { Combinational::Buffer(c) } }
+impl From<Nand> for Combinational {
+    fn from(c: Nand) -> Self {
+        Combinational::Nand(c)
+    }
+}
+impl From<Buffer> for Combinational {
+    fn from(c: Buffer) -> Self {
+        Combinational::Buffer(c)
+    }
+}
 
 impl Reflect for Combinational {
     fn reflect(&self) -> Interface {
         match self {
-            Self::Nand(c)   => c.reflect(),
+            Self::Nand(c) => c.reflect(),
             Self::Buffer(c) => c.reflect(),
         }
     }
     fn name(&self) -> String {
         match self {
-            Self::Nand(c)   => c.name(),
+            Self::Nand(c) => c.name(),
             Self::Buffer(c) => c.name(),
         }
     }
@@ -61,10 +69,13 @@ pub struct CombinationalCounts {
 }
 
 pub fn count_combinational(components: &[Combinational]) -> CombinationalCounts {
-    let mut counts = CombinationalCounts { nands: 0, buffers: 0 };
+    let mut counts = CombinationalCounts {
+        nands: 0,
+        buffers: 0,
+    };
     for comp in components {
         match comp {
-            Combinational::Nand(_)   => counts.nands += 1,
+            Combinational::Nand(_) => counts.nands += 1,
             Combinational::Buffer(_) => counts.buffers += 1,
         }
     }
@@ -100,22 +111,34 @@ pub enum Sequential<Width: Nat> {
     Register(Register<Width>),
 }
 
-impl<Width: Nat> From<Nand>            for Sequential<Width> { fn from(c: Nand)            -> Self { Sequential::Nand(c)     } }
-impl<Width: Nat> From<Buffer>          for Sequential<Width> { fn from(c: Buffer)          -> Self { Sequential::Buffer(c)   } }
-impl<Width: Nat> From<Register<Width>> for Sequential<Width> { fn from(c: Register<Width>) -> Self { Sequential::Register(c) } }
+impl<Width: Nat> From<Nand> for Sequential<Width> {
+    fn from(c: Nand) -> Self {
+        Sequential::Nand(c)
+    }
+}
+impl<Width: Nat> From<Buffer> for Sequential<Width> {
+    fn from(c: Buffer) -> Self {
+        Sequential::Buffer(c)
+    }
+}
+impl<Width: Nat> From<Register<Width>> for Sequential<Width> {
+    fn from(c: Register<Width>) -> Self {
+        Sequential::Register(c)
+    }
+}
 
 impl<Width: Nat + Clone> Reflect for Sequential<Width> {
     fn reflect(&self) -> Interface {
         match self {
-            Self::Nand(c)     => c.reflect(),
-            Self::Buffer(c)   => c.reflect(),
+            Self::Nand(c) => c.reflect(),
+            Self::Buffer(c) => c.reflect(),
             Self::Register(c) => c.reflect(),
         }
     }
     fn name(&self) -> String {
         match self {
-            Self::Nand(c)     => c.name(),
-            Self::Buffer(c)   => c.name(),
+            Self::Nand(c) => c.name(),
+            Self::Buffer(c) => c.name(),
             Self::Register(c) => c.name(),
         }
     }
@@ -138,11 +161,15 @@ pub struct SequentialCounts {
 }
 
 pub fn count_sequential<W: Nat>(components: &[Sequential<W>]) -> SequentialCounts {
-    let mut counts = SequentialCounts { nands: 0, buffers: 0, registers: 0 };
+    let mut counts = SequentialCounts {
+        nands: 0,
+        buffers: 0,
+        registers: 0,
+    };
     for comp in components {
         match comp {
-            Sequential::Nand(_)     => counts.nands += 1,
-            Sequential::Buffer(_)   => counts.buffers += 1,
+            Sequential::Nand(_) => counts.nands += 1,
+            Sequential::Buffer(_) => counts.buffers += 1,
             Sequential::Register(_) => counts.registers += 1,
         }
     }
@@ -168,7 +195,13 @@ pub struct RAM<A: Nat, D: Nat> {
 // Note: this is not the Chip trait, due to the extra arg.
 impl<A: Nat, D: Nat> RAM<A, D> {
     pub fn chip(size: usize) -> Self {
-        RAM { size, addr: Input::new(), write: Input::new(), data_in: Input::new(), data_out: OutputBus::<D>::new() }
+        RAM {
+            size,
+            addr: Input::new(),
+            write: Input::new(),
+            data_in: Input::new(),
+            data_out: OutputBus::<D>::new(),
+        }
     }
 }
 
@@ -195,7 +228,11 @@ pub struct ROM<A: Nat, D: Nat> {
 // Note: this is not the Chip trait, due to the extra arg.
 impl<A: Nat, D: Nat> ROM<A, D> {
     pub fn chip(size: usize) -> Self {
-        ROM { size: size, addr: Input::<A>::new(), out: OutputBus::<D>::new() }
+        ROM {
+            size: size,
+            addr: Input::<A>::new(),
+            out: OutputBus::<D>::new(),
+        }
     }
 }
 
@@ -207,7 +244,6 @@ impl<A: Nat, D: Nat> Component for ROM<A, D> {
         None
     }
 }
-
 
 /// Read/write one word at a time from/to the outside world. Could represent a directly-connected
 /// keyboard (as in the original design), or a serial port, a debug interface, or some combination
@@ -229,7 +265,9 @@ pub struct Serial<Width: Nat> {
 
 impl<W: Nat> Component for Serial<W> {
     type Target = Serial<W>;
-    fn expand(&self) -> Option<IC<Serial<W>>> { None }
+    fn expand(&self) -> Option<IC<Serial<W>>> {
+        None
+    }
 }
 
 /// Abstracted writable memory system; presents the same interface as a RAM, but the simulator
@@ -274,23 +312,23 @@ pub enum Computational<A: Nat, D: Nat> {
 impl<A: Nat + Clone, D: Nat + Clone> Reflect for Computational<A, D> {
     fn reflect(&self) -> Interface {
         match self {
-            Self::Nand(c)         => c.reflect(),
-            Self::Buffer(c)       => c.reflect(),
-            Self::Register(c)     => c.reflect(),
-            Self::RAM(c)          => c.reflect(),
-            Self::ROM(c)          => c.reflect(),
-            Self::Serial(c)       => c.reflect(),
+            Self::Nand(c) => c.reflect(),
+            Self::Buffer(c) => c.reflect(),
+            Self::Register(c) => c.reflect(),
+            Self::RAM(c) => c.reflect(),
+            Self::ROM(c) => c.reflect(),
+            Self::Serial(c) => c.reflect(),
             Self::MemorySystem(c) => c.reflect(),
         }
     }
     fn name(&self) -> String {
         match self {
-            Self::Nand(c)         => c.name(),
-            Self::Buffer(c)       => c.name(),
-            Self::Register(c)     => c.name(),
-            Self::RAM(c)          => c.name(),
-            Self::ROM(c)          => c.name(),
-            Self::Serial(c)       => c.name(),
+            Self::Nand(c) => c.name(),
+            Self::Buffer(c) => c.name(),
+            Self::Register(c) => c.name(),
+            Self::RAM(c) => c.name(),
+            Self::ROM(c) => c.name(),
+            Self::Serial(c) => c.name(),
             Self::MemorySystem(c) => c.name(),
         }
     }
@@ -304,10 +342,10 @@ impl<A: Nat, D: Nat> Component for Computational<A, D> {
     }
 }
 
-pub type RAM16           = RAM<N16, N16>;
-pub type ROM16           = ROM<N16, N16>;
-pub type Serial16        = Serial<N16>;
-pub type MemorySystem16  = MemorySystem<N16, N16>;
+pub type RAM16 = RAM<N16, N16>;
+pub type ROM16 = ROM<N16, N16>;
+pub type Serial16 = Serial<N16>;
+pub type MemorySystem16 = MemorySystem<N16, N16>;
 pub type Computational16 = Computational<N16, N16>;
 
 pub struct ComputationalCounts {
@@ -320,19 +358,26 @@ pub struct ComputationalCounts {
     pub memory_systems: usize,
 }
 
-pub fn count_computational<A: Nat, D: Nat>(components: &[Computational<A, D>]) -> ComputationalCounts {
+pub fn count_computational<A: Nat, D: Nat>(
+    components: &[Computational<A, D>],
+) -> ComputationalCounts {
     let mut counts = ComputationalCounts {
-        nands: 0, buffers: 0, registers: 0,
-        rams: 0, roms: 0, serials: 0, memory_systems: 0,
+        nands: 0,
+        buffers: 0,
+        registers: 0,
+        rams: 0,
+        roms: 0,
+        serials: 0,
+        memory_systems: 0,
     };
     for comp in components {
         match comp {
-            Computational::Nand(_)         => counts.nands += 1,
-            Computational::Buffer(_)       => counts.buffers += 1,
-            Computational::Register(_)     => counts.registers += 1,
-            Computational::RAM(_)          => counts.rams += 1,
-            Computational::ROM(_)          => counts.roms += 1,
-            Computational::Serial(_)       => counts.serials += 1,
+            Computational::Nand(_) => counts.nands += 1,
+            Computational::Buffer(_) => counts.buffers += 1,
+            Computational::Register(_) => counts.registers += 1,
+            Computational::RAM(_) => counts.rams += 1,
+            Computational::ROM(_) => counts.roms += 1,
+            Computational::Serial(_) => counts.serials += 1,
             Computational::MemorySystem(_) => counts.memory_systems += 1,
         }
     }
@@ -342,7 +387,7 @@ pub fn count_computational<A: Nat, D: Nat>(components: &[Computational<A, D>]) -
 impl<A: Nat, D: Nat> From<Combinational> for Computational<A, D> {
     fn from(c: Combinational) -> Self {
         match c {
-            Combinational::Nand(n)   => Computational::Nand(n),
+            Combinational::Nand(n) => Computational::Nand(n),
             Combinational::Buffer(b) => Computational::Buffer(b),
         }
     }
@@ -351,8 +396,8 @@ impl<A: Nat, D: Nat> From<Combinational> for Computational<A, D> {
 impl<A: Nat, D: Nat> From<Sequential<D>> for Computational<A, D> {
     fn from(s: Sequential<D>) -> Self {
         match s {
-            Sequential::Nand(n)     => Computational::Nand(n),
-            Sequential::Buffer(n)   => Computational::Buffer(n),
+            Sequential::Nand(n) => Computational::Nand(n),
+            Sequential::Buffer(n) => Computational::Buffer(n),
             Sequential::Register(r) => Computational::Register(r),
         }
     }

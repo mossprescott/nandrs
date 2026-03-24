@@ -8,7 +8,7 @@ use std::time::Instant;
 
 use minifb::{Window, WindowOptions};
 
-use assignments::project_05::{find_ram, find_screen, find_keyboard};
+use assignments::project_05::{find_keyboard, find_ram, find_screen};
 use simulator::simulate::ChipState;
 use simulator::word::Word16;
 
@@ -16,7 +16,9 @@ pub fn fmt_commas(n: u64) -> String {
     let s = n.to_string();
     let mut out = String::new();
     for (i, c) in s.chars().rev().enumerate() {
-        if i > 0 && i % 3 == 0 { out.push(','); }
+        if i > 0 && i % 3 == 0 {
+            out.push(',');
+        }
         out.push(c);
     }
     out.chars().rev().collect()
@@ -37,7 +39,7 @@ pub fn run(
     let ram = find_ram(&state);
     let screen = find_screen(&state);
     let keyboard = find_keyboard(&state);
-    let win_width  = (display::WIDTH  + 2 * display::BEZEL) * args.scale();
+    let win_width = (display::WIDTH + 2 * display::BEZEL) * args.scale();
     let win_height = (display::HEIGHT + 2 * display::BEZEL) * args.scale();
     let bezel = display::load_bezel(args.scale());
     let mut pixels = bezel.clone();
@@ -52,7 +54,10 @@ pub fn run(
     let mut display_fps = String::new();
 
     let print_state = |pc: Word16, cycle: u64| {
-        let labels = symbols_by_addr.get(&pc).map(|v| format!(" [{}]", v.join(", "))).unwrap_or_default();
+        let labels = symbols_by_addr
+            .get(&pc)
+            .map(|v| format!(" [{}]", v.join(", ")))
+            .unwrap_or_default();
         println!("pc={pc}{labels}: (cycle {})", fmt_commas(cycle));
         println!("  SP: {}", ram.peek(0));
         let asm = fmt_instr(pc);
@@ -62,13 +67,18 @@ pub fn run(
     const TRACE_SKIP: &[&str] = &["math.abs", "math.multiply"];
     let print_fn_entry = |pc: Word16, cycle: u64| {
         if let Some(labels) = symbols_by_addr.get(&pc) {
-            let fn_labels: Vec<&str> = labels.iter()
+            let fn_labels: Vec<&str> = labels
+                .iter()
                 .filter(|l| l.contains('.') && !l.contains('$') && !l.contains('_'))
                 .filter(|l| !TRACE_SKIP.contains(&l.as_str()))
                 .map(|l| l.as_str())
                 .collect();
             if !fn_labels.is_empty() {
-                println!("pc={pc} [{}] (cycle {})", fn_labels.join(", "), fmt_commas(cycle));
+                println!(
+                    "pc={pc} [{}] (cycle {})",
+                    fn_labels.join(", "),
+                    fmt_commas(cycle)
+                );
             }
         }
     };
@@ -102,7 +112,7 @@ pub fn run(
                 if args.verbose {
                     // let labels = symbols_by_addr.get(&pc).map(|v| format!(" [{}]", v.join(", "))).unwrap_or_default();
                     // if !labels.is_empty() {
-                        print_state(pc, cycle);
+                    print_state(pc, cycle);
                     // }
                 } else if args.trace {
                     print_fn_entry(state.get("pc"), cycle);
@@ -116,7 +126,12 @@ pub fn run(
                     frame_count += 1;
                     if args.trace {
                         let delta = cycle - last_frame_cycle;
-                        println!("frame {} at cycle {} (+{})", fmt_commas(frame_count), fmt_commas(cycle), fmt_commas(delta));
+                        println!(
+                            "frame {} at cycle {} (+{})",
+                            fmt_commas(frame_count),
+                            fmt_commas(cycle),
+                            fmt_commas(delta)
+                        );
                     }
                     last_frame_cycle = cycle;
                     interval_frames += 1;
@@ -146,12 +161,30 @@ pub fn run(
             let text_y = bezel_top + (display::BEZEL - 9) * args.scale() / 2;
             let text_color = 0x404040;
             if !display_speed.is_empty() {
-                display::draw_text(&mut pixels, win_width, display::BEZEL * args.scale(), text_y, args.scale(), &display_speed, text_color);
+                display::draw_text(
+                    &mut pixels,
+                    win_width,
+                    display::BEZEL * args.scale(),
+                    text_y,
+                    args.scale(),
+                    &display_speed,
+                    text_color,
+                );
                 let fw = display::text_width(&display_fps, args.scale());
-                display::draw_text(&mut pixels, win_width, win_width - display::BEZEL * args.scale() - fw, text_y, args.scale(), &display_fps, text_color);
+                display::draw_text(
+                    &mut pixels,
+                    win_width,
+                    win_width - display::BEZEL * args.scale() - fw,
+                    text_y,
+                    args.scale(),
+                    &display_fps,
+                    text_color,
+                );
             }
 
-            window.update_with_buffer(&pixels, win_width, win_height).unwrap();
+            window
+                .update_with_buffer(&pixels, win_width, win_height)
+                .unwrap();
 
             let elapsed = interval_start.elapsed();
             if elapsed.as_millis() >= 1000 {
@@ -181,7 +214,9 @@ pub fn run(
             }
         } else {
             // Halted: just keep the window open and responsive.
-            window.update_with_buffer(&pixels, win_width, win_height).unwrap();
+            window
+                .update_with_buffer(&pixels, win_width, win_height)
+                .unwrap();
             std::thread::sleep(display::FRAME_TIME);
         }
     }

@@ -18,16 +18,21 @@ pub(super) struct WireIndex(pub(super) u32);
 
 pub(super) type Indexes = HashMap<WireID, WireIndex>;
 
-
 /// Location of the storage for a single-bit wire, at a certain word index and bit offset within the word.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(super) struct BitRef { pub(super) id: WireIndex, pub(super) offset: u8 }
+pub(super) struct BitRef {
+    pub(super) id: WireIndex,
+    pub(super) offset: u8,
+}
 
 /// Location of the storage for a multi-bit wire (aka a bus), at a certain word index. Now used only
 /// for input/output wiring when sub-component chips are tested in isolation. If then.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(super) struct WireRef { pub(super) id: WireIndex, pub(super) offset: u8, pub(super) width: u8 }
-
+pub(super) struct WireRef {
+    pub(super) id: WireIndex,
+    pub(super) offset: u8,
+    pub(super) width: u8,
+}
 
 /// Records connections involved in one step of evaluation. Could be called "Op", maybe?
 #[derive(Clone)]
@@ -61,7 +66,7 @@ pub(super) enum ComponentWiring {
 pub(super) struct NandWiring {
     pub(super) a: BitRef,
     pub(super) b: BitRef,
-    pub(super) out: BitRef
+    pub(super) out: BitRef,
 }
 
 /// Select one result or another, as a primitive. Once the selector has been evaluated, only the
@@ -90,27 +95,49 @@ pub(super) struct AdderWiring {
     pub(super) carry: BitRef,
 }
 
-
 //
 // External ("Bus-resident"):
 //
 
 #[derive(Clone)]
-pub(super) struct RegisterWiring { pub(super) write: BitRef, pub(super) data_in: WireIndex, pub(super) data_out: WireIndex }
+pub(super) struct RegisterWiring {
+    pub(super) write: BitRef,
+    pub(super) data_in: WireIndex,
+    pub(super) data_out: WireIndex,
+}
 
 #[derive(Clone)]
-pub(super) struct ROMWiring { pub(super) device_slot: usize, pub(super) out: WireIndex, pub(super) addr: WireIndex }
+pub(super) struct ROMWiring {
+    pub(super) device_slot: usize,
+    pub(super) out: WireIndex,
+    pub(super) addr: WireIndex,
+}
 
 #[derive(Clone)]
-pub(super) struct RAMWiring { pub(super) device_slot: usize, pub(super) out: WireIndex, pub(super) addr: WireIndex, pub(super) write: BitRef, pub(super) data_in: WireIndex }
+pub(super) struct RAMWiring {
+    pub(super) device_slot: usize,
+    pub(super) out: WireIndex,
+    pub(super) addr: WireIndex,
+    pub(super) write: BitRef,
+    pub(super) data_in: WireIndex,
+}
 
 #[derive(Clone)]
-pub(super) struct MemorySystemWiring { pub(super) device_slot: usize, pub(super) out: WireIndex, pub(super) addr: WireIndex, pub(super) write: BitRef, pub(super) data_in: WireIndex }
+pub(super) struct MemorySystemWiring {
+    pub(super) device_slot: usize,
+    pub(super) out: WireIndex,
+    pub(super) addr: WireIndex,
+    pub(super) write: BitRef,
+    pub(super) data_in: WireIndex,
+}
 
 #[derive(Clone)]
-pub(super) struct SerialWiring { pub(super) device_slot: usize, pub(super) out: WireIndex, pub(super) write: BitRef, pub(super) data_in: WireIndex }
-
-
+pub(super) struct SerialWiring {
+    pub(super) device_slot: usize,
+    pub(super) out: WireIndex,
+    pub(super) write: BitRef,
+    pub(super) data_in: WireIndex,
+}
 
 //
 // "Synthetic" operations: result from coalescing multiple primitive operations which have related
@@ -165,7 +192,7 @@ pub(super) struct ManyWayAndWiring {
     pub(super) a: WireIndex,
     pub(super) out: BitRef,
 
-    pub(super) mask: u64
+    pub(super) mask: u64,
 }
 
 //

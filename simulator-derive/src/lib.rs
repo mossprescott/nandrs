@@ -49,13 +49,13 @@ pub fn derive_reflect(input: TokenStream) -> TokenStream {
         panic!("Reflect can only be derived for structs with named fields");
     };
 
-    let mut inputs  = vec![];
+    let mut inputs = vec![];
     let mut outputs = vec![];
 
     for field in &named_fields.named {
-        let field_name     = field.ident.as_ref().unwrap();
+        let field_name = field.ident.as_ref().unwrap();
         let field_name_str = field_name.to_string();
-        let field_ty       = &field.ty;
+        let field_ty = &field.ty;
 
         if type_name_starts_with(field_ty, "Input") {
             inputs.push(quote! {
@@ -122,11 +122,15 @@ pub fn derive_chip(input: TokenStream) -> TokenStream {
 
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
-    let chip_fields: Vec<_> = named_fields.named.iter().map(|field| {
-        let field_name = field.ident.as_ref().unwrap();
-        let field_ty   = &field.ty;
-        quote! { #field_name: <#field_ty>::new() }
-    }).collect();
+    let chip_fields: Vec<_> = named_fields
+        .named
+        .iter()
+        .map(|field| {
+            let field_name = field.ident.as_ref().unwrap();
+            let field_ty = &field.ty;
+            quote! { #field_name: <#field_ty>::new() }
+        })
+        .collect();
 
     quote! {
         impl #impl_generics Chip for #name #ty_generics #where_clause {

@@ -1,11 +1,10 @@
+use std::cmp::Ordering;
+use std::fmt;
+use std::marker::PhantomData;
 /// Type-level natural numbers.
 ///
 /// https://gist.github.com/bodil/a6f61e139fdf892b1a632c55f7cffc8b
-
 use std::ops::{Add, Sub};
-use std::cmp::Ordering;
-use std::marker::PhantomData;
-use std::fmt;
 
 use crate::bool::*;
 
@@ -42,11 +41,7 @@ where
 }
 
 pub trait Pos: Nat {}
-impl<N> Pos for Succ<N>
-where
-    N: Nat,
-{
-}
+impl<N> Pos for Succ<N> where N: Nat {}
 
 // Addition
 
@@ -59,7 +54,10 @@ impl<N: Nat> Add<N> for Zero {
     }
 }
 
-impl<L: Nat, R: Add<L>> Add<R> for Succ<L> where <R as Add<L>>::Output: Nat {
+impl<L: Nat, R: Add<L>> Add<R> for Succ<L>
+where
+    <R as Add<L>>::Output: Nat,
+{
     type Output = Succ<<R as Add<L>>::Output>;
     fn add(self, _: R) -> Self::Output {
         <Self::Output as Nat>::new()
@@ -84,7 +82,10 @@ impl<N: Nat> Sub<Zero> for Succ<N> {
     }
 }
 
-impl<L: Nat + Sub<R>, R: Nat> Sub<Succ<R>> for Succ<L> where <L as Sub<R>>::Output: Nat {
+impl<L: Nat + Sub<R>, R: Nat> Sub<Succ<R>> for Succ<L>
+where
+    <L as Sub<R>>::Output: Nat,
+{
     type Output = <L as Sub<R>>::Output;
     fn sub(self, _: Succ<R>) -> Self::Output {
         <Self::Output as Nat>::new()
@@ -251,8 +252,6 @@ pub type Lt<L, R> = <L as LT<R>>::Output;
 pub type Eq<L, R> = <L as EQ<R>>::Output;
 pub type Gt<L, R> = <L as GT<R>>::Output;
 
-
-
 // Literals
 
 pub type N0 = Zero;
@@ -321,7 +320,6 @@ pub type N62 = Succ<N61>;
 pub type N63 = Succ<N62>;
 pub type N64 = Succ<N63>;
 
-
 impl fmt::Debug for Zero {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "0")
@@ -333,8 +331,6 @@ impl<N: Nat> fmt::Debug for Succ<N> {
         write!(f, "{}", Self::as_int())
     }
 }
-
-
 
 // Tests
 

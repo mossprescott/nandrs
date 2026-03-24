@@ -3,37 +3,42 @@
 ///
 /// The idea is: during simulation, bits are bits; everything is stored in u64, which is assumed to be
 /// efficiently handled by the host.
-
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 
 use crate::bool::False;
-use crate::nat::{Cmp, Compare, IsGreater, IsLess, Nat, N1, N8, N16, N32, N64};
+use crate::nat::{Cmp, Compare, IsGreater, IsLess, N1, N8, N16, N32, N64, Nat};
 
 /// A type-level word size that can handle at least `Min` bits, and will fit in our usual storage word
 /// (u64).
-pub trait StorableFor<Min: Nat>: Nat + Cmp<N64> + Cmp<Min>
+pub trait StorableFor<Min: Nat>:
+    Nat
+    + Cmp<N64>
+    + Cmp<Min>
     + IsGreater<Compare<Self, N64>, Output = False>
     + IsLess<Compare<Self, Min>, Output = False>
-{}
+{
+}
 
 impl<Width, Min> StorableFor<Min> for Width
 where
     Min: Nat,
-    Width: Nat + Cmp<N64> + Cmp<Min>
+    Width: Nat
+        + Cmp<N64>
+        + Cmp<Min>
         + IsGreater<Compare<Width, N64>, Output = False>
         + IsLess<Compare<Width, Min>, Output = False>,
-{}
+{
+}
 
 /// A type-level word size that will fit in our usual storage word (u64).
 pub trait Storable: Nat + Cmp<N64> + IsGreater<Compare<Self, N64>, Output = False> {}
 
-impl<Width> Storable for Width
-where
-    Width: Nat + Cmp<N64>
-        + IsGreater<Compare<Width, N64>, Output = False>,
-{}
+impl<Width> Storable for Width where
+    Width: Nat + Cmp<N64> + IsGreater<Compare<Width, N64>, Output = False>
+{
+}
 
 /// Store bits which can be treated as a signed or unsigned value of the specified width.
 #[derive(PartialEq, Eq)]
@@ -43,7 +48,9 @@ pub struct Word<Width: Storable> {
 }
 
 impl<Width: Storable> Clone for Word<Width> {
-    fn clone(&self) -> Self { *self }
+    fn clone(&self) -> Self {
+        *self
+    }
 }
 
 impl<Width: Storable> Copy for Word<Width> {}
@@ -57,7 +64,10 @@ impl<Width: Storable> Hash for Word<Width> {
 impl<Width: Nat + Storable> Word<Width> {
     /// Unsafe: accept any bits.
     pub fn new(val: u64) -> Self {
-        Word { val: val & Self::mask(), _width: PhantomData }
+        Word {
+            val: val & Self::mask(),
+            _width: PhantomData,
+        }
     }
 
     fn mask() -> u64 {
@@ -96,9 +106,22 @@ impl<Width: Storable> fmt::Display for Word<Width> {
         let signed = self.signed();
         let unsigned = self.unsigned();
         if signed < 0 {
-            write!(f, "{} (0x{:0>width$X}; {})", signed, unsigned, unsigned, width = hex_digits)
+            write!(
+                f,
+                "{} (0x{:0>width$X}; {})",
+                signed,
+                unsigned,
+                unsigned,
+                width = hex_digits
+            )
         } else {
-            write!(f, "{} (0x{:0>width$X})", signed, unsigned, width = hex_digits)
+            write!(
+                f,
+                "{} (0x{:0>width$X})",
+                signed,
+                unsigned,
+                width = hex_digits
+            )
         }
     }
 }
@@ -112,44 +135,57 @@ impl<Width: Storable> fmt::Debug for Word<Width> {
 
 /// Safe conversion for a single bit
 impl<Width: Storable + StorableFor<N1>> From<bool> for Word<Width> {
-    fn from(val: bool) -> Word<Width> { Word::<Width>::new(val as u64) }
+    fn from(val: bool) -> Word<Width> {
+        Word::<Width>::new(val as u64)
+    }
 }
 
 /// Safe conversion for 16-bit signed values
 impl<Width: Storable + StorableFor<N16>> From<i16> for Word<Width> {
-    fn from(val: i16) -> Word<Width> { Word::<Width>::new(val as u16 as u64) }
+    fn from(val: i16) -> Word<Width> {
+        Word::<Width>::new(val as u16 as u64)
+    }
 }
 
 /// Safe conversion for 16-bit unsigned values
 impl<Width: Storable + StorableFor<N16>> From<u16> for Word<Width> {
-    fn from(val: u16) -> Word<Width> { Word::<Width>::new(val as u64) }
+    fn from(val: u16) -> Word<Width> {
+        Word::<Width>::new(val as u64)
+    }
 }
 
 /// Safe conversion for 32-bit signed values
 impl<Width: Storable + StorableFor<N32>> From<i32> for Word<Width> {
-    fn from(val: i32) -> Word<Width> { Word::<Width>::new(val as u32 as u64) }
+    fn from(val: i32) -> Word<Width> {
+        Word::<Width>::new(val as u32 as u64)
+    }
 }
 
 /// Safe conversion for 32-bit unsigned values
 impl<Width: Storable + StorableFor<N32>> From<u32> for Word<Width> {
-    fn from(val: u32) -> Word<Width> { Word::<Width>::new(val as u64) }
+    fn from(val: u32) -> Word<Width> {
+        Word::<Width>::new(val as u64)
+    }
 }
 
 /// Safe conversion for 64-bit signed values
 impl<Width: Storable + StorableFor<N64>> From<i64> for Word<Width> {
-    fn from(val: i64) -> Word<Width> { Word::<Width>::new(val as u64) }
+    fn from(val: i64) -> Word<Width> {
+        Word::<Width>::new(val as u64)
+    }
 }
 
 /// Safe conversion for 64-bit unsigned values
 impl<Width: Storable + StorableFor<N64>> From<u64> for Word<Width> {
-    fn from(val: u64) -> Word<Width> { Word::<Width>::new(val) }
+    fn from(val: u64) -> Word<Width> {
+        Word::<Width>::new(val)
+    }
 }
 
 pub type Word8 = Word<N8>;
 pub type Word16 = Word<N16>;
 pub type Word32 = Word<N32>;
 pub type Word64 = Word<N64>;
-
 
 #[cfg(test)]
 mod tests {

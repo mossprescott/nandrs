@@ -1,10 +1,9 @@
-/// Components that aren't strictly primitive (or don't need to be), but which are provided as
-/// "native" in that the simulator implements them directly for performance reasons.
-
-use crate::{Component, IC, Input, Input1, Output, OutputBus, Reflect, Chip, Interface};
 use crate::component::{Computational, ComputationalCounts};
 use crate::declare::BusRef;
-use crate::nat::{Nat, N1, IsGreater};
+use crate::nat::{IsGreater, N1, Nat};
+/// Components that aren't strictly primitive (or don't need to be), but which are provided as
+/// "native" in that the simulator implements them directly for performance reasons.
+use crate::{Chip, Component, IC, Input, Input1, Interface, Output, OutputBus, Reflect};
 
 /// Mux: out = if sel { a1 } else { a0 }, applied bitwise across Width bits.
 #[derive(Clone, Reflect, Chip)]
@@ -51,7 +50,9 @@ pub struct Adder {
 impl Component for Adder {
     type Target = Adder;
 
-    fn expand(&self) -> Option<IC<Adder>> { None }
+    fn expand(&self) -> Option<IC<Adder>> {
+        None
+    }
 }
 
 /// The type of components that participate in computers for simulation purposes: this includes the
@@ -68,48 +69,57 @@ impl<A: Nat + Clone, D: Nat + Clone> Reflect for Simulational<A, D> {
     fn reflect(&self) -> Interface {
         match self {
             Self::Primitive(c) => c.reflect(),
-            Self::Mux(c)      => c.reflect(),
-            Self::Mux1(c)     => c.reflect(),
-            Self::Adder(c)    => c.reflect(),
+            Self::Mux(c) => c.reflect(),
+            Self::Mux1(c) => c.reflect(),
+            Self::Adder(c) => c.reflect(),
         }
     }
     fn name(&self) -> String {
         match self {
             Self::Primitive(c) => c.name(),
-            Self::Mux(c)      => c.name(),
-            Self::Mux1(c)     => c.name(),
-            Self::Adder(c)    => c.name(),
+            Self::Mux(c) => c.name(),
+            Self::Mux1(c) => c.name(),
+            Self::Adder(c) => c.name(),
         }
     }
 }
 
 impl<A: Nat, D: Nat> From<Computational<A, D>> for Simulational<A, D> {
-    fn from(c: Computational<A, D>) -> Self { Simulational::Primitive(c) }
+    fn from(c: Computational<A, D>) -> Self {
+        Simulational::Primitive(c)
+    }
 }
 
 impl<A: Nat, D: Nat> From<crate::component::Sequential<D>> for Simulational<A, D> {
     fn from(s: crate::component::Sequential<D>) -> Self {
         use crate::component::Sequential;
         Simulational::Primitive(match s {
-            Sequential::Nand(n)     => Computational::Nand(n),
-            Sequential::Buffer(b)   => Computational::Buffer(b),
+            Sequential::Nand(n) => Computational::Nand(n),
+            Sequential::Buffer(b) => Computational::Buffer(b),
             Sequential::Register(r) => Computational::Register(r),
         })
     }
 }
 
 impl<A: Nat, D: Nat> From<Mux<D>> for Simulational<A, D>
-  where D: IsGreater<N1>
+where
+    D: IsGreater<N1>,
 {
-    fn from(c: Mux<D>) -> Self { Simulational::Mux(c) }
+    fn from(c: Mux<D>) -> Self {
+        Simulational::Mux(c)
+    }
 }
 
 impl<A: Nat, D: Nat> From<Mux<N1>> for Simulational<A, D> {
-    fn from(c: Mux<N1>) -> Self { Simulational::Mux1(c) }
+    fn from(c: Mux<N1>) -> Self {
+        Simulational::Mux1(c)
+    }
 }
 
 impl<A: Nat, D: Nat> From<Adder> for Simulational<A, D> {
-    fn from(c: Adder) -> Self { Simulational::Adder(c) }
+    fn from(c: Adder) -> Self {
+        Simulational::Adder(c)
+    }
 }
 
 pub struct SimulationalCounts {
@@ -122,24 +132,31 @@ pub struct SimulationalCounts {
 pub fn count_simulational<A: Nat, D: Nat>(components: &[Simulational<A, D>]) -> SimulationalCounts {
     let mut counts = SimulationalCounts {
         primitive: ComputationalCounts {
-            nands: 0, buffers: 0, registers: 0,
-            rams: 0, roms: 0, serials: 0, memory_systems: 0,
+            nands: 0,
+            buffers: 0,
+            registers: 0,
+            rams: 0,
+            roms: 0,
+            serials: 0,
+            memory_systems: 0,
         },
-        muxes: 0, mux1s: 0, adders: 0,
+        muxes: 0,
+        mux1s: 0,
+        adders: 0,
     };
     for comp in components {
         match comp {
             Simulational::Primitive(p) => match p {
-                Computational::Nand(_)         => counts.primitive.nands += 1,
-                Computational::Buffer(_)       => counts.primitive.buffers += 1,
-                Computational::Register(_)     => counts.primitive.registers += 1,
-                Computational::RAM(_)          => counts.primitive.rams += 1,
-                Computational::ROM(_)          => counts.primitive.roms += 1,
-                Computational::Serial(_)       => counts.primitive.serials += 1,
+                Computational::Nand(_) => counts.primitive.nands += 1,
+                Computational::Buffer(_) => counts.primitive.buffers += 1,
+                Computational::Register(_) => counts.primitive.registers += 1,
+                Computational::RAM(_) => counts.primitive.rams += 1,
+                Computational::ROM(_) => counts.primitive.roms += 1,
+                Computational::Serial(_) => counts.primitive.serials += 1,
                 Computational::MemorySystem(_) => counts.primitive.memory_systems += 1,
             },
-            Simulational::Mux(_)   => counts.muxes += 1,
-            Simulational::Mux1(_)  => counts.mux1s += 1,
+            Simulational::Mux(_) => counts.muxes += 1,
+            Simulational::Mux1(_) => counts.mux1s += 1,
             Simulational::Adder(_) => counts.adders += 1,
         }
     }

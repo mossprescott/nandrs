@@ -1,12 +1,14 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use simulator::{self, Component, IC, Input1, Input16, Output, Output16, Reflect, Chip, expand, fixed};
-use simulator::declare::{Interface, BusRef};
-use simulator::Reflect as _;
-use simulator::Chip as _;
-use simulator::component::{Combinational, Nand, Register16, Sequential, Sequential16};
-use crate::project_01::{Or, Mux16, Project01Component};
+use crate::project_01::{Mux16, Or, Project01Component};
 use crate::project_02::{Inc16, Project02Component};
+use simulator::Chip as _;
+use simulator::Reflect as _;
+use simulator::component::{Combinational, Nand, Register16, Sequential, Sequential16};
+use simulator::declare::{BusRef, Interface};
+use simulator::{
+    self, Chip, Component, IC, Input1, Input16, Output, Output16, Reflect, expand, fixed,
+};
 
 #[derive(Clone)]
 pub enum Project03Component {
@@ -19,15 +21,28 @@ impl<C: Into<Project02Component>> From<C> for Project03Component {
         Project03Component::Project02(c.into())
     }
 }
-impl From<Register16> for Project03Component { fn from(c: Register16) -> Self { Project03Component::Register16(c) } }
-impl From<PC> for Project03Component { fn from(c: PC) -> Self { Project03Component::PC(c) } }
+impl From<Register16> for Project03Component {
+    fn from(c: Register16) -> Self {
+        Project03Component::Register16(c)
+    }
+}
+impl From<PC> for Project03Component {
+    fn from(c: PC) -> Self {
+        Project03Component::PC(c)
+    }
+}
 
 impl Component for Project03Component {
     type Target = Project03Component;
 
     fn expand(&self) -> Option<IC<Project03Component>> {
         match self {
-            Project03Component::Project02(c) => c.expand().map(|ic| IC { name: ic.name, intf: ic.intf, components: ic.components.into_iter().map(Into::into).collect() }),            Project03Component::Register16(c) => c.expand().map(|ic| unreachable!()),
+            Project03Component::Project02(c) => c.expand().map(|ic| IC {
+                name: ic.name,
+                intf: ic.intf,
+                components: ic.components.into_iter().map(Into::into).collect(),
+            }),
+            Project03Component::Register16(c) => c.expand().map(|ic| unreachable!()),
             Project03Component::PC(c) => c.expand(),
         }
     }
@@ -55,14 +70,14 @@ pub fn flatten<C: Reflect + Into<Project03Component>>(chip: C) -> IC<Sequential1
     fn go(comp: Project03Component) -> Vec<Sequential16> {
         match comp.expand() {
             None => match comp {
-                Project03Component::Project02(p) =>
-                    crate::project_02::flatten(p)
-                        .components.into_iter()
-                        .map(|c| match c {
-                            Combinational::Nand(n)   => Sequential::Nand(n),
-                            Combinational::Buffer(c) => Sequential::Buffer(c),
-                        })
-                        .collect(),
+                Project03Component::Project02(p) => crate::project_02::flatten(p)
+                    .components
+                    .into_iter()
+                    .map(|c| match c {
+                        Combinational::Nand(n) => Sequential::Nand(n),
+                        Combinational::Buffer(c) => Sequential::Buffer(c),
+                    })
+                    .collect(),
                 Project03Component::Register16(reg) => vec![Sequential::Register(reg)],
                 _ => panic!("Did not reduce to Nand/Register: {:?}", comp.name()),
             },
@@ -100,12 +115,12 @@ impl Component for PC {
     // Note: no special ceremony needed for back-references to the register's output, because
     // that wire is already declared as the output "out".
     /*
-        inc = Inc16 { a: reg.out }
-        next_inc   = Mux16 { a0: reg.out,       a1: inc.out,   sel: self.inc }
-        next_load  = Mux16 { a0: next_inc.out,  a1: self.addr, sel: self.load }
-        next_reset = Mux16 { a0: next_load.out, a1: 0,         sel: self.reset }
-        reg = Register16 { data_in: next_reset, write: 1 }
-     */
+       inc = Inc16 { a: reg.out }
+       next_inc   = Mux16 { a0: reg.out,       a1: inc.out,   sel: self.inc }
+       next_load  = Mux16 { a0: next_inc.out,  a1: self.addr, sel: self.load }
+       next_reset = Mux16 { a0: next_load.out, a1: 0,         sel: self.reset }
+       reg = Register16 { data_in: next_reset, write: 1 }
+    */
     expand! { |this| {
         inc: Inc16 { a: this.out.into(), out: Output16::new() },
         next0: Mux16 { a0: this.out.into(), a1: inc.out.into(), sel: this.inc, out: Output16::new() },
