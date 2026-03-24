@@ -20,92 +20,17 @@ use simulator::{
     self, Chip, Component, IC, Input1, Input16, Output, Output16, Reflect, expand, fixed,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Reflect, Component)]
 pub enum Project05Component {
-    // Previous project:
+    #[delegate]
     Project03(Project03Component),
-
-    // Memory primitives:
+    #[primitive]
     ROM(ROM16),
+    #[primitive]
     MemorySystem(MemorySystem16),
-
-    // New here:
     Decode(Decode),
     CPU(CPU),
     Computer(Computer),
-}
-
-impl<C: Into<Project03Component>> From<C> for Project05Component {
-    fn from(c: C) -> Self {
-        Project05Component::Project03(c.into())
-    }
-}
-impl From<ROM16> for Project05Component {
-    fn from(c: ROM16) -> Self {
-        Project05Component::ROM(c)
-    }
-}
-impl From<MemorySystem16> for Project05Component {
-    fn from(c: MemorySystem16) -> Self {
-        Project05Component::MemorySystem(c)
-    }
-}
-impl From<Decode> for Project05Component {
-    fn from(c: Decode) -> Self {
-        Project05Component::Decode(c)
-    }
-}
-impl From<CPU> for Project05Component {
-    fn from(c: CPU) -> Self {
-        Project05Component::CPU(c)
-    }
-}
-impl From<Computer> for Project05Component {
-    fn from(c: Computer) -> Self {
-        Project05Component::Computer(c)
-    }
-}
-
-impl Component for Project05Component {
-    type Target = Project05Component;
-
-    fn expand(&self) -> Option<IC<Project05Component>> {
-        match self {
-            Project05Component::Project03(c) => c.expand().map(|ic| IC {
-                name: ic.name,
-                intf: ic.intf,
-                components: ic.components.into_iter().map(Into::into).collect(),
-            }),
-            Project05Component::ROM(c) => c.expand().map(|_| unreachable!()),
-            Project05Component::MemorySystem(c) => c.expand().map(|_| unreachable!()),
-            Project05Component::Decode(c) => c.expand(),
-            Project05Component::CPU(c) => c.expand(),
-            Project05Component::Computer(c) => c.expand(),
-        }
-    }
-}
-
-impl Reflect for Project05Component {
-    fn reflect(&self) -> simulator::Interface {
-        match self {
-            Project05Component::Project03(c) => c.reflect(),
-            Project05Component::ROM(c) => c.reflect(),
-            Project05Component::MemorySystem(c) => c.reflect(),
-            Project05Component::Decode(c) => c.reflect(),
-            Project05Component::CPU(c) => c.reflect(),
-            Project05Component::Computer(c) => c.reflect(),
-        }
-    }
-    fn name(&self) -> String {
-        match self {
-            Project05Component::Project03(c) => c.name(),
-            Project05Component::ROM(c) => c.name(),
-            Project05Component::MemorySystem(c) => c.name(),
-            Project05Component::Decode(c) => c.name(),
-            Project05Component::CPU(c) => c.name(),
-            Project05Component::Computer(c) => c.name(),
-        }
-    }
 }
 
 /// Recursively expand until only Nands, Registers, RAMs, and ROMs are left.

@@ -320,78 +320,14 @@ impl Component for Inc2 {
     }}
 }
 
-#[derive(Clone)]
+#[derive(Clone, Reflect, Component)]
 pub enum DoubleComponent {
+    #[delegate]
     Project05(Project05Component),
     CPU(CPU),
     Computer(Computer),
     DoublePC(DoublePC),
     Inc2(Inc2),
-}
-
-impl<C: Into<Project05Component>> From<C> for DoubleComponent {
-    fn from(c: C) -> Self {
-        DoubleComponent::Project05(c.into())
-    }
-}
-impl From<CPU> for DoubleComponent {
-    fn from(c: CPU) -> Self {
-        DoubleComponent::CPU(c)
-    }
-}
-impl From<Computer> for DoubleComponent {
-    fn from(c: Computer) -> Self {
-        DoubleComponent::Computer(c)
-    }
-}
-impl From<DoublePC> for DoubleComponent {
-    fn from(c: DoublePC) -> Self {
-        DoubleComponent::DoublePC(c)
-    }
-}
-impl From<Inc2> for DoubleComponent {
-    fn from(c: Inc2) -> Self {
-        DoubleComponent::Inc2(c)
-    }
-}
-
-impl Component for DoubleComponent {
-    type Target = DoubleComponent;
-
-    fn expand(&self) -> Option<IC<DoubleComponent>> {
-        match self {
-            DoubleComponent::Project05(c) => c.expand().map(|ic| IC {
-                name: ic.name,
-                intf: ic.intf,
-                components: ic.components.into_iter().map(Into::into).collect(),
-            }),
-            DoubleComponent::CPU(c) => c.expand(),
-            DoubleComponent::Computer(c) => c.expand(),
-            DoubleComponent::DoublePC(c) => c.expand(),
-            DoubleComponent::Inc2(c) => c.expand(),
-        }
-    }
-}
-
-impl Reflect for DoubleComponent {
-    fn reflect(&self) -> simulator::Interface {
-        match self {
-            DoubleComponent::Project05(c) => c.reflect(),
-            DoubleComponent::CPU(c) => c.reflect(),
-            DoubleComponent::Computer(c) => c.reflect(),
-            DoubleComponent::DoublePC(c) => c.reflect(),
-            DoubleComponent::Inc2(c) => c.reflect(),
-        }
-    }
-    fn name(&self) -> String {
-        match self {
-            DoubleComponent::Project05(c) => c.name(),
-            DoubleComponent::CPU(c) => c.name(),
-            DoubleComponent::Computer(c) => c.name(),
-            DoubleComponent::DoublePC(c) => c.name(),
-            DoubleComponent::Inc2(c) => c.name(),
-        }
-    }
 }
 
 /// Find the two ROMs (rom0 at pc, rom1 at pc+1) in the chip state.

@@ -13,8 +13,9 @@ use simulator::{
     self, Chip, Component, IC, Input1, Input16, Output, Output16, Reflect, expand, fixed,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Reflect, Component)]
 pub enum Project02Component {
+    #[delegate]
     Project01(Project01Component),
     HalfAdder(HalfAdder),
     FullAdder(FullAdder),
@@ -24,111 +25,6 @@ pub enum Project02Component {
     Zero16(Zero16),
     Neg16(Neg16),
     ALU(ALU),
-}
-
-impl<C: Into<Project01Component>> From<C> for Project02Component {
-    fn from(c: C) -> Self {
-        Project02Component::Project01(c.into())
-    }
-}
-impl From<HalfAdder> for Project02Component {
-    fn from(c: HalfAdder) -> Self {
-        Project02Component::HalfAdder(c)
-    }
-}
-impl From<FullAdder> for Project02Component {
-    fn from(c: FullAdder) -> Self {
-        Project02Component::FullAdder(c)
-    }
-}
-impl From<Inc16> for Project02Component {
-    fn from(c: Inc16) -> Self {
-        Project02Component::Inc16(c)
-    }
-}
-impl From<Add16> for Project02Component {
-    fn from(c: Add16) -> Self {
-        Project02Component::Add16(c)
-    }
-}
-impl From<Nand16Way> for Project02Component {
-    fn from(c: Nand16Way) -> Self {
-        Project02Component::Nand16Way(c)
-    }
-}
-impl From<Zero16> for Project02Component {
-    fn from(c: Zero16) -> Self {
-        Project02Component::Zero16(c)
-    }
-}
-impl From<Neg16> for Project02Component {
-    fn from(c: Neg16) -> Self {
-        Project02Component::Neg16(c)
-    }
-}
-impl From<ALU> for Project02Component {
-    fn from(c: ALU) -> Self {
-        Project02Component::ALU(c)
-    }
-}
-
-impl Component for Project02Component {
-    type Target = Project02Component;
-
-    fn expand(&self) -> Option<IC<Project02Component>> {
-        match self {
-            Project02Component::Project01(c) => c.expand().map(|ic| IC {
-                name: ic.name,
-                intf: ic.intf,
-                components: ic.components.into_iter().map(Into::into).collect(),
-            }),
-            Project02Component::HalfAdder(c) => c.expand().map(|ic| IC {
-                name: ic.name,
-                intf: ic.intf,
-                components: ic.components.into_iter().map(Into::into).collect(),
-            }),
-            Project02Component::FullAdder(c) => c.expand().map(|ic| IC {
-                name: ic.name,
-                intf: ic.intf,
-                components: ic.components.into_iter().map(Into::into).collect(),
-            }),
-            Project02Component::Inc16(c) => c.expand(),
-            Project02Component::Add16(c) => c.expand(),
-            Project02Component::Nand16Way(c) => c.expand(),
-            Project02Component::Zero16(c) => c.expand(),
-            Project02Component::Neg16(c) => c.expand(),
-            Project02Component::ALU(c) => c.expand(),
-        }
-    }
-}
-
-impl Reflect for Project02Component {
-    fn reflect(&self) -> simulator::Interface {
-        match self {
-            Project02Component::Project01(c) => c.reflect(),
-            Project02Component::HalfAdder(c) => c.reflect(),
-            Project02Component::FullAdder(c) => c.reflect(),
-            Project02Component::Inc16(c) => c.reflect(),
-            Project02Component::Add16(c) => c.reflect(),
-            Project02Component::Nand16Way(c) => c.reflect(),
-            Project02Component::Zero16(c) => c.reflect(),
-            Project02Component::Neg16(c) => c.reflect(),
-            Project02Component::ALU(c) => c.reflect(),
-        }
-    }
-    fn name(&self) -> String {
-        match self {
-            Project02Component::Project01(c) => c.name(),
-            Project02Component::HalfAdder(c) => c.name(),
-            Project02Component::FullAdder(c) => c.name(),
-            Project02Component::Inc16(c) => c.name(),
-            Project02Component::Add16(c) => c.name(),
-            Project02Component::Nand16Way(c) => c.name(),
-            Project02Component::Zero16(c) => c.name(),
-            Project02Component::Neg16(c) => c.name(),
-            Project02Component::ALU(c) => c.name(),
-        }
-    }
 }
 
 /// Recursively expand until only primitives are left.

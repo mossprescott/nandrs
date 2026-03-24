@@ -13,12 +13,12 @@ pub use simulator::component::{Buffer, Nand};
 use simulator::declare::Input;
 
 /// Components implemented in this project: simple, logical components for 1 and 16 bits.
-#[derive(Clone)]
+#[derive(Clone, Reflect, Component)]
 pub enum Project01Component {
-    // primitive:
+    #[primitive]
     Nand(Nand),
+    #[primitive]
     Buffer(Buffer),
-    // non-primitive:
     Not(Not),
     And(And),
     Or(Or),
@@ -28,124 +28,6 @@ pub enum Project01Component {
     Not16(Not16),
     And16(And16),
     Mux16(Mux16),
-    // Or16(Or16),
-}
-
-// primitive:
-impl From<Nand> for Project01Component {
-    fn from(c: Nand) -> Self {
-        Project01Component::Nand(c)
-    }
-}
-impl From<Buffer> for Project01Component {
-    fn from(c: Buffer) -> Self {
-        Project01Component::Buffer(c)
-    }
-}
-// non-primitive:
-impl From<Not> for Project01Component {
-    fn from(c: Not) -> Self {
-        Project01Component::Not(c)
-    }
-}
-impl From<And> for Project01Component {
-    fn from(c: And) -> Self {
-        Project01Component::And(c)
-    }
-}
-impl From<Or> for Project01Component {
-    fn from(c: Or) -> Self {
-        Project01Component::Or(c)
-    }
-}
-impl From<Xor> for Project01Component {
-    fn from(c: Xor) -> Self {
-        Project01Component::Xor(c)
-    }
-}
-impl From<Mux> for Project01Component {
-    fn from(c: Mux) -> Self {
-        Project01Component::Mux(c)
-    }
-}
-impl From<Dmux> for Project01Component {
-    fn from(c: Dmux) -> Self {
-        Project01Component::Dmux(c)
-    }
-}
-impl From<Not16> for Project01Component {
-    fn from(c: Not16) -> Self {
-        Project01Component::Not16(c)
-    }
-}
-impl From<And16> for Project01Component {
-    fn from(c: And16) -> Self {
-        Project01Component::And16(c)
-    }
-}
-impl From<Mux16> for Project01Component {
-    fn from(c: Mux16) -> Self {
-        Project01Component::Mux16(c)
-    }
-}
-// impl From<Or16>  for Project01Component { fn from(c: Or16)  -> Self { Project01Component::Or16(c)  } }
-
-impl Component for Project01Component {
-    type Target = Project01Component;
-
-    fn expand(&self) -> Option<IC<Project01Component>> {
-        match self {
-            // primitive:
-            Project01Component::Nand(c) => None,
-            Project01Component::Buffer(c) => None,
-            // non-primitive:
-            Project01Component::Not(c) => c.expand(),
-            Project01Component::And(c) => c.expand(),
-            Project01Component::Or(c) => c.expand(),
-            Project01Component::Xor(c) => c.expand(),
-            Project01Component::Mux(c) => c.expand(),
-            Project01Component::Dmux(c) => c.expand(),
-            Project01Component::Not16(c) => c.expand(),
-            Project01Component::And16(c) => c.expand(),
-            Project01Component::Mux16(c) => c.expand(),
-        }
-    }
-}
-impl Reflect for Project01Component {
-    fn reflect(&self) -> simulator::Interface {
-        match self {
-            // primitive:
-            Project01Component::Nand(c) => c.reflect(),
-            Project01Component::Buffer(c) => c.reflect(),
-            // non-primitive:
-            Project01Component::Not(c) => c.reflect(),
-            Project01Component::And(c) => c.reflect(),
-            Project01Component::Or(c) => c.reflect(),
-            Project01Component::Xor(c) => c.reflect(),
-            Project01Component::Mux(c) => c.reflect(),
-            Project01Component::Dmux(c) => c.reflect(),
-            Project01Component::Not16(c) => c.reflect(),
-            Project01Component::And16(c) => c.reflect(),
-            Project01Component::Mux16(c) => c.reflect(),
-        }
-    }
-    fn name(&self) -> String {
-        match self {
-            // primitive:
-            Project01Component::Nand(c) => c.name(),
-            Project01Component::Buffer(c) => c.name(),
-            // non-primitive:
-            Project01Component::Not(c) => c.name(),
-            Project01Component::And(c) => c.name(),
-            Project01Component::Or(c) => c.name(),
-            Project01Component::Xor(c) => c.name(),
-            Project01Component::Mux(c) => c.name(),
-            Project01Component::Dmux(c) => c.name(),
-            Project01Component::Not16(c) => c.name(),
-            Project01Component::And16(c) => c.name(),
-            Project01Component::Mux16(c) => c.name(),
-        }
-    }
 }
 
 /// Recursively expand() until only primitives are left.
