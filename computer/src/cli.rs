@@ -22,6 +22,10 @@ pub struct Args {
     #[arg(long)]
     pub no_exec: bool,
 
+    /// Use precise (nand-only) flattening instead of native components
+    #[arg(long)]
+    pub precise: bool,
+
     /// Double the window size
     #[arg(long = "2x")]
     pub scale_2x: bool,

@@ -8,7 +8,7 @@ use computer::disasm::disassemble;
 use assignments::project_02::Project02Component;
 use assignments::project_03::Project03Component;
 use assignments::project_05::Project05Component;
-use double::computer::{Computer, DoubleComponent, find_roms, flatten as flatten_double};
+use double::computer::{Computer, DoubleComponent, find_roms, flatten as flatten_double, flatten_for_simulation as flatten_double_sim};
 use simulator::{Chip, Component, IC, flatten, print_ic_graph};
 use simulator::simulate::{synthesize, initialize};
 use simulator::word::Word16;
@@ -30,13 +30,15 @@ fn main() {
         println!("{}", print_ic_graph(&simple));
     }
 
-    let chip = flatten_double(computer);
-
-    // TODO: summarize the size of the chip in some way, for easier comparison with the standard impl.
-
     let Program { instructions, symbols } = program;
 
-    let wiring = synthesize(&chip, memory_system());
+    let wiring = if args.precise {
+        let chip = flatten_double(computer);
+        synthesize(&chip, memory_system())
+    } else {
+        let chip = flatten_double_sim(computer);
+        synthesize(&chip, memory_system())
+    };
     if args.print {
         print!("{wiring}");
     }
