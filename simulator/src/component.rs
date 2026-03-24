@@ -1,6 +1,6 @@
 use crate::{Component, IC, Input, Input1, Output, OutputBus, Reflect, Chip, Interface};
 use crate::declare::BusRef;
-use crate::nat::{Nat, N1, N16, IsGreater};
+use crate::nat::{Nat, N16};
 
 // - Nand (Combinational)
 
@@ -29,94 +29,46 @@ impl Component for Buffer {
     }
 }
 
-/// The Mux primitive: out = if sel { a1 } else { a0 }, applied bitwise across Width bits.
-#[derive(Clone, Reflect, Chip)]
-pub struct Mux<Width: Nat> {
-    pub a0: Input<Width>,
-    pub a1: Input<Width>,
-    pub sel: Input1,
-    pub out: OutputBus<Width>,
-}
-
-/// Nothing to expand; Mux is primitive.
-impl<Width: Nat> Component for Mux<Width> {
-    type Target = Mux<Width>;
-
-    fn expand(&self) -> Option<IC<Mux<Width>>> {
-        None
-    }
-}
-
-pub type Mux1 = Mux<N1>;
-pub type Mux16 = Mux<N16>;
-
-/// Single-bit slice off a multi-bit adder: adds three bits, producing a two-bit result
-///
-/// sum = 1s-digit of three-bit sum, carry = 2s-digit
-#[derive(Clone, Reflect, Chip)]
-pub struct FullAdder {
-    /// "Left" input bit:
-    pub a: Input1,
-    /// "Right" input bit:
-    pub b: Input1,
-    /// "Carry-in" bit:
-    pub c: Input1,
-
-    /// 1s digit of a + b + c:
-    pub sum: Output,
-    /// 2s digit of a + b + c:
-    pub carry: Output,
-}
-
-/// Nothing to expand; FullAdder is primitive.
-impl Component for FullAdder {
-    type Target = FullAdder;
-
-    fn expand(&self) -> Option<IC<FullAdder>> { None }
-}
-
 /// Type of components that participate in "combinational" circuits:
-/// - most importantly Nand
-/// - Buffer for pass-through connections
-/// - Mux, included because it makes simulation significantly more efficient
-pub enum Combinational<Width: Nat> {
+/// - most importantly `Nand`
+/// - `Buffer` for pass-through connections
+pub enum Combinational {
     Nand(Nand),
     Buffer(Buffer),
-    Mux(Mux<Width>),
-    /// For conditionalizing chains of logic, we need a single-bit Mux as well.
-    Mux1(Mux1),
-    Adder(FullAdder),
 }
 
-impl<Width: Nat> From<Nand>  for Combinational<Width> { fn from(c: Nand)  -> Self { Combinational::Nand(c)  } }
-impl<Width: Nat> From<Buffer> for Combinational<Width> { fn from(c: Buffer) -> Self { Combinational::Buffer(c) } }
-impl<Width: Nat> From<Mux<Width>> for Combinational<Width>
-  where Width: IsGreater<N1>
-{
-    fn from(c: Mux<Width>) -> Self { Combinational::Mux(c) }
-}
-impl<Width: Nat> From<Mux<N1>> for Combinational<Width> { fn from(c: Mux<N1>) -> Self { Combinational::Mux1(c) } }
-impl<Width: Nat> From<FullAdder> for Combinational<Width> { fn from(c: FullAdder) -> Self { Combinational::Adder(c) } }
+impl From<Nand>   for Combinational { fn from(c: Nand)   -> Self { Combinational::Nand(c)   } }
+impl From<Buffer>  for Combinational { fn from(c: Buffer)  -> Self { Combinational::Buffer(c) } }
 
-impl<Width: Nat + Clone> Reflect for Combinational<Width> {
+impl Reflect for Combinational {
     fn reflect(&self) -> Interface {
         match self {
             Self::Nand(c)   => c.reflect(),
             Self::Buffer(c) => c.reflect(),
-            Self::Mux(c)    => c.reflect(),
-            Self::Mux1(c)   => c.reflect(),
-            Self::Adder(c)  => c.reflect(),
         }
     }
     fn name(&self) -> String {
         match self {
             Self::Nand(c)   => c.name(),
             Self::Buffer(c) => c.name(),
-            Self::Mux(c)    => c.name(),
-            Self::Mux1(c)   => c.name(),
-            Self::Adder(c)  => c.name(),
         }
     }
+}
+
+pub struct CombinationalCounts {
+    pub nands: usize,
+    pub buffers: usize,
+}
+
+pub fn count_combinational(components: &[Combinational]) -> CombinationalCounts {
+    let mut counts = CombinationalCounts { nands: 0, buffers: 0 };
+    for comp in components {
+        match comp {
+            Combinational::Nand(_)   => counts.nands += 1,
+            Combinational::Buffer(_) => counts.buffers += 1,
+        }
+    }
+    counts
 }
 
 // - Registers (Sequential)
@@ -145,21 +97,11 @@ pub type Register16 = Register<N16>;
 pub enum Sequential<Width: Nat> {
     Nand(Nand),
     Buffer(Buffer),
-    Mux(Mux<Width>),
-    Mux1(Mux1),
-    Adder(FullAdder),
     Register(Register<Width>),
 }
 
 impl<Width: Nat> From<Nand>            for Sequential<Width> { fn from(c: Nand)            -> Self { Sequential::Nand(c)     } }
 impl<Width: Nat> From<Buffer>          for Sequential<Width> { fn from(c: Buffer)          -> Self { Sequential::Buffer(c)   } }
-impl<Width: Nat> From<Mux<Width>>      for Sequential<Width>
-  where Width: IsGreater<N1>
-{
-    fn from(c: Mux<Width>) -> Self { Sequential::Mux(c) }
-}
-impl<Width: Nat> From<Mux<N1>>        for Sequential<Width> { fn from(c: Mux<N1>)        -> Self { Sequential::Mux1(c)    } }
-impl<Width: Nat> From<FullAdder>       for Sequential<Width> { fn from(c: FullAdder)       -> Self { Sequential::Adder(c)   } }
 impl<Width: Nat> From<Register<Width>> for Sequential<Width> { fn from(c: Register<Width>) -> Self { Sequential::Register(c) } }
 
 impl<Width: Nat + Clone> Reflect for Sequential<Width> {
@@ -167,9 +109,6 @@ impl<Width: Nat + Clone> Reflect for Sequential<Width> {
         match self {
             Self::Nand(c)     => c.reflect(),
             Self::Buffer(c)   => c.reflect(),
-            Self::Mux(c)      => c.reflect(),
-            Self::Mux1(c)     => c.reflect(),
-            Self::Adder(c)    => c.reflect(),
             Self::Register(c) => c.reflect(),
         }
     }
@@ -177,9 +116,6 @@ impl<Width: Nat + Clone> Reflect for Sequential<Width> {
         match self {
             Self::Nand(c)     => c.name(),
             Self::Buffer(c)   => c.name(),
-            Self::Mux(c)      => c.name(),
-            Self::Mux1(c)     => c.name(),
-            Self::Adder(c)    => c.name(),
             Self::Register(c) => c.name(),
         }
     }
@@ -195,6 +131,23 @@ impl<Width: Nat> Component for Sequential<Width> {
 
 pub type Sequential16 = Sequential<N16>;
 
+pub struct SequentialCounts {
+    pub nands: usize,
+    pub buffers: usize,
+    pub registers: usize,
+}
+
+pub fn count_sequential<W: Nat>(components: &[Sequential<W>]) -> SequentialCounts {
+    let mut counts = SequentialCounts { nands: 0, buffers: 0, registers: 0 };
+    for comp in components {
+        match comp {
+            Sequential::Nand(_)     => counts.nands += 1,
+            Sequential::Buffer(_)   => counts.buffers += 1,
+            Sequential::Register(_) => counts.registers += 1,
+        }
+    }
+    counts
+}
 
 // - Memory and I/O (Computational)
 
@@ -309,9 +262,6 @@ pub enum Computational<A: Nat, D: Nat> {
     // combinational:
     Nand(Nand),
     Buffer(Buffer),
-    Mux(Mux<D>),
-    Mux1(Mux1),
-    Adder(FullAdder),
     // sequential:
     Register(Register<D>),
     // computational:
@@ -324,15 +274,9 @@ pub enum Computational<A: Nat, D: Nat> {
 impl<A: Nat + Clone, D: Nat + Clone> Reflect for Computational<A, D> {
     fn reflect(&self) -> Interface {
         match self {
-            // combinational:
             Self::Nand(c)         => c.reflect(),
             Self::Buffer(c)       => c.reflect(),
-            Self::Mux(c)          => c.reflect(),
-            Self::Mux1(c)         => c.reflect(),
-            Self::Adder(c)        => c.reflect(),
-            // sequential:
             Self::Register(c)     => c.reflect(),
-            // computational:
             Self::RAM(c)          => c.reflect(),
             Self::ROM(c)          => c.reflect(),
             Self::Serial(c)       => c.reflect(),
@@ -341,15 +285,9 @@ impl<A: Nat + Clone, D: Nat + Clone> Reflect for Computational<A, D> {
     }
     fn name(&self) -> String {
         match self {
-            // combinational:
             Self::Nand(c)         => c.name(),
             Self::Buffer(c)       => c.name(),
-            Self::Mux(c)          => c.name(),
-            Self::Mux1(c)         => c.name(),
-            Self::Adder(c)        => c.name(),
-            // sequential:
             Self::Register(c)     => c.name(),
-            // computational:
             Self::RAM(c)          => c.name(),
             Self::ROM(c)          => c.name(),
             Self::Serial(c)       => c.name(),
@@ -372,14 +310,40 @@ pub type Serial16        = Serial<N16>;
 pub type MemorySystem16  = MemorySystem<N16, N16>;
 pub type Computational16 = Computational<N16, N16>;
 
-impl<A: Nat, D: Nat> From<Combinational<D>> for Computational<A, D> {
-    fn from(c: Combinational<D>) -> Self {
+pub struct ComputationalCounts {
+    pub nands: usize,
+    pub buffers: usize,
+    pub registers: usize,
+    pub rams: usize,
+    pub roms: usize,
+    pub serials: usize,
+    pub memory_systems: usize,
+}
+
+pub fn count_computational<A: Nat, D: Nat>(components: &[Computational<A, D>]) -> ComputationalCounts {
+    let mut counts = ComputationalCounts {
+        nands: 0, buffers: 0, registers: 0,
+        rams: 0, roms: 0, serials: 0, memory_systems: 0,
+    };
+    for comp in components {
+        match comp {
+            Computational::Nand(_)         => counts.nands += 1,
+            Computational::Buffer(_)       => counts.buffers += 1,
+            Computational::Register(_)     => counts.registers += 1,
+            Computational::RAM(_)          => counts.rams += 1,
+            Computational::ROM(_)          => counts.roms += 1,
+            Computational::Serial(_)       => counts.serials += 1,
+            Computational::MemorySystem(_) => counts.memory_systems += 1,
+        }
+    }
+    counts
+}
+
+impl<A: Nat, D: Nat> From<Combinational> for Computational<A, D> {
+    fn from(c: Combinational) -> Self {
         match c {
             Combinational::Nand(n)   => Computational::Nand(n),
             Combinational::Buffer(b) => Computational::Buffer(b),
-            Combinational::Mux(m)    => Computational::Mux(m),
-            Combinational::Mux1(m)   => Computational::Mux1(m),
-            Combinational::Adder(a)  => Computational::Adder(a),
         }
     }
 }
@@ -389,9 +353,6 @@ impl<A: Nat, D: Nat> From<Sequential<D>> for Computational<A, D> {
         match s {
             Sequential::Nand(n)     => Computational::Nand(n),
             Sequential::Buffer(n)   => Computational::Buffer(n),
-            Sequential::Mux(m)      => Computational::Mux(m),
-            Sequential::Mux1(m)     => Computational::Mux1(m),
-            Sequential::Adder(m)    => Computational::Adder(m),
             Sequential::Register(r) => Computational::Register(r),
         }
     }

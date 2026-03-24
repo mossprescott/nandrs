@@ -24,7 +24,13 @@ extra work getting done on each cycle brings the frame rate to roughly parity.
 
 ## Results
 
-|                                                | "gates"  | init(1)  | "speed"       |
-|------------------------------------------------|------|--------------|---------------|
-| [project_05](../assignments/src/project_05.rs) | ...  | 3.9m         | 1.3MHz, 20fps |
-| [double](double/src/computer.rs)               | (+?) | 2.8m  (-28%) |  800Hz, 20fps |
+Running examples/Pong.asm:
+
+|                                                | gates  | init  | speed       |
+|------------------------------------------------|-------------|--------------|---------------|
+| [project_05](../assignments/src/project_05.rs) | 1126        | 3.9m         | 2.0 MHz, 30 fps |
+| [double](double/src/computer.rs)               | 1436 (+28%) | 2.8m  (-28%) |  1.4 MHz, 30 fps |
+
+- *gates*: number of Nands, including flattened adders and muxes, but not registers and the whoel memory system.
+- *init*: number of cycles to reach the "main.main" label
+- *speed*: as shown in the UI

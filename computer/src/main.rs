@@ -31,11 +31,16 @@ fn main() {
         let simple = simplify(Computer::chip());
         println!("{}", print_ic_graph(&simple));
     }
-    let chip = project_05::flatten(computer);
 
     let Program { instructions, symbols } = program;
 
-    let wiring = synthesize(&chip, memory_system());
+    let wiring = if args.precise {
+        let chip = project_05::flatten(computer);
+        synthesize(&chip, memory_system())
+    } else {
+        let chip = project_05::flatten_for_simulation(computer);
+        synthesize(&chip, memory_system())
+    };
     if args.print {
         print!("{wiring}");
     }

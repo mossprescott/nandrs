@@ -1,6 +1,6 @@
 use crate::project_03::{PC, flatten};
 use simulator::declare::{Chip as _};
-use simulator::component::Sequential;
+use simulator::component::{Sequential, count_sequential};
 use simulator::nat::N16;
 use simulator::simulate::{MemoryMap, simulate};
 use simulator::print_graph;
@@ -70,13 +70,8 @@ fn pc_behavior() {
 
 #[test]
 fn pc_optimal() {
-    let components = flatten(PC::chip()).components;
-    let nands = components.iter().filter(|c| matches!(c, Sequential::Nand(_))).count();
-    let adders = components.iter().filter(|c| matches!(c, Sequential::Adder(_))).count();
-    let muxes = components.iter().filter(|c| matches!(c, Sequential::Mux(_))).count();
-    let registers = components.iter().filter(|c| matches!(c, Sequential::Register(_))).count();
-    assert_eq!(nands, 1);
-    assert_eq!(adders, 15);
-    assert_eq!(muxes, 3);
-    assert_eq!(registers, 1);
+    let chip = flatten(PC::chip());
+    let counts = count_sequential(&chip.components);
+    assert_eq!(counts.nands, 223);
+    assert_eq!(counts.registers, 1);
 }

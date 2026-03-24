@@ -4,14 +4,15 @@ use simulator::{self, Component, IC, Input1, Input16, Output, Output16, Reflect,
 use simulator::declare::{Interface, BusRef};
 use simulator::Reflect as _;
 use simulator::Chip as _;
-use simulator::component::{Combinational, FullAdder};
-use simulator::nat::N16;
-use crate::project_01::{Project01Component, Nand, Buffer, Mux1, Mux16, Not16, And16, Not, Xor, And, Or};
+use simulator::component::Combinational;
+use simulator::nat::{Nat, N16};
+use simulator::simulate::native;
+use crate::project_01::{Project01Component, Nand, Buffer, Mux16, Not16, And16, Not, Xor, And, Or, Mux};
 
 #[derive(Clone)]
 pub enum Project02Component {
     Project01(Project01Component),
-    // HalfAdder(HalfAdder),
+    HalfAdder(HalfAdder),
     FullAdder(FullAdder),
     Inc16(Inc16),
     Add16(Add16),
@@ -26,6 +27,7 @@ impl<C: Into<Project01Component>> From<C> for Project02Component {
         Project02Component::Project01(c.into())
     }
 }
+impl From<HalfAdder> for Project02Component { fn from(c: HalfAdder) -> Self { Project02Component::HalfAdder(c) } }
 impl From<FullAdder> for Project02Component { fn from(c: FullAdder) -> Self { Project02Component::FullAdder(c) } }
 impl From<Inc16>     for Project02Component { fn from(c: Inc16)     -> Self { Project02Component::Inc16(c)     } }
 impl From<Add16>     for Project02Component { fn from(c: Add16)     -> Self { Project02Component::Add16(c)     } }
@@ -40,7 +42,8 @@ impl Component for Project02Component {
     fn expand(&self) -> Option<IC<Project02Component>> {
         match self {
             Project02Component::Project01(c) => c.expand().map(|ic| IC { name: ic.name, intf: ic.intf, components: ic.components.into_iter().map(Into::into).collect() }),
-            Project02Component::FullAdder(_) => None,
+            Project02Component::HalfAdder(c) => c.expand().map(|ic| IC { name: ic.name, intf: ic.intf, components: ic.components.into_iter().map(Into::into).collect() }),
+            Project02Component::FullAdder(c) => c.expand().map(|ic| IC { name: ic.name, intf: ic.intf, components: ic.components.into_iter().map(Into::into).collect() }),
             Project02Component::Inc16(c)     => c.expand(),
             Project02Component::Add16(c)     => c.expand(),
             Project02Component::Nand16Way(c) => c.expand(),
@@ -55,23 +58,25 @@ impl Reflect for Project02Component {
     fn reflect(&self) -> simulator::Interface {
         match self {
             Project02Component::Project01(c) => c.reflect(),
+            Project02Component::HalfAdder(c) => c.reflect(),
             Project02Component::FullAdder(c) => c.reflect(),
-            Project02Component::Inc16(c)      => c.reflect(),
-            Project02Component::Add16(c)      => c.reflect(),
-            Project02Component::Nand16Way(c)  => c.reflect(),
-            Project02Component::Zero16(c)     => c.reflect(),
-            Project02Component::Neg16(c)      => c.reflect(),
-            Project02Component::ALU(c)        => c.reflect(),
+            Project02Component::Inc16(c)     => c.reflect(),
+            Project02Component::Add16(c)     => c.reflect(),
+            Project02Component::Nand16Way(c) => c.reflect(),
+            Project02Component::Zero16(c)    => c.reflect(),
+            Project02Component::Neg16(c)     => c.reflect(),
+            Project02Component::ALU(c)       => c.reflect(),
         }
     }
     fn name(&self) -> String {
         match self {
-            Project02Component::Project01(c)  => c.name(),
-            Project02Component::FullAdder(c)  => c.name(),
-            Project02Component::Inc16(c)      => c.name(),
-            Project02Component::Add16(c)      => c.name(),
-            Project02Component::Nand16Way(c)  => c.name(),
-            Project02Component::Zero16(c)     => c.name(),
+            Project02Component::Project01(c) => c.name(),
+            Project02Component::HalfAdder(c) => c.name(),
+            Project02Component::FullAdder(c) => c.name(),
+            Project02Component::Inc16(c)     => c.name(),
+            Project02Component::Add16(c)     => c.name(),
+            Project02Component::Nand16Way(c) => c.name(),
+            Project02Component::Zero16(c)    => c.name(),
             Project02Component::Neg16(c)     => c.name(),
             Project02Component::ALU(c)       => c.name(),
         }
@@ -79,12 +84,11 @@ impl Reflect for Project02Component {
 }
 
 /// Recursively expand until only primitives are left.
-pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Combinational<N16>> {
-    fn go(comp: Project02Component) -> Vec<Combinational<N16>> {
+pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Combinational> {
+    fn go(comp: Project02Component) -> Vec<Combinational> {
         match comp.expand() {
             None => match comp {
                 Project02Component::Project01(p) => crate::project_01::flatten(p).components,
-                Project02Component::FullAdder(c) => vec![Combinational::Adder(c)],
                 _ => panic!("Did not reduce to primitive: {:?}", comp.name()),
             },
             Some(ic) => ic.components.into_iter().flat_map(go).collect(),
@@ -97,21 +101,72 @@ pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Combination
     }
 }
 
-/// FullAdder is now provided as a primitive, but it's interesting to implement this separately
-/// anyway; this version isn't used by any other components.
+/// Like `flatten`, but replaces HalfAdder/FullAdder with native Adder and Mux/Mux16 with
+/// native Mux for efficient simulation.
 ///
+/// Note: this is pinned to N16, just so it can rewrite the Mux16 component as a native Mux.
+pub fn flatten_for_simulation<C>(chip: C) -> IC<native::Simulational<N16, N16>>
+where
+    C: Reflect + Into<Project02Component>,
+{
+    fn go(comp: Project02Component) -> Vec<native::Simulational<N16, N16>> {
+        match comp {
+            Project02Component::HalfAdder(c) => vec![
+                // Tricky: the simulator looks for the carry chain to always pass the carry bit in
+                // c, s it's important for the zero bit to got to b here, even though in principle
+                // it doesn't matter.
+                native::Adder {
+                    a: c.a, b: fixed(0), c: c.b, sum: c.sum, carry: c.carry,
+                }.into()
+            ],
+            Project02Component::FullAdder(c) => vec![
+                native::Adder {
+                    a: c.a, b: c.b, c: c.c, sum: c.sum, carry: c.carry,
+                }.into()
+            ],
+            Project02Component::Project01(Project01Component::Mux(c)) => vec![
+                native::Simulational::Mux1(native::Mux {
+                    a0: c.a0, a1: c.a1, sel: c.sel, out: c.out,
+                })
+            ],
+            Project02Component::Project01(Project01Component::Mux16(c)) => vec![
+                native::Simulational::Mux(native::Mux {
+                    a0: c.a0, a1: c.a1, sel: c.sel, out: c.out,
+                })
+            ],
+            _ => match comp.expand() {
+                None => match comp {
+                    Project02Component::Project01(p) =>
+                        crate::project_01::flatten(p).components
+                            .into_iter()
+                            .map(|c| native::Simulational::from(simulator::component::Computational::from(c)))
+                            .collect(),
+                    _ => panic!("Did not reduce to primitive: {:?}", comp.name()),
+                },
+                Some(ic) => ic.components.into_iter().flat_map(go).collect(),
+            }
+        }
+    }
+    IC {
+        name: format!("{} (flat/sim)", chip.name()),
+        intf: chip.reflect(),
+        components: go(chip.into()),
+    }
+}
+
 /// sum = 1s-digit of two-bit sum, carry = 2s-digit
 ///
-/// Future: for pedagocical purposes, define this as HalfAdder here, with reduction to Nands.
+/// Note: for efficiency in simulation, there is an alternative expansion for this component to
+/// native::Adder.
 #[derive(Clone, Reflect, Chip)]
-pub struct MyHalfAdder {
+pub struct HalfAdder {
     pub a:     Input1,
     pub b:     Input1,
     pub sum:   Output,
     pub carry: Output,
 }
 
-impl Component for MyHalfAdder {
+impl Component for HalfAdder {
     type Target = Project01Component;
 
     /*
@@ -130,15 +185,12 @@ impl Component for MyHalfAdder {
     }}
 }
 
-/// FullAdder is now provided as a primitive, but it's interesting to implement separately anyway;
-/// this version isn't used by any other components
-///
 /// sum = 1s-digit of three-bit sum, carry = 2s-digit
 ///
-/// Future: for pedagocical purposes, define this here, with reduction to Nands. Then arrange for it
-/// *not* to be expanded when we want to do an efficient simulation.
+/// Note: for efficiency in simulation, there is an alternative expansion for this component to
+/// native::Adder.
 #[derive(Clone, Reflect, Chip)]
-pub struct MyFullAdder {
+pub struct FullAdder {
     pub a:     Input1,
     pub b:     Input1,
     pub c:     Input1,
@@ -146,7 +198,7 @@ pub struct MyFullAdder {
     pub carry: Output,
 }
 
-impl Component for MyFullAdder {
+impl Component for FullAdder {
     type Target = Project01Component;
 
     /*
@@ -166,6 +218,8 @@ impl Component for MyFullAdder {
     }}
 }
 
+
+
 /// out = in + 1 (16-bit, overflow ignored)
 #[derive(Clone, Reflect, Chip)]
 pub struct Inc16 {
@@ -182,10 +236,9 @@ impl Component for Inc16 {
 
         // Carry-ripple: fold threads the carry across iterations
         _carry_out: (1..16).fold(this.a.bit(0), |carry, i| {
-            add: FullAdder {
+            add: HalfAdder {
                 a: this.a.bit(i),
-                b: fixed(0),
-                c: carry,
+                b: carry,
                 sum: this.out.bit(i),
                 carry: Output::new(),
             },
@@ -231,7 +284,8 @@ impl Component for Add16 {
 /// True if any of the 16 bits is false, as if they were all fed into a big 16-input Nand gate —
 /// which is a thing which exists — but here implemented with a series of discreet Ands.
 ///
-/// Note: the simulator will recognize a series of Ands like this and
+/// Note: the simulator will recognize a series of Ands like this and reduce it to a single
+/// operation.
 #[derive(Clone, Reflect, Chip)]
 pub struct Nand16Way {
     pub a: Input16,
@@ -373,7 +427,7 @@ impl Component for ALU {
 
         // Gate output and zr with disable.  When disabled: out=0, zr=1.
         out_gate: Mux16 { sel: this.disable, a0: raw_out.out.into(), a1: fixed(0), out: this.out },
-        zr_gate: Mux1 { sel: this.disable, a0: raw_zr.out.into(), a1: fixed(1), out: this.zr },
+        zr_gate: Mux { sel: this.disable, a0: raw_zr.out.into(), a1: fixed(1), out: this.zr },
 
         // ng reads from the gated output; when disabled out=0 so ng=0 (correct).
         // Neg16 is 0 nands (just a buffer) so there's nothing to skip.

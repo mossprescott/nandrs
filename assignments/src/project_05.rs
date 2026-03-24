@@ -6,7 +6,7 @@ use simulator::Reflect as _;
 use simulator::Chip as _;
 use simulator::component::{Buffer, Nand, Register16, RAM16, ROM16, MemorySystem16, Sequential, Computational, Computational16};
 use simulator::nat::N16;
-use simulator::simulate::{ChipState, BusResident, ROMHandle, RAMHandle, SerialHandle, MemoryMap, RegionMap, RAMMap, ROMMap, SerialMap};
+use simulator::simulate::{ChipState, BusResident, ROMHandle, RAMHandle, SerialHandle, MemoryMap, RegionMap, RAMMap, ROMMap, SerialMap, native};
 use simulator::word::Word16;
 use crate::project_01::{Project01Component, Not, And, Or, Mux16};
 use crate::project_02::{Project02Component, ALU};
@@ -87,9 +87,6 @@ pub fn flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Computation
                         .map(|s| match s {
                             Sequential::Nand(n)     => Computational::Nand(n),
                             Sequential::Buffer(c)   => Computational::Buffer(c),
-                            Sequential::Mux(m)      => Computational::Mux(m),
-                            Sequential::Mux1(m)     => Computational::Mux1(m),
-                            Sequential::Adder(a)    => Computational::Adder(a),
                             Sequential::Register(r) => Computational::Register(r),
                         })
                         .collect(),
@@ -102,6 +99,31 @@ pub fn flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Computation
     }
     IC {
         name: format!("{} (flat)", chip.name()),
+        intf: chip.reflect(),
+        components: go(chip.into()),
+    }
+}
+
+/// Like `flatten`, but replaces FullAdder with native Adder for efficient simulation.
+pub fn flatten_for_simulation<C: Reflect + Into<Project05Component>>(chip: C) -> IC<native::Simulational<N16, N16>> {
+    fn go(comp: Project05Component) -> Vec<native::Simulational<N16, N16>> {
+        // Delegate to lower-level flatten_for_simulation as soon as possible:
+        match comp {
+            Project05Component::Project03(Project03Component::Project02(p)) =>
+                return crate::project_02::flatten_for_simulation(p).components,
+            Project05Component::Project03(Project03Component::Register16(r)) =>
+                return vec![Computational::Register(r).into()],
+            Project05Component::ROM(r)          => return vec![Computational::ROM(r).into()],
+            Project05Component::MemorySystem(m) => return vec![Computational::MemorySystem(m).into()],
+            _ => {}
+        }
+        match comp.expand() {
+            Some(ic) => ic.components.into_iter().flat_map(go).collect(),
+            None => panic!("Did not reduce to primitive: {:?}", comp.name()),
+        }
+    }
+    IC {
+        name: format!("{} (flat/sim)", chip.name()),
         intf: chip.reflect(),
         components: go(chip.into()),
     }
