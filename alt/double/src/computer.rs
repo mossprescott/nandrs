@@ -462,7 +462,7 @@ mod test {
         let registers = components.iter().filter(|c| matches!(c, Computational::Register(_))).count();
         assert_eq!(memsys,    1);
         assert_eq!(roms,      2); // Compare to 1
-        assert_eq!(nands,  1556); // Compare to 1186
+        assert_eq!(nands,  1436); // Compare to 1126
         assert_eq!(registers, 4); // Compare to 3
     }
 }

@@ -233,10 +233,9 @@ impl Component for Inc16 {
 
         // Carry-ripple: fold threads the carry across iterations
         _carry_out: (1..16).fold(this.a.bit(0), |carry, i| {
-            add: FullAdder {
+            add: HalfAdder {
                 a: this.a.bit(i),
-                b: fixed(0),
-                c: carry,
+                b: carry,
                 sum: this.out.bit(i),
                 carry: Output::new(),
             },

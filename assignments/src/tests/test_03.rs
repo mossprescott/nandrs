@@ -72,6 +72,6 @@ fn pc_behavior() {
 fn pc_optimal() {
     let chip = flatten(PC::chip());
     let counts = count_sequential(&chip.components);
-    assert_eq!(counts.nands, 283);
+    assert_eq!(counts.nands, 223);
     assert_eq!(counts.registers, 1);
 }

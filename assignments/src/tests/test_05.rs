@@ -168,7 +168,7 @@ fn cpu_optimal() {
     // TODO: actually what?
     let chip = flatten(CPU::chip());
     let counts = count_computational(&chip.components);
-    assert_eq!(counts.nands, 1186);
+    assert_eq!(counts.nands, 1126);
     assert_eq!(counts.registers, 3);
 }
 
@@ -407,7 +407,7 @@ fn computer_read_keyboard() {
 fn computer_optimal() {
     let chip = flatten(Computer::chip());
     let counts = count_computational(&chip.components);
-    assert_eq!(counts.nands,  1186);
+    assert_eq!(counts.nands,  1126);
     assert_eq!(counts.registers, 3);
     assert_eq!(counts.roms,      1);
     assert_eq!(counts.memory_systems, 1);

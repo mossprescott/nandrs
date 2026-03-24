@@ -83,8 +83,8 @@ fn inc16_truth_table() {
 #[test]
 fn inc16_optimal() {
     let chip = flatten(Inc16::chip());
-    // Not(1) for bit 0, plus 15 FullAdders × 9 nands each for the carry chain
-    assert_eq!(count_combinational(&chip.components).nands, 1 + 15 * 9);
+    // Not(1) for bit 0, plus 15 HalfAdders × 5 nands each for the carry chain
+    assert_eq!(count_combinational(&chip.components).nands, 1 + 15 * 5);
 }
 
 #[test]
