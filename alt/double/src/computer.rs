@@ -407,14 +407,13 @@ pub fn flatten<C: Reflect + Into<DoubleComponent>>(chip: C) -> IC<Computational1
 pub fn flatten_for_simulation<C: Reflect + Into<DoubleComponent>>(chip: C) -> IC<simulator::simulate::native::Simulational<N16, N16>> {
     use simulator::simulate::native::Simulational;
     fn go(comp: DoubleComponent) -> Vec<Simulational<N16, N16>> {
+        // Delegate Project05 subtrees immediately, so their interception logic handles Mux/Adder:
+        if let DoubleComponent::Project05(p) = comp {
+            return project_05::flatten_for_simulation(p).components;
+        }
         match comp.expand() {
-            None => match comp {
-                DoubleComponent::Project05(p) =>
-                    project_05::flatten_for_simulation(p)
-                        .components,
-                _ => panic!("Did not reduce to primitive: {:?}", comp.name()),
-            },
             Some(ic) => ic.components.into_iter().flat_map(go).collect(),
+            None => panic!("Did not reduce to primitive: {:?}", comp.name()),
         }
     }
     IC {

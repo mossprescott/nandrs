@@ -107,33 +107,19 @@ pub fn flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Computation
 /// Like `flatten`, but replaces FullAdder with native Adder for efficient simulation.
 pub fn flatten_for_simulation<C: Reflect + Into<Project05Component>>(chip: C) -> IC<native::Simulational<N16, N16>> {
     fn go(comp: Project05Component) -> Vec<native::Simulational<N16, N16>> {
-        // Intercept components that have native equivalents before expand() turns them into nands:
-        if let Project05Component::Project03(Project03Component::Project02(ref p)) = comp {
-            match p {
-                Project02Component::HalfAdder(_) | Project02Component::FullAdder(_)
-                | Project02Component::Project01(Project01Component::Mux(_))
-                | Project02Component::Project01(Project01Component::Mux16(_)) =>
-                    return crate::project_02::flatten_for_simulation(p.clone()).components,
-                _ => {}
-            }
+        // Delegate to lower-level flatten_for_simulation as soon as possible:
+        match comp {
+            Project05Component::Project03(Project03Component::Project02(p)) =>
+                return crate::project_02::flatten_for_simulation(p).components,
+            Project05Component::Project03(Project03Component::Register16(r)) =>
+                return vec![Computational::Register(r).into()],
+            Project05Component::ROM(r)          => return vec![Computational::ROM(r).into()],
+            Project05Component::MemorySystem(m) => return vec![Computational::MemorySystem(m).into()],
+            _ => {}
         }
         match comp.expand() {
-            None => match comp {
-                Project05Component::Project03(Project03Component::Project02(p)) =>
-                    crate::project_02::flatten_for_simulation(p).components,
-                Project05Component::Project03(Project03Component::Register16(r)) =>
-                    vec![Computational::Register(r).into()],
-                Project05Component::Project03(p) => match p.expand() {
-                    Some(ic) => ic.components.into_iter()
-                        .flat_map(|c| go(Project05Component::Project03(c)))
-                        .collect(),
-                    None => panic!("Did not reduce to primitive: {:?}", p.name()),
-                },
-                Project05Component::ROM(r)          => vec![Computational::ROM(r).into()],
-                Project05Component::MemorySystem(m) => vec![Computational::MemorySystem(m).into()],
-                _ => panic!("Did not reduce to primitive: {:?}", comp.name()),
-            },
             Some(ic) => ic.components.into_iter().flat_map(go).collect(),
+            None => panic!("Did not reduce to primitive: {:?}", comp.name()),
         }
     }
     IC {
