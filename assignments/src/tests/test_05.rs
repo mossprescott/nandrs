@@ -225,6 +225,7 @@ pub fn max_program() -> Vec<Word16> {
         .to_vec()
 }
 
+/// Run the full, non-native flattened representation as a sanity check:
 #[test]
 pub fn computer_max_behavior() {
     let chip = Computer::chip();
@@ -246,6 +247,7 @@ pub fn computer_max_behavior() {
     test_computer_max_behavior(state, pgm.len() as u64);
 }
 
+/// Run the faster, "flattened for simulation" graph.
 #[test]
 pub fn computer_max_behavior_fast() {
     let chip = Computer::chip();
