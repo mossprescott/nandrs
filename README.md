@@ -21,8 +21,15 @@ Support alternative chip designs equally well:
 On the other hand, some concessions are made in the interest of simulation speed, as long as they don't
 get in the way of experimenting:
 - max bus width is 64 bits; you could build a bigger chip with extra hassle, but you won't
-- a multi-bit Mux component is provided as primitive; this allows the simulator to easily identify
-  portions of the chip that are active in each cycle
+
+To make this work, a couple of components that have normal, reducing-to-Nand implementations also
+get translated to "native" components that the simulator can handle more efficiently:
+- `n`-bit `Mux`: allows the simulator to easily identify portions of the chip that are active in
+  each cycle and skip entire sub-graphs whose results aren't used in the current cycle
+- single-bit-slice `Adder`: reduces 9 gates to one simple operation; also exposes the structure of
+adder carry-chains to the simulator so that *entire* add/inc operations can be done in one
+operation. This is the big win. Note: adders of any bit width with one or two operands are supported
+equally well. See, for example, `Inc16` and the more exotic `Inc2`.
 
 Focus on *processor* design considerations. Overall system design issues like bus timing, memory
 hierarchies, etc. are beside the point. I want to play with different ISAs, functional unit
