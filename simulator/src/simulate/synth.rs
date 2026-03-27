@@ -707,6 +707,9 @@ where
     // Post-processing: move exclusive producers into mux branches (recursively).
     populate_mux_branches(&mut component_wiring, &output_wires);
 
+    // Topological sort: ensure evaluation order respects dependencies.
+    topo_sort_wiring(&mut component_wiring);
+
     let n_wires = wire_indexes.len();
     let intf = chip.reflect();
 
@@ -1761,4 +1764,105 @@ fn populate_mux_branches(
             }
         }
     }
+}
+
+/// Topological sort of component_wiring so that dependencies are evaluated before dependents.
+///
+/// Only logic gates participate in the sort. Stateful components (registers, RAM, ROM, etc.)
+/// have their outputs seeded externally, so they are excluded from the producer map and
+/// appended at the end in their original order.
+fn topo_sort_wiring(components: &mut Vec<wiring::ComponentWiring>) {
+    use std::collections::HashMap;
+    use wiring::ComponentWiring as CW;
+
+    fn is_logic(comp: &CW) -> bool {
+        matches!(
+            comp,
+            CW::Nand(_)
+                | CW::And(_)
+                | CW::ParallelNand(_)
+                | CW::RippleAdder(_)
+                | CW::ManyWayAnd(_)
+                | CW::Mux(_)
+                | CW::Adder(_)
+        )
+    }
+
+    fn output_wires(comp: &CW) -> Vec<wiring::WireIndex> {
+        match comp {
+            CW::Nand(n) => vec![n.out.id],
+            CW::And(n) => vec![n.out.id],
+            CW::ParallelNand(n) => vec![n.out],
+            CW::RippleAdder(a) => vec![a.out],
+            CW::ManyWayAnd(m) => vec![m.out.id],
+            CW::Mux(m) => vec![m.out],
+            CW::Adder(a) => vec![a.sum.id, a.carry.id],
+            _ => vec![],
+        }
+    }
+
+    fn input_wires(comp: &CW) -> Vec<wiring::WireIndex> {
+        match comp {
+            CW::Nand(n) => vec![n.a.id, n.b.id],
+            CW::And(n) => vec![n.a.id, n.b.id],
+            CW::ParallelNand(n) => vec![n.a, n.b],
+            CW::RippleAdder(a) => vec![a.a, a.b, a.carry_in.id],
+            CW::ManyWayAnd(m) => vec![m.a],
+            CW::Mux(m) => vec![m.sel.id, m.a0, m.a1],
+            CW::Adder(a) => vec![a.a.id, a.b.id, a.c.id],
+            _ => vec![],
+        }
+    }
+
+    // Map output wire → producer index (logic gates only).
+    let mut producers: HashMap<wiring::WireIndex, usize> = HashMap::new();
+    for (i, comp) in components.iter().enumerate() {
+        if is_logic(comp) {
+            for w in output_wires(comp) {
+                producers.insert(w, i);
+            }
+        }
+    }
+
+    let n = components.len();
+    let mut visited = vec![false; n];
+    let mut order = Vec::with_capacity(n);
+
+    fn visit(
+        i: usize,
+        components: &[CW],
+        producers: &HashMap<wiring::WireIndex, usize>,
+        visited: &mut [bool],
+        order: &mut Vec<usize>,
+    ) {
+        if visited[i] {
+            return;
+        }
+        visited[i] = true;
+        for w in input_wires(&components[i]) {
+            if let Some(&dep) = producers.get(&w) {
+                visit(dep, components, producers, visited, order);
+            }
+        }
+        order.push(i);
+    }
+
+    // Sort logic gates first.
+    for i in 0..n {
+        if is_logic(&components[i]) {
+            visit(i, components, &producers, &mut visited, &mut order);
+        }
+    }
+    // Append stateful components in their original order.
+    for i in 0..n {
+        if !is_logic(&components[i]) {
+            order.push(i);
+        }
+    }
+
+    let mut sorted: Vec<CW> = Vec::with_capacity(n);
+    for &i in &order {
+        sorted.push(components[i].clone());
+    }
+    *components = sorted;
 }
