@@ -3,19 +3,20 @@
 /// This design uses ~20% fewer gates, but requires 2 cycles to execute each Hack instruction.
 /// Mostly, it's a test case for simulating an alternative architecure; this one shares no
 /// components with the standard CPU beyond the primitives and single-bit logic.
-
 use assignments::project_01::{And, Mux, Nand, Not};
 use assignments::project_02::FullAdder;
-use simulator::component::Buffer;
 use assignments::{project_02, project_05};
-use simulator::{Chip, Component, IC, Input, Input1, Input16, Interface, Output, Output16, OutputBus, Reflect, expand, fixed};
+use simulator::component::Buffer;
 use simulator::component::Computational16;
 use simulator::declare::BusRef;
 use simulator::nat::{N8, N16};
+use simulator::{
+    Chip, Component, IC, Input, Input1, Input16, Interface, Output, Output16, OutputBus, Reflect,
+    expand, fixed,
+};
 
 type Input8 = Input<N8>;
 type Output8 = OutputBus<N8>;
-
 
 /// Selects between two 8-bit inputs bit-by-bit, using a single sel bit.
 #[derive(Clone, Reflect, Chip)]
@@ -97,6 +98,32 @@ impl Component for Add8 {
     }}
 }
 
+/// 8-way NAND: AND-tree of all 8 input bits, then invert. Used by Zero8 for efficient simulation
+/// (the simulator can coalesce this into a single native ManyWayAnd operation).
+#[derive(Clone, Reflect, Chip)]
+pub struct Nand8Way {
+    pub a: Input8,
+    pub out: Output,
+}
+impl Component for Nand8Way {
+    type Target = project_02::Project02Component;
+
+    expand! { |this| {
+        // Level 1: pair up adjacent bits
+        and_01: And { a: this.a.bit(0).into(), b: this.a.bit(1).into(), out: Output::new() },
+        and_23: And { a: this.a.bit(2).into(), b: this.a.bit(3).into(), out: Output::new() },
+        and_45: And { a: this.a.bit(4).into(), b: this.a.bit(5).into(), out: Output::new() },
+        and_67: And { a: this.a.bit(6).into(), b: this.a.bit(7).into(), out: Output::new() },
+        // Level 2
+        and_0123: And { a: and_01.out.into(), b: and_23.out.into(), out: Output::new() },
+        and_4567: And { a: and_45.out.into(), b: and_67.out.into(), out: Output::new() },
+        // Level 3
+        and_all: And { a: and_0123.out.into(), b: and_4567.out.into(), out: Output::new() },
+
+        _not: Not { a: and_all.out.into(), out: this.out },
+    }}
+}
+
 /// Returns 1 if all bits of the 8-bit input are 0.
 #[derive(Clone, Reflect, Chip)]
 pub struct Zero8 {
@@ -104,38 +131,18 @@ pub struct Zero8 {
     pub out: Output,
 }
 impl Component for Zero8 {
-    type Target = project_02::Project02Component;
+    type Target = Combinational8;
 
     // zero = (!a[0]) & (!a[1]) & ... & (!a[7])
     expand! { |this| {
-        // TODO: for efficient simulation, adopt this pattern:
+        // Negate into a single bus; the simulator makes this parallel.
+        not: Not8 { a: this.a, out: Output8::new() },
 
-        //  // Negate into a single bus; the simulator makes this parallel.
-        // not: Not8 { a: this.a, out: Output16::new() },
+        // Compare them all at once, as if 8-way fan-in was a thing. The simulator
+        // handles this efficiently, too.
+        nand_all: Nand8Way { a: not.out.into(), out: Output::new() },
 
-        // // Compare them all at once, as if 16-way fan-in was a thing. The simulator
-        // // handles this efficiently, too.
-        // nand_all: Nand8Way { a: not.out.into(), out: Output::new() },
-
-        // _f: Not { a: nand_all.out.into(), out: this.out },
-
-        // Negate each bit
-        not0: Not { a: this.a.bit(0).into(), out: Output::new() },
-        not1: Not { a: this.a.bit(1).into(), out: Output::new() },
-        not2: Not { a: this.a.bit(2).into(), out: Output::new() },
-        not3: Not { a: this.a.bit(3).into(), out: Output::new() },
-        not4: Not { a: this.a.bit(4).into(), out: Output::new() },
-        not5: Not { a: this.a.bit(5).into(), out: Output::new() },
-        not6: Not { a: this.a.bit(6).into(), out: Output::new() },
-        not7: Not { a: this.a.bit(7).into(), out: Output::new() },
-        // AND tree
-        and_01: And { a: not0.out.into(), b: not1.out.into(), out: Output::new() },
-        and_23: And { a: not2.out.into(), b: not3.out.into(), out: Output::new() },
-        and_45: And { a: not4.out.into(), b: not5.out.into(), out: Output::new() },
-        and_67: And { a: not6.out.into(), b: not7.out.into(), out: Output::new() },
-        and_0123: And { a: and_01.out.into(), b: and_23.out.into(), out: Output::new() },
-        and_4567: And { a: and_45.out.into(), b: and_67.out.into(), out: Output::new() },
-        _all: And { a: and_0123.out.into(), b: and_4567.out.into(), out: this.out },
+        _f: Not { a: nand_all.out.into(), out: this.out },
     }}
 }
 
@@ -153,7 +160,6 @@ impl Component for Neg8 {
     }}
 }
 
-
 /// 8-bit ALU, which handles one-half word in a single cycle.
 #[derive(Clone, Reflect, Chip)]
 pub struct ALU {
@@ -162,40 +168,40 @@ pub struct ALU {
     pub disable: Input1,
 
     /// "Left" input
-    pub x:   Input8,
+    pub x: Input8,
     // "Right" input
-    pub y:   Input8,
+    pub y: Input8,
 
     pub carry_in: Input1,
 
     /// Zero the x input
-    pub zx:  Input1,
+    pub zx: Input1,
     /// Negate the x input (i.e. "not")
-    pub nx:  Input1,
+    pub nx: Input1,
     /// Zero the y input
-    pub zy:  Input1,
+    pub zy: Input1,
     /// Negate the y input (i.e. "not")
-    pub ny:  Input1,
+    pub ny: Input1,
     /// 0 => x && y; 1 => x + y
-    pub f:   Input1,
+    pub f: Input1,
     /// Negate the result (i.e. "not")
-    pub no:  Input1,
+    pub no: Input1,
 
     /// 8-bit result
     pub out: Output8,
     /// Flag: is the result equal to zero (all bits zero)
-    pub zr:  Output,
+    pub zr: Output,
     /// Flag: is the result < 0? (high bit set)
-    pub ng:  Output,
+    pub ng: Output,
 
     /// Carry (overflow) bit from the addition operation, if appl.
-    pub carry_out: Output
+    pub carry_out: Output,
 }
 
 impl Component for ALU {
     type Target = Combinational8;
 
-    expand!{ |this| {
+    expand! { |this| {
         // zx/nx: conditionally zero then negate x
          x1: Mux8 { sel: this.zx, a0: this.x, a1: fixed(0), out: Output8::new() },
          x2_not: Not8 { a: x1.out.into(), out: Output8::new() },
@@ -243,6 +249,7 @@ pub enum Combinational8 {
     Not8(Not8),
     And8(And8),
     Add8(Add8),
+    Nand8Way(Nand8Way),
     Zero8(Zero8),
     Neg8(Neg8),
     ALU(ALU),
@@ -291,8 +298,6 @@ pub struct PC {
     pub out: Output16,
 }
 
-
-
 #[derive(Clone, Reflect, Chip)]
 pub struct CPU {
     /// Return to a known state (i.e. jump to address 0)
@@ -312,7 +317,6 @@ pub struct CPU {
 
     pub mem_data_in: Input16,
 }
-
 
 #[derive(Clone, Reflect, Chip)]
 pub struct Computer {
@@ -377,11 +381,11 @@ pub fn flatten_for_simulation<C: Reflect + Into<EightComponent>>(
 mod test {
     use std::collections::HashMap;
 
-    use simulator::{Chip as _, eval, print_graph};
-    use simulator::word::Word;
-    use simulator::nat::N16;
-    use simulator::component::{Combinational, count_combinational};
     use crate::computer::{ALU, flatten_to_nands};
+    use simulator::component::{Combinational, count_combinational};
+    use simulator::nat::N16;
+    use simulator::word::Word;
+    use simulator::{Chip as _, eval, print_graph};
 
     // Note: the ALU and related components are all 8-bit, but end up embedded in a 16-bit circuit, so for simplicity,
     // treat values as 16-bits
@@ -575,7 +579,6 @@ mod test {
         assert_eq!(r["zr"].unsigned(), 0);
         assert_eq!(r["ng"].unsigned(), 0); // x OR y
 
-
         // x + y + 1 (carry from previous cycle)
         let r = eval16(
             &chip,
@@ -611,7 +614,7 @@ mod test {
                 ("no", false.into()),
             ],
         );
-        assert_eq!(r["out"].unsigned(), 0);  // low-half-word of 256
+        assert_eq!(r["out"].unsigned(), 0); // low-half-word of 256
         assert_eq!(r["zr"].unsigned(), 1);
         assert_eq!(r["ng"].unsigned(), 0);
         assert_eq!(r["carry_out"].unsigned(), 1);
@@ -620,6 +623,6 @@ mod test {
     #[test]
     fn alu_optimal() {
         let chip = flatten_to_nands(ALU::chip());
-        assert_eq!(count_combinational(&chip.components).nands, 366);  // Compare to 720
+        assert_eq!(count_combinational(&chip.components).nands, 368); // Compare to 720
     }
 }
