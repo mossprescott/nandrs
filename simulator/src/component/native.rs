@@ -3,7 +3,7 @@ use crate::declare::BusRef;
 use crate::nat::{IsGreater, N1, Nat};
 /// Components that aren't strictly primitive (or don't need to be), but which are provided as
 /// "native" in that the simulator implements them directly for performance reasons.
-use crate::{Chip, Component, IC, Input, Input1, Interface, Output, OutputBus, Reflect};
+use crate::{Chip, Input, Input1, Interface, Output, OutputBus, Reflect};
 
 /// Mux: out = if sel { a1 } else { a0 }, applied bitwise across Width bits.
 #[derive(Clone, Reflect, Chip)]
@@ -14,14 +14,14 @@ pub struct Mux<Width: Nat> {
     pub out: OutputBus<Width>,
 }
 
-/// Nothing to expand.
-impl<Width: Nat> Component for Mux<Width> {
-    type Target = Mux<Width>;
+// /// Nothing to expand.
+// impl<Width: Nat> Component for Mux<Width> {
+//     type Target = Mux<Width>;
 
-    fn expand(&self) -> Option<IC<Mux<Width>>> {
-        None
-    }
-}
+//     fn expand(&self) -> Option<IC<Mux<Width>>> {
+//         None
+//     }
+// }
 
 /// Single-bit slice off a multi-bit adder: adds three bits, producing a two-bit result.
 ///
@@ -46,14 +46,14 @@ pub struct Adder {
     pub carry: Output,
 }
 
-/// Nothing to expand.
-impl Component for Adder {
-    type Target = Adder;
+// /// Nothing to expand.
+// impl Component for Adder {
+//     type Target = Adder;
 
-    fn expand(&self) -> Option<IC<Adder>> {
-        None
-    }
-}
+//     fn expand(&self) -> Option<IC<Adder>> {
+//         None
+//     }
+// }
 
 /// The type of components that participate in computers for simulation purposes: this includes the
 /// native components here in addition to the actual primitives of the Computational type.

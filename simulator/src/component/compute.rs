@@ -3,7 +3,7 @@
 
 use crate::declare::BusRef;
 use crate::nat::{N16, Nat};
-use crate::{Chip, Component, IC, Input, Input1, Interface, OutputBus, Reflect};
+use crate::{Chip, Input, Input1, Interface, OutputBus, Reflect};
 
 use super::{Buffer, Combinational, Nand, Register, Sequential};
 
@@ -34,15 +34,6 @@ impl<A: Nat, D: Nat> RAM<A, D> {
     }
 }
 
-/// Nothing to expand; RAM is primitive for the simulator.
-impl<A: Nat, D: Nat> Component for RAM<A, D> {
-    type Target = RAM<A, D>;
-
-    fn expand(&self) -> Option<IC<RAM<A, D>>> {
-        None
-    }
-}
-
 /// Simple, read-only memory. The simulator supplies an implementation when it finds one of these.
 #[derive(Clone, Reflect)]
 pub struct ROM<A: Nat, D: Nat> {
@@ -65,15 +56,6 @@ impl<A: Nat, D: Nat> ROM<A, D> {
     }
 }
 
-/// Nothing to expand; ROM is primitive for the simulator.
-impl<A: Nat, D: Nat> Component for ROM<A, D> {
-    type Target = ROM<A, D>;
-
-    fn expand(&self) -> Option<IC<ROM<A, D>>> {
-        None
-    }
-}
-
 /// Read/write one word at a time from/to the outside world. Could represent a directly-connected
 /// keyboard (as in the original design), or a serial port, a debug interface, or some combination
 /// of the above.
@@ -92,13 +74,6 @@ pub struct Serial<Width: Nat> {
     pub write: Input1,
 }
 
-impl<W: Nat> Component for Serial<W> {
-    type Target = Serial<W>;
-    fn expand(&self) -> Option<IC<Serial<W>>> {
-        None
-    }
-}
-
 /// Abstracted writable memory system; presents the same interface as a RAM, but the simulator
 /// allows an arbitrary implementation to be supplied. This is analogous to dropping a CPU into
 /// a new system where some other chip is in charge of managing the bus.
@@ -112,15 +87,6 @@ pub struct MemorySystem<A: Nat, D: Nat> {
     pub data_out: OutputBus<D>,
 }
 
-/// Nothing to expand; MemorySystem is primitive for the simulator.
-impl<A: Nat, D: Nat> Component for MemorySystem<A, D> {
-    type Target = MemorySystem<A, D>;
-
-    fn expand(&self) -> Option<IC<MemorySystem<A, D>>> {
-        None
-    }
-}
-
 /// Type of components that participate in computers, including logic, registers, memory, and I/O.
 #[derive(Clone, Reflect)]
 pub enum Computational<A: Nat, D: Nat> {
@@ -131,14 +97,6 @@ pub enum Computational<A: Nat, D: Nat> {
     ROM(ROM<A, D>),
     Serial(Serial<D>),
     MemorySystem(MemorySystem<A, D>),
-}
-
-impl<A: Nat, D: Nat> Component for Computational<A, D> {
-    type Target = Self;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        None
-    }
 }
 
 impl<A: Nat, D: Nat> From<Combinational> for Computational<A, D> {
