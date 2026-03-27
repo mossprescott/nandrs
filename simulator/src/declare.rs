@@ -487,12 +487,12 @@ macro_rules! expand {
         $components.push($var.into());
     };
 
-    // --- For loop body: construct and push in one step (loop-scoped) ---
+    // --- For loop body: construct, clone+push, repeat (clone keeps binding alive for later entries) ---
 
     (@for_body $components:ident;) => {};
     (@for_body $components:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
         let $var = $T { $($fields)* };
-        $components.push($var.into());
+        $components.push($var.clone().into());
         $crate::expand!(@for_body $components; $($rest)*);
     };
     (@for_body $components:ident; $var:ident : $T:ident { $($fields:tt)* }) => {
