@@ -22,6 +22,14 @@ That's conceptually simple, but it involves considerable hardware resources:
 In simulation, the clock speed is heavily impacted, probably by the extra adders, but even so the
 extra work getting done on each cycle brings the frame rate to roughly parity.
 
+
+## Eight
+
+Conversely, get half as much done per cycle by using only an 8-bit ALU and address incrementer.
+
+
+
+
 ## Results
 
 Running examples/Pong.asm:
@@ -30,6 +38,7 @@ Running examples/Pong.asm:
 |------------------------------------------------|-------------|--------------|---------------|
 | [project_05](../assignments/src/project_05.rs) | 1126        | 3.9m         | 2.0 MHz, 30 fps |
 | [double](double/src/computer.rs)               | 1385 (+16%) | 2.8m  (-28%) |  1.4 MHz, 30 fps |
+| [eight](eight/src/computer.rs)               | ? (-?%) | 5.6m  (+100%) |  ? MHz, ? fps |
 
 - *gates*: number of Nands, including flattened adders and muxes, but not registers and the whoel memory system.
 - *init*: number of cycles to reach the "main.main" label
