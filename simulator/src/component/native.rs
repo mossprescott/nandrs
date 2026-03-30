@@ -71,8 +71,8 @@ impl<A: Nat, D: Nat> From<Computational<A, D>> for Simulational<A, D> {
     }
 }
 
-impl<A: Nat, D: Nat> From<crate::component::Sequential<D>> for Simulational<A, D> {
-    fn from(s: crate::component::Sequential<D>) -> Self {
+impl<A: Nat, D: Nat> From<crate::component::Sequential> for Simulational<A, D> {
+    fn from(s: crate::component::Sequential) -> Self {
         use crate::component::Sequential;
         Simulational::Primitive(match s {
             Sequential::Nand(n) => Computational::Nand(n),

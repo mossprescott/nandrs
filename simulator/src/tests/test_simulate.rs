@@ -1,4 +1,4 @@
-use crate::component::{Computational16, RAM16, Register16, Sequential16, Serial16};
+use crate::component::{Computational16, RAM16, Register16, Sequential, Serial16};
 use crate::declare::{Chip as _, IC, Reflect as _};
 use crate::nat::N16;
 use crate::simulate::{BusResident, MemoryMap, simulate};
@@ -6,10 +6,10 @@ use crate::simulate::{BusResident, MemoryMap, simulate};
 #[test]
 fn register_behavior() {
     let reg = Register16::chip();
-    let chip = IC {
+    let chip: IC<Sequential> = IC {
         name: reg.name().to_string(),
         intf: reg.reflect(),
-        components: vec![Sequential16::Register(reg)],
+        components: vec![reg.into()],
     };
     let mut state = simulate::<_, N16, N16>(&chip, MemoryMap::new(vec![]));
 

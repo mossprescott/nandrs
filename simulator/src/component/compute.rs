@@ -5,7 +5,7 @@ use crate::declare::BusRef;
 use crate::nat::{N16, Nat};
 use crate::{Chip, Input, Input1, Interface, OutputBus, Reflect};
 
-use super::{Buffer, Combinational, Nand, Register, Sequential};
+use super::{Buffer, Combinational, Nand, WiredRegister, Sequential};
 
 /// Simple, writable memory. The simulator supplies an implementation when it finds one of these.
 #[derive(Clone, Reflect)]
@@ -92,7 +92,7 @@ pub struct MemorySystem<A: Nat, D: Nat> {
 pub enum Computational<A: Nat, D: Nat> {
     Nand(Nand),
     Buffer(Buffer),
-    Register(Register<D>),
+    Register(WiredRegister),
     RAM(RAM<A, D>),
     ROM(ROM<A, D>),
     Serial(Serial<D>),
@@ -108,8 +108,8 @@ impl<A: Nat, D: Nat> From<Combinational> for Computational<A, D> {
     }
 }
 
-impl<A: Nat, D: Nat> From<Sequential<D>> for Computational<A, D> {
-    fn from(s: Sequential<D>) -> Self {
+impl<A: Nat, D: Nat> From<Sequential> for Computational<A, D> {
+    fn from(s: Sequential) -> Self {
         match s {
             Sequential::Nand(n) => Computational::Nand(n),
             Sequential::Buffer(n) => Computational::Buffer(n),
