@@ -5,7 +5,7 @@ use crate::declare::BusRef;
 use crate::nat::{N16, Nat};
 use crate::{Chip, Input, Input1, Interface, OutputBus, Reflect};
 
-use super::{Buffer, Combinational, Nand, WiredRegister, Sequential};
+use super::{Buffer, Combinational, Nand, Sequential, WiredRegister};
 
 /// Simple, writable memory. The simulator supplies an implementation when it finds one of these.
 #[derive(Clone, Reflect)]

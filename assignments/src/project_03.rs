@@ -4,7 +4,7 @@ use crate::project_01::{Mux16, Or, Project01Component};
 use crate::project_02::{Inc16, Project02Component};
 use simulator::Chip as _;
 use simulator::Reflect as _;
-use simulator::component::{Combinational, Nand, Register16, Sequential, Sequential16};
+use simulator::component::{Combinational, Nand, Register16, Sequential};
 use simulator::declare::{BusRef, Interface};
 use simulator::{
     self, Chip, Component, IC, Input1, Input16, Output, Output16, Reflect, expand, fixed,
@@ -15,13 +15,13 @@ pub enum Project03Component {
     #[delegate]
     Project02(Project02Component),
     #[primitive]
-    Register16(Register16),
+    Register(Register16),
     PC(PC),
 }
 
 /// Recursively expand until only Nands and Registers are left.
-pub fn flatten<C: Reflect + Into<Project03Component>>(chip: C) -> IC<Sequential16> {
-    fn go(comp: Project03Component) -> Vec<Sequential16> {
+pub fn flatten<C: Reflect + Into<Project03Component>>(chip: C) -> IC<Sequential> {
+    fn go(comp: Project03Component) -> Vec<Sequential> {
         match comp.expand() {
             None => match comp {
                 Project03Component::Project02(p) => crate::project_02::flatten(p)
@@ -32,7 +32,7 @@ pub fn flatten<C: Reflect + Into<Project03Component>>(chip: C) -> IC<Sequential1
                         Combinational::Buffer(c) => Sequential::Buffer(c),
                     })
                     .collect(),
-                Project03Component::Register16(reg) => vec![Sequential::Register(reg)],
+                Project03Component::Register(reg) => vec![reg.into()],
                 _ => panic!("Did not reduce to Nand/Register: {:?}", comp.name()),
             },
             Some(ic) => ic.components.into_iter().flat_map(go).collect(),

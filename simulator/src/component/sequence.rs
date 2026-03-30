@@ -45,6 +45,17 @@ impl Reflect for WiredRegister {
     }
 }
 
+impl<Width: Nat> From<Register<Width>> for WiredRegister {
+    fn from(c: Register<Width>) -> Self {
+        WiredRegister {
+            width: Width::as_int(),
+            data_in: BusRef::from_input(c.data_in),
+            write: BusRef::from_input(c.write),
+            data_out: BusRef::from_output(c.data_out),
+        }
+    }
+}
+
 /// Type of components that participate in "sequential" circuits: `Combinational` and `Register`.
 ///
 /// Note: a single chip can contain registers (and other components) that have various bit-widths,
@@ -68,12 +79,7 @@ impl From<Buffer> for Sequential {
 }
 impl<Width: Nat> From<Register<Width>> for Sequential {
     fn from(c: Register<Width>) -> Self {
-        Sequential::Register(WiredRegister {
-            width: Width::as_int(),
-            data_in: BusRef::from_input(c.data_in),
-            write: BusRef::from_input(c.write),
-            data_out: BusRef::from_output(c.data_out),
-        })
+        Sequential::Register(c.into())
     }
 }
 
@@ -83,7 +89,7 @@ pub struct SequentialCounts {
     pub registers: usize,
 }
 
-pub fn count_sequential<W: Nat>(components: &[Sequential]) -> SequentialCounts {
+pub fn count_sequential(components: &[Sequential]) -> SequentialCounts {
     let mut counts = SequentialCounts {
         nands: 0,
         buffers: 0,

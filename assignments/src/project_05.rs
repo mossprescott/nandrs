@@ -72,8 +72,8 @@ pub fn flatten_for_simulation<C: Reflect + Into<Project05Component>>(
             Project05Component::Project03(Project03Component::Project02(p)) => {
                 return crate::project_02::flatten_for_simulation(p).components;
             }
-            Project05Component::Project03(Project03Component::Register16(r)) => {
-                return vec![Computational::Register(r).into()];
+            Project05Component::Project03(Project03Component::Register(r)) => {
+                return vec![Computational::Register(r.into()).into()];
             }
             Project05Component::ROM(r) => return vec![Computational::ROM(r).into()],
             Project05Component::MemorySystem(m) => {
