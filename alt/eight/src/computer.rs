@@ -533,6 +533,9 @@ impl Component for CPU {
         next_addr_hi: Mux8 { a0: reg_a_hi_out.into(), a1: a_data_hi.out.into(), sel: load_a.out.into(), out: Output8::new() },
         next_addr: Join { lo: next_addr_lo.out.into(), hi: next_addr_hi.out.into(), out: this.mem_addr },
 
+        // === mem_write (write_m already gated with is_c in Decode) ===
+        mem_write: And { a: bottom_half.into(), b: decode.write_m.into(), out: this.mem_write },
+
         // === Jump logic ===
         not_ng:   Not { a: alu.ng.into(), out: Output::new() },
         not_zr:   Nand { a: zr_latch_out.into(), b: alu.zr.into(), out: Output::new() },
