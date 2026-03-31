@@ -614,8 +614,6 @@ impl Component for Computer {
 
 #[derive(Reflect, Component)]
 pub enum EightComponent {
-    // #[delegate]
-    // Project05(project_05::Project05Component),
     #[delegate]
     Combinational8(Combinational8),
     #[primitive]
@@ -648,7 +646,6 @@ impl From<EightMemSys> for Computational16 {
 pub fn flatten<C: Reflect + Into<EightComponent>>(chip: C) -> IC<Computational16> {
     fn go(comp: EightComponent) -> Vec<Computational16> {
         match comp {
-            // EightComponent::Project05(p) => project_05::flatten(p).components,
             EightComponent::Combinational8(c) => match c.expand() {
                 Some(ic) => ic
                     .components
@@ -687,11 +684,18 @@ pub fn flatten_for_simulation<C: Reflect + Into<EightComponent>>(
 ) -> IC<simulator::component::native::Simulational<N16, N16>> {
     use simulator::component::native::Simulational;
     fn go(comp: EightComponent) -> Vec<Simulational<N16, N16>> {
-        // Delegate Project05 subtrees immediately, so their interception logic handles Mux/Adder:
-        // if let EightComponent::Project05(p) = comp {
-        //     return project_05::flatten_for_simulation(p).components;
-        // }
         match comp {
+            EightComponent::Combinational8(Combinational8::Project02(p)) => {
+                project_02::flatten_for_simulation(p).components
+            }
+            EightComponent::Combinational8(c) => match c.expand() {
+                Some(ic) => ic
+                    .components
+                    .into_iter()
+                    .flat_map(|c| go(c.into()))
+                    .collect(),
+                None => panic!("Did not reduce to primitive: {:?}", c.name()),
+            },
             EightComponent::Register(r) => vec![Computational::Register(r.into()).into()],
             EightComponent::Latch1(l) => vec![Computational::Register(l.into()).into()],
             EightComponent::ROM(r) => vec![Computational::ROM(r.0).into()],
