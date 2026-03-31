@@ -730,6 +730,8 @@ mod test {
     use simulator::word::Word;
     use simulator::{Chip as _, eval, print_graph};
 
+
+
     // Note: the ALU and related components are all 8-bit, but end up embedded in a 16-bit circuit, so for simplicity,
     // treat values as 16-bits
     fn eval16<'a>(
@@ -1080,12 +1082,15 @@ mod test {
 
     #[test]
     fn computer_max_behavior() {
+        use assignments::project_05::{find_rom, memory_system};
+        use assignments::tests::test_05::max_program;
+
         let chip = flatten(Computer::chip());
+        let state = simulate::<_, N16, N16>(&chip, memory_system());
 
-        let no_ram = MemoryMap::new(vec![]);
-        let state = simulate::<_, N16, N16>(&chip, no_ram);
+        find_rom(&state).flash(max_program());
 
-        test_05::test_computer_max_behavior(state, 10);
+        test_05::test_computer_max_behavior(state, 100);
     }
 
     #[test]
