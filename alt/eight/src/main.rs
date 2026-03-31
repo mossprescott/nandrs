@@ -66,10 +66,5 @@ fn main() {
             .unwrap_or("?".to_string())
     };
 
-    let fmt_instrs = |pc: Word16| -> String {
-        let next = Word16::new(pc.unsigned() + 1);
-        format!("{}, {}", fmt_instr(pc), fmt_instr(next))
-    };
-
-    computer::run(&args, state, &symbols, &fmt_instrs);
+    computer::run(&args, state, &symbols, &fmt_instr);
 }
