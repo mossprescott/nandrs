@@ -6,11 +6,12 @@
 use assignments::project_01::{And, Mux, Nand, Not, Or};
 use assignments::project_02::FullAdder;
 use assignments::project_02::{self, HalfAdder};
-use simulator::component::Computational16;
+use assignments::project_05::Decode;
+use simulator::component::{Combinational, Computational16, MemorySystem16, ROM16, Register};
 use simulator::component::{Buffer, Computational, WiredRegister};
 
 use simulator::declare::BusRef;
-use simulator::nat::{N8, N16};
+use simulator::nat::{N1, N8, N16};
 use simulator::{
     Chip, Component, IC, Input, Input1, Input16, Interface, Output, Output16, OutputBus, Reflect,
     expand, fixed,
@@ -310,6 +311,7 @@ impl Component for Join {
 pub enum Combinational8 {
     #[delegate]
     Project02(project_02::Project02Component),
+    // Decode(Decode),
     Mux8(Mux8),
     Not8(Not8),
     And8(And8),
@@ -322,8 +324,6 @@ pub enum Combinational8 {
     Split(Split),
     Join(Join),
 }
-
-use simulator::component::Combinational;
 
 /// Recursively expand until only Nands and Buffers are left.
 pub fn flatten_to_nands<C: Reflect + Component<Target = Combinational8>>(
@@ -366,6 +366,39 @@ impl From<Register8> for WiredRegister {
             width: 8,
             data_in: BusRef::from_input(r.data_in),
             write: BusRef::from_input(r.write),
+            data_out: BusRef::from_output(r.data_out),
+        }
+    }
+}
+
+#[derive(Clone, Reflect, Chip)]
+pub struct Latch8 {
+    pub data_in: Input8,
+    pub data_out: Output8,
+}
+
+impl Component for Latch8 {
+    type Target = EightComponent;
+
+    expand! { |this| {
+        reg: Register8 { data_in: this.data_in, write: fixed(1), data_out: this.data_out },
+    }}
+}
+
+/// Wrap a single-bit latch as a (trivial) component with its own distinct type, because Rust's
+/// cross-crate trait resolution is happier that way.
+#[derive(Clone, Reflect, Chip)]
+pub struct Latch1 {
+    pub data_in: Input1,
+    pub data_out: Output,
+}
+
+impl From<Latch1> for WiredRegister {
+    fn from(r: Latch1) -> Self {
+        WiredRegister {
+            width: 1,
+            data_in: BusRef::from_input(r.data_in),
+            write: BusRef::from_input(fixed::<N1>(1)),
             data_out: BusRef::from_output(r.data_out),
         }
     }
@@ -430,8 +463,7 @@ impl Component for PC {
         hi: Register8 { data_in: next2_hi.out.into(), write: this.bottom_half, data_out: hi_out },
 
         // Latch Inc result for next cycle.
-        // TODO: make Latch8 a component?
-        latch: Register8 { data_in: inc.out.into(), write: fixed(1), data_out: latch_out },
+        latch: Latch8 { data_in: inc.out.into(), data_out: latch_out },
     }}
 }
 
@@ -455,6 +487,140 @@ pub struct CPU {
     pub mem_data_in: Input16,
 }
 
+impl Component for CPU {
+    type Target = EightComponent;
+
+    expand! { |this| {
+        top_half: forward Output::new(),
+        bottom_half: forward Output::new(),
+
+        alu_latch_out: forward Output8::new(),
+        zr_latch_out: forward Output::new(),
+        carry_latch_out: forward Output::new(),
+
+        reg_a_lo_out: forward Output8::new(),
+        reg_a_hi_out: forward Output8::new(),
+
+        reg_d_lo_out: forward Output8::new(),
+        reg_d_hi_out: forward Output8::new(),
+
+        decode: Decode {
+            instr: this.instr,
+
+            is_c: Output::new(),
+            is_a: Output::new(),
+
+            read_m: Output::new(),
+
+            zx: Output::new(), nx: Output::new(),
+            zy: Output::new(), ny: Output::new(),
+            f:  Output::new(), no: Output::new(),
+
+            write_a: Output::new(), write_m: Output::new(), write_d: Output::new(),
+
+            jmp_lt:  Output::new(), jmp_eq:  Output::new(), jmp_gt:  Output::new(),
+        },
+
+        x_src: Mux8 { a0: reg_d_lo_out.into(), a1: reg_d_hi_out.into(), sel: bottom_half.into(), out: Output8::new() },
+
+        // === load_a = is_a OR write_a ===
+        load_a: Or { a: decode.is_a.into(), b: decode.write_a.into(), out: Output::new() },
+
+        // === ALU Y mux: sel=read_m → a0=A, a1=mem_in ===
+        reg_a_sel: Mux8 { a0: reg_a_lo_out.into(), a1: reg_a_hi_out.into(), sel: bottom_half.into(), out: Output8::new() },
+        mem_data_in: Split { a: this.mem_data_in, lo: Output8::new(), hi: Output8::new() },
+        mem_data_sel: Mux8 { a0: mem_data_in.lo.into(), a1: mem_data_in.hi.into(), sel: bottom_half.into(), out: Output8::new() },
+        y_src: Mux8 {
+            a0:  reg_a_sel.out.into(),
+            a1:  mem_data_sel.out.into(),
+            sel: decode.read_m.into(),
+            out: Output8::new(),
+        },
+
+        alu: ALU {
+            x:   x_src.out.into(),
+            y:   y_src.out.into(),
+            carry_in: carry_latch_out.into(),
+            zx:  decode.zx.into(), nx: decode.nx.into(),
+            zy:  decode.zy.into(), ny: decode.ny.into(),
+            f:   decode.f.into(),  no: decode.no.into(),
+            disable: decode.is_a.into(),
+            out: Output8::new(),
+            zr:  Output::new(),
+            ng:  Output::new(),
+            carry_out: carry_latch_out,
+        },
+
+        mem_data_out: Join { lo: alu_latch_out.into(), hi: alu.out.into(), out: this.mem_data_out },
+
+
+        // // === A register data mux: AFTER ALU ===
+        // // sel=is_a → a1=instr (A-instr), a0=ALU output (C-instr with dest=A)
+        instr: Split { a: this.instr, lo: Output8::new(), hi: Output8::new() },
+        a_data_lo: Mux8 {
+            a0: alu_latch_out.into(),
+            a1: instr.lo.into(),
+            sel: decode.is_a.into(),
+            out: Output8::new(),
+        },
+        a_data_hi: Mux8 {
+            a0: alu.out.into(),
+            a1: instr.hi.into(),
+            sel: decode.is_a.into(),
+            out: Output8::new(),
+        },
+
+        // // === next_addr: if A is being written this cycle, expose the new A value as the
+        // // address for the memory system (so RAM latches the right read address); otherwise
+        // // expose the current A.out. Write address is always A.out (load_a=0 when write_m=1). ===
+        // next_addr: Mux16 {
+        //     sel: load_a.out.into(),
+        //     a0:  reg_a_out.into(),
+        //     a1:  a_data.out.into(),
+        //     out: this.mem_addr,
+        // },
+        _bogus_next_addr: Join { lo: fixed(0), hi: fixed(0), out: this.mem_addr },
+
+        // === Jump logic ===
+        not_ng:   Not { a: alu.ng.into(), out: Output::new() },
+        not_zr:   Nand { a: zr_latch_out.into(), b: alu.zr.into(), out: Output::new() },
+        is_pos:   And { a: not_ng.out.into(), b: not_zr.out.into(), out: Output::new() },
+        // Jump signals already gated with is_c in Decode.
+        jlt_and:  And { a: decode.jmp_lt.into(), b: alu.ng.into(), out: Output::new() },
+        jeq_and:  And { a: decode.jmp_eq.into(), b: alu.zr.into(), out: Output::new() },
+        jgt_and:  And { a: decode.jmp_gt.into(), b: is_pos.out.into(), out: Output::new() },
+        j_lt_eq:  Or  { a: jlt_and.out.into(), b: jeq_and.out.into(), out: Output::new() },
+        jump_any: Or  { a: j_lt_eq.out.into(), b: jgt_and.out.into(), out: Output::new() },
+
+        reg_a_joined: Join { lo: reg_a_lo_out.into(), hi: reg_a_hi_out.into(), out: Output16::new() },
+
+        pc: PC {
+            top_half: top_half.into(),
+            bottom_half: bottom_half.into(),
+            addr:  reg_a_joined.out.into(),
+            load:  jump_any.out.into(),
+            inc:   fixed(1),
+            reset: this.reset.into(),
+            out:   this.pc,
+        },
+
+        // Finally, all the registers and latches:
+
+        alu_latch: Latch8 { data_in: alu.out.into(), data_out: alu_latch_out },
+        zr_latch: Latch1 { data_in: alu.zr.into(), data_out: zr_latch_out },
+        carry_latch: Latch1 { data_in: alu.carry_out.into(), data_out: carry_latch_out },
+
+        reg_a_lo: Register8 { data_in: a_data_lo.out.into(), write: load_a.out.into(), data_out: reg_a_lo_out },
+        reg_a_hi: Register8 { data_in: a_data_hi.out.into(), write: load_a.out.into(), data_out: reg_a_hi_out },
+
+        reg_d_lo: Register8 { data_in: alu.out.into(), write: decode.write_d.into(), data_out: reg_d_lo_out },
+        reg_d_hi: Register8 { data_in: alu.out.into(), write: decode.write_d.into(), data_out: reg_d_hi_out },
+
+        next_cycle: Not { a: top_half.into(), out: bottom_half },
+        cycle_dff: Latch1 { data_in: next_cycle.out.into(), data_out: top_half },
+    }}
+}
+
 #[derive(Clone, Reflect, Chip)]
 pub struct Computer {
     /// A way to force the CPU to return to a known state (i.e. jump to address 0)
@@ -462,6 +628,37 @@ pub struct Computer {
 
     /// Useful for debugging, but also acts as a root for traversing the graph
     pub pc: Output16,
+}
+
+impl Component for Computer {
+    type Target = EightComponent;
+
+    expand! { |this| {
+        mem_out: forward Output16::new(),
+
+        rom: ROM16 {
+            size: 32 * 1024,
+            addr: this.pc.into(),
+            out:  Output16::new(),
+        },
+
+        cpu: CPU {
+            reset:        this.reset,
+            pc:           this.pc,
+            instr:        rom.out.into(),
+            mem_data_out: Output16::new(),
+            mem_write:    Output::new(),
+            mem_addr:     Output16::new(),
+            mem_data_in:  mem_out.into(),
+        },
+
+        memory: MemorySystem16 {
+            addr:     cpu.mem_addr.into(),
+            write:    cpu.mem_write.into(),
+            data_in:  cpu.mem_data_out.into(),
+            data_out: mem_out,
+        },
+    }}
 }
 
 #[derive(Reflect, Component)]
@@ -472,9 +669,16 @@ pub enum EightComponent {
     Combinational8(Combinational8),
     #[primitive]
     Register(Register8),
+    #[primitive]
+    Latch1(Latch1),
+    #[primitive]
+    ROM(ROM16),
+    #[primitive]
+    MemorySystem(MemorySystem16),
+    Latch8(Latch8),
     PC(PC),
-    // CPU(CPU),
-    // Computer(Computer),
+    CPU(CPU),
+    Computer(Computer),
 }
 
 /// Recursively expand until only Nands, Registers, RAMs, ROMs, and MemorySystems are left.
@@ -541,7 +745,8 @@ pub fn flatten_for_simulation<C: Reflect + Into<EightComponent>>(
 mod test {
     use std::collections::HashMap;
 
-    use crate::computer::{ALU, PC, flatten, flatten_to_nands};
+    use assignments::tests::test_05;
+    use crate::computer::{ALU, CPU, Computer, PC, flatten, flatten_to_nands};
     use simulator::component::{Combinational, count_combinational, count_computational};
     use simulator::nat::N16;
     use simulator::simulate::{MemoryMap, simulate};
@@ -886,5 +1091,33 @@ mod test {
         let counts = count_computational(&chip.components);
         assert_eq!(counts.nands, 221); // Compare to 223
         assert_eq!(counts.registers, 3); // 3x8 bits; compare to 1x16
+    }
+
+    #[test]
+    fn cpu_optimal() {
+        let chip = flatten(CPU::chip());
+        let counts = count_computational(&chip.components);
+        assert_eq!(counts.nands, 0);  // Compare to 1126
+        assert_eq!(counts.registers, 3);
+    }
+
+    #[test]
+    fn computer_max_behavior() {
+        let chip = flatten(Computer::chip());
+
+        let no_ram = MemoryMap::new(vec![]);
+        let state = simulate::<_, N16, N16>(&chip, no_ram);
+
+        test_05::test_computer_max_behavior(state, 10);
+    }
+
+    #[test]
+    fn computer_optimal() {
+        let chip = flatten(Computer::chip());
+        let counts = count_computational(&chip.components);
+        assert_eq!(counts.nands, 0);  // Compare to 1126
+        assert_eq!(counts.registers, 3);
+        assert_eq!(counts.roms, 1);
+        assert_eq!(counts.memory_systems, 1);
     }
 }
