@@ -207,6 +207,8 @@ name = "eight"
 version = "0.1.0"
 dependencies = [
  "assignments",
+ "clap",
+ "computer",
  "simulator",
 ]
 
