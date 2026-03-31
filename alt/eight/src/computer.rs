@@ -7,6 +7,7 @@ use assignments::project_01::{And, Mux, Nand, Not, Or};
 use assignments::project_02::FullAdder;
 use assignments::project_02::{self, HalfAdder};
 use assignments::project_05::Decode;
+use simulator::component::native;
 use simulator::component::{Buffer, Computational};
 use simulator::component::{Combinational, Computational16, MemorySystem16, ROM16};
 use simulator::nat::N16;
@@ -687,6 +688,17 @@ pub fn flatten_for_simulation<C: Reflect + Into<EightComponent>>(
         match comp {
             EightComponent::Combinational8(Combinational8::Project02(p)) => {
                 project_02::flatten_for_simulation(p).components
+            }
+            EightComponent::Combinational8(Combinational8::Mux8(c)) => {
+                vec![
+                    native::Mux {
+                        a0: c.a0,
+                        a1: c.a1,
+                        sel: c.sel,
+                        out: c.out,
+                    }
+                    .into(),
+                ]
             }
             EightComponent::Combinational8(c) => match c.expand() {
                 Some(ic) => ic

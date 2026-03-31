@@ -79,20 +79,26 @@ where
                 .into(),
             ],
             Project02Component::Project01(Project01Component::Mux(c)) => {
-                vec![native::Simulational::Mux1(native::Mux {
-                    a0: c.a0,
-                    a1: c.a1,
-                    sel: c.sel,
-                    out: c.out,
-                })]
+                vec![
+                    native::Mux {
+                        a0: c.a0,
+                        a1: c.a1,
+                        sel: c.sel,
+                        out: c.out,
+                    }
+                    .into(),
+                ]
             }
             Project02Component::Project01(Project01Component::Mux16(c)) => {
-                vec![native::Simulational::Mux(native::Mux {
-                    a0: c.a0,
-                    a1: c.a1,
-                    sel: c.sel,
-                    out: c.out,
-                })]
+                vec![
+                    native::Mux {
+                        a0: c.a0,
+                        a1: c.a1,
+                        sel: c.sel,
+                        out: c.out,
+                    }
+                    .into(),
+                ]
             }
             _ => match comp.expand() {
                 None => match comp {

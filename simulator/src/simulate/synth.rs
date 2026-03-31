@@ -479,13 +479,6 @@ where
                     assign(WireID::from(&intf.inputs["sel"]));
                     assign(WireID::from(&intf.outputs["out"]));
                 }
-                Simulational::Mux1(c) => {
-                    let intf = c.reflect();
-                    assign(WireID::from(&intf.inputs["a0"]));
-                    assign(WireID::from(&intf.inputs["a1"]));
-                    assign(WireID::from(&intf.inputs["sel"]));
-                    assign(WireID::from(&intf.outputs["out"]));
-                }
                 Simulational::Adder(c) => {
                     let intf = c.reflect();
                     assign(WireID::from(&intf.inputs["a"]));
@@ -540,14 +533,20 @@ where
         if let Some((offset, src, _)) = renamed.get(id) {
             wiring::BitRef {
                 id: *wire_indexes.get(src).unwrap_or_else(|| {
-                    panic!("ref_for: renamed wire source not in wire_indexes (width={}, offset={})", b.width, b.offset)
+                    panic!(
+                        "ref_for: renamed wire source not in wire_indexes (width={}, offset={})",
+                        b.width, b.offset
+                    )
                 }),
                 offset: *offset as u8,
             }
         } else {
             wiring::BitRef {
                 id: *wire_indexes.get(id).unwrap_or_else(|| {
-                    panic!("ref_for: wire not in wire_indexes (width={}, offset={})", b.width, b.offset)
+                    panic!(
+                        "ref_for: wire not in wire_indexes (width={}, offset={})",
+                        b.width, b.offset
+                    )
                 }),
                 offset: b.offset as u8,
             }
@@ -596,17 +595,6 @@ where
                     }
                 }
                 Simulational::Mux(c) => {
-                    let intf = c.reflect();
-                    Some(CW::Mux(wiring::MuxWiring {
-                        sel: ref_for(&intf.inputs["sel"]),
-                        a0: wire_indexes[&WireID::from(&intf.inputs["a0"])],
-                        a1: wire_indexes[&WireID::from(&intf.inputs["a1"])],
-                        out: wire_indexes[&WireID::from(&intf.outputs["out"])],
-                        branch0: Vec::new(),
-                        branch1: Vec::new(),
-                    }))
-                }
-                Simulational::Mux1(c) => {
                     let intf = c.reflect();
                     Some(CW::Mux(wiring::MuxWiring {
                         sel: ref_for(&intf.inputs["sel"]),

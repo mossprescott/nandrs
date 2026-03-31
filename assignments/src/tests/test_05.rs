@@ -417,6 +417,9 @@ fn computer_optimal() {
 }
 
 /// Component counts when flattened for simulation (with native Adder/Mux).
+///
+/// Note: this is more a test of the machinery for efficient simulation, not of the Computer
+/// implementation.
 #[test]
 fn computer_graph_for_simulation() {
     use simulator::component::native::count_simulational;
@@ -426,7 +429,6 @@ fn computer_graph_for_simulation() {
     assert_eq!(counts.primitive.registers, 3);
     assert_eq!(counts.primitive.roms, 1);
     assert_eq!(counts.primitive.memory_systems, 1);
-    assert_eq!(counts.muxes, 15);
-    assert_eq!(counts.mux1s, 1);
+    assert_eq!(counts.muxes, 16);
     assert_eq!(counts.adders, 31);
 }
