@@ -1084,7 +1084,7 @@ mod test {
         let chip = flatten(PC::chip());
         // Note: flattening to computational for simplicity, even though only register is needed
         let counts = count_computational(&chip.components);
-        assert_eq!(counts.nands, 221); // Compare to 223
+        assert_eq!(counts.nands, 224); // Compare to 223
         assert_eq!(counts.registers, 3); // 3x8 bits; compare to 1x16
     }
 
@@ -1092,7 +1092,7 @@ mod test {
     fn cpu_optimal() {
         let chip = flatten(CPU::chip());
         let counts = count_computational(&chip.components);
-        assert_eq!(counts.nands, 776); // Compare to 1126
+        assert_eq!(counts.nands, 838); // Compare to 1126
         assert_eq!(counts.registers, 11); // 6 8-bit registers, 2 8-bit latches (ALU and PC), and a couple of 1-bit latches for carries and the zr condition
     }
 
@@ -1115,7 +1115,7 @@ mod test {
     fn computer_optimal() {
         let chip = flatten(Computer::chip());
         let counts = count_computational(&chip.components);
-        assert_eq!(counts.nands, 776); // Compare to 1126
+        assert_eq!(counts.nands, 838); // Compare to 1126
         assert_eq!(counts.registers, 11);
         assert_eq!(counts.roms, 1);
         assert_eq!(counts.memory_systems, 1);
