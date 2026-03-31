@@ -799,13 +799,19 @@ mod test {
         let no_ram = MemoryMap::new(vec![]);
         let mut state = simulate::<_, N16, N16>(&chip, no_ram);
 
-        let crank = |state: &mut simulator::simulate::ChipState<N16, N16>| {
+        let tick = |state: &mut simulator::simulate::ChipState<N16, N16>| {
             state.set("top_half", true.into());
             state.set("bottom_half", false.into());
             state.ticktock();
+        };
+        let tock = |state: &mut simulator::simulate::ChipState<N16, N16>| {
             state.set("top_half", false.into());
             state.set("bottom_half", true.into());
             state.ticktock();
+        };
+        let crank = |mut state: &mut simulator::simulate::ChipState<N16, N16>| {
+            tick(&mut state);
+            tock(&mut state);
         };
 
         assert_eq!(state.get("out"), 0u16.into());
@@ -820,8 +826,11 @@ mod test {
 
         assert_eq!(state.get("out"), 0u16.into()); // No change: previous value still latched
 
-        crank(&mut state);
-        assert_eq!(state.get("out"), 1u16.into());
+        tick(&mut state);
+        assert_eq!(state.get("out"), 0u16.into()); // No change after the "top half" cycle
+
+        tock(&mut state);
+        assert_eq!(state.get("out"), 1u16.into()); // Now the incremented address is available
 
         crank(&mut state);
         assert_eq!(state.get("out"), 2u16.into());
@@ -857,12 +866,23 @@ mod test {
 
         crank(&mut state);
         assert_eq!(state.get("out"), 0u16.into());
+
+        // Specifically test crossing an 8-bit address boundary:
+        state.set("reset", false.into());
+        state.set("addr", 0x00ffu16.into());
+        state.set("load", true.into());
+        crank(&mut state);
+        assert_eq!(state.get("out"), 0x00ffu16.into());
+
+        state.set("load", false.into());
+        crank(&mut state);
+        assert_eq!(state.get("out"), 0x0100u16.into());  // low-byte = 0; high-byte = 1
     }
 
     #[test]
     fn pc_optimal() {
         let chip = flatten(PC::chip());
-        // Note: flattinging to computational for simplicity, even though only register is needed
+        // Note: flattening to computational for simplicity, even though only register is needed
         let counts = count_computational(&chip.components);
         assert_eq!(counts.nands, 221); // Compare to 223
         assert_eq!(counts.registers, 3); // 3x8 bits; compare to 1x16
