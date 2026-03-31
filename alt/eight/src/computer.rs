@@ -572,8 +572,8 @@ impl Component for CPU {
         reg_a_lo: Register8 { data_in: a_data_lo.out.into(), write: load_a.out.into(), data_out: reg_a_lo_out },
         reg_a_hi: Register8 { data_in: a_data_hi.out.into(), write: load_a.out.into(), data_out: reg_a_hi_out },
 
-        reg_d_lo: Register8 { data_in: alu.out.into(), write: decode.write_d.into(), data_out: reg_d_lo_out },
-        reg_d_hi: Register8 { data_in: alu.out.into(), write: decode.write_d.into(), data_out: reg_d_hi_out },
+        reg_d_lo: Register8 { data_in: alu_latch_out.into(), write: decode.write_d.into(), data_out: reg_d_lo_out },
+        reg_d_hi: Register8 { data_in: alu.out.into(),       write: decode.write_d.into(), data_out: reg_d_hi_out },
 
         next_cycle: Not { a: top_half.into(), out: bottom_half },
         cycle_dff: Latch1 { data_in: next_cycle.out.into(), data_out: top_half },
