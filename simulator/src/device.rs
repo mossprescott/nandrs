@@ -1,6 +1,9 @@
 use crate::nat::Nat;
 use crate::word::{Storable, Word};
 
+/// Enable crude but sometimes helpful logging of _all_ writes; reads can't really be logged
+/// usefully because at the moment the RAM _always_ "reads" from teh current address, even if the
+/// value isn't used.
 const DEBUG_MEMORY: bool = true;
 
 pub enum Error {
