@@ -462,8 +462,15 @@ where
                     assign(WireID::from(&intf.inputs["b"]));
                     assign(WireID::from(&intf.outputs["out"]));
                 }
-                Simulational::Primitive(Computational::Buffer(_)) => {
-                    // Ignore; already recorded in `renamed`
+                Simulational::Primitive(Computational::Buffer(c)) => {
+                    // Full-bus buffers are handled via `renamed`; sub-bus buffers need their
+                    // `a` wire assigned explicitly (including the case where `a` is fixed).
+                    let intf = c.reflect();
+                    let a = &intf.inputs["a"];
+                    if a.width == 1 {
+                        assign(WireID::from(a));
+                        assign(WireID::from(&intf.outputs["out"]));
+                    }
                 }
                 Simulational::Mux(c) => {
                     let intf = c.reflect();
