@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-assignments = { path = "../../assignments" }
+assignments = { path = "../../assignments", features = ["test-support"] }
 simulator = { path = "../../simulator" }
