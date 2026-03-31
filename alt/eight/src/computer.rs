@@ -7,15 +7,17 @@ use assignments::project_01::{And, Mux, Nand, Not, Or};
 use assignments::project_02::FullAdder;
 use assignments::project_02::{self, HalfAdder};
 use assignments::project_05::Decode;
-use simulator::component::{Combinational, Computational16, MemorySystem16, ROM16};
 use simulator::component::{Buffer, Computational};
+use simulator::component::{Combinational, Computational16, MemorySystem16, ROM16};
 use simulator::nat::N16;
 use simulator::{
-    Chip, Component, IC, Input1, Input16, Interface, Output, Output16, Reflect,
-    expand, fixed, declare::BusRef
+    Chip, Component, IC, Input1, Input16, Interface, Output, Output16, Reflect, declare::BusRef,
+    expand, fixed,
 };
 
-use crate::component::{EightDecode, EightMemSys, EightROM, Input8, Latch1, Latch8, Output8, Register8};
+use crate::component::{
+    EightDecode, EightMemSys, EightROM, Input8, Latch1, Latch8, Output8, Register8,
+};
 
 /// Selects between two 8-bit inputs bit-by-bit, using a single sel bit.
 #[derive(Clone, Reflect, Chip)]
@@ -520,29 +522,15 @@ impl Component for CPU {
         // // === A register data mux: AFTER ALU ===
         // // sel=is_a → a1=instr (A-instr), a0=ALU output (C-instr with dest=A)
         instr: Split { a: this.instr, lo: Output8::new(), hi: Output8::new() },
-        a_data_lo: Mux8 {
-            a0: alu_latch_out.into(),
-            a1: instr.lo.into(),
-            sel: decode.is_a.into(),
-            out: Output8::new(),
-        },
-        a_data_hi: Mux8 {
-            a0: alu.out.into(),
-            a1: instr.hi.into(),
-            sel: decode.is_a.into(),
-            out: Output8::new(),
-        },
+        a_data_lo: Mux8 { a0: alu_latch_out.into(), a1: instr.lo.into(), sel: decode.is_a.into(), out: Output8::new() },
+        a_data_hi: Mux8 { a0: alu.out.into(),       a1: instr.hi.into(), sel: decode.is_a.into(), out: Output8::new() },
 
-        // // === next_addr: if A is being written this cycle, expose the new A value as the
-        // // address for the memory system (so RAM latches the right read address); otherwise
-        // // expose the current A.out. Write address is always A.out (load_a=0 when write_m=1). ===
-        // next_addr: Mux16 {
-        //     sel: load_a.out.into(),
-        //     a0:  reg_a_out.into(),
-        //     a1:  a_data.out.into(),
-        //     out: this.mem_addr,
-        // },
-        _bogus_next_addr: Join { lo: fixed(0), hi: fixed(0), out: this.mem_addr },
+        // === next_addr: if A is being written this cycle, expose the new A value as the
+        // address for the memory system (so RAM latches the right read address); otherwise
+        // expose the current A.out. Write address is always A.out (load_a=0 when write_m=1). ===
+        next_addr_lo: Mux8 { a0: reg_a_lo_out.into(), a1: a_data_lo.out.into(), sel: load_a.out.into(), out: Output8::new() },
+        next_addr_hi: Mux8 { a0: reg_a_hi_out.into(), a1: a_data_hi.out.into(), sel: load_a.out.into(), out: Output8::new() },
+        next_addr: Join { lo: next_addr_lo.out.into(), hi: next_addr_hi.out.into(), out: this.mem_addr },
 
         // === Jump logic ===
         not_ng:   Not { a: alu.ng.into(), out: Output::new() },
@@ -644,13 +632,16 @@ pub enum EightComponent {
     Computer(Computer),
 }
 
-
 impl From<EightROM> for Computational16 {
-    fn from(r: EightROM) -> Self { Computational::ROM(r.0) }
+    fn from(r: EightROM) -> Self {
+        Computational::ROM(r.0)
+    }
 }
 
 impl From<EightMemSys> for Computational16 {
-    fn from(m: EightMemSys) -> Self { Computational::MemorySystem(m.0) }
+    fn from(m: EightMemSys) -> Self {
+        Computational::MemorySystem(m.0)
+    }
 }
 
 /// Recursively expand until only Nands, Registers, RAMs, ROMs, and MemorySystems are left.
@@ -722,15 +713,13 @@ pub fn flatten_for_simulation<C: Reflect + Into<EightComponent>>(
 mod test {
     use std::collections::HashMap;
 
-    use assignments::tests::test_05;
     use crate::computer::{ALU, CPU, Computer, PC, flatten, flatten_to_nands};
+    use assignments::tests::test_05;
     use simulator::component::{Combinational, count_combinational, count_computational};
     use simulator::nat::N16;
     use simulator::simulate::{MemoryMap, simulate};
     use simulator::word::Word;
     use simulator::{Chip as _, eval, print_graph};
-
-
 
     // Note: the ALU and related components are all 8-bit, but end up embedded in a 16-bit circuit, so for simplicity,
     // treat values as 16-bits
@@ -1060,7 +1049,7 @@ mod test {
 
         state.set("load", false.into());
         crank(&mut state);
-        assert_eq!(state.get("out"), 0x0100u16.into());  // low-byte = 0; high-byte = 1
+        assert_eq!(state.get("out"), 0x0100u16.into()); // low-byte = 0; high-byte = 1
     }
 
     #[test]
@@ -1076,7 +1065,7 @@ mod test {
     fn cpu_optimal() {
         let chip = flatten(CPU::chip());
         let counts = count_computational(&chip.components);
-        assert_eq!(counts.nands, 776);  // Compare to 1126
+        assert_eq!(counts.nands, 776); // Compare to 1126
         assert_eq!(counts.registers, 11); // 6 8-bit registers, 2 8-bit latches (ALU and PC), and a couple of 1-bit latches for carries and the zr condition
     }
 
@@ -1097,7 +1086,7 @@ mod test {
     fn computer_optimal() {
         let chip = flatten(Computer::chip());
         let counts = count_computational(&chip.components);
-        assert_eq!(counts.nands, 776);  // Compare to 1126
+        assert_eq!(counts.nands, 776); // Compare to 1126
         assert_eq!(counts.registers, 11);
         assert_eq!(counts.roms, 1);
         assert_eq!(counts.memory_systems, 1);
