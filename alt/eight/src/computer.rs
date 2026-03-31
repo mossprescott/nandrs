@@ -513,7 +513,7 @@ impl Component for CPU {
             out: Output8::new(),
             zr:  Output::new(),
             ng:  Output::new(),
-            carry_out: carry_latch_out,
+            carry_out: Output::new(),
         },
 
         mem_data_out: Join { lo: alu_latch_out.into(), hi: alu.out.into(), out: this.mem_data_out },
