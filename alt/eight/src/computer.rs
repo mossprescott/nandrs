@@ -425,8 +425,10 @@ impl Component for PC {
 
         out: Join { lo: lo_out.into(), hi: hi_out.into(), out: this.out },
 
-        lo: Register8 { data_in: next2_lo.out.into(), write: this.bottom_half, data_out: lo_out },
-        hi: Register8 { data_in: next2_hi.out.into(), write: this.bottom_half, data_out: hi_out },
+        // Note: reset is effective in any (single) cycle; others only in bottom_half
+        write: Or { a: this.bottom_half, b: this.reset, out: Output::new() },
+        lo: Register8 { data_in: next2_lo.out.into(), write: write.out.into(), data_out: lo_out },
+        hi: Register8 { data_in: next2_hi.out.into(), write: write.out.into(), data_out: hi_out },
 
         // Latch Inc result for next cycle.
         latch: Latch8 { data_in: inc.out.into(), data_out: latch_out },
@@ -575,7 +577,9 @@ impl Component for CPU {
         reg_d_lo: Register8 { data_in: alu_latch_out.into(), write: decode.write_d.into(), data_out: reg_d_lo_out },
         reg_d_hi: Register8 { data_in: alu.out.into(),       write: decode.write_d.into(), data_out: reg_d_hi_out },
 
-        next_cycle: Not { a: top_half.into(), out: bottom_half },
+        // Note: reset forces top_half, so only it only has to be asserted for a single cycle
+        not_top: Not { a: top_half.into(), out: bottom_half },
+        next_cycle: Or { a: not_top.out.into(), b: this.reset, out: Output::new() },
         cycle_dff: Latch1 { data_in: next_cycle.out.into(), data_out: top_half },
     }}
 }
