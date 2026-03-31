@@ -7,18 +7,15 @@ use assignments::project_01::{And, Mux, Nand, Not, Or};
 use assignments::project_02::FullAdder;
 use assignments::project_02::{self, HalfAdder};
 use assignments::project_05::Decode;
-use simulator::component::{Combinational, Computational16, MemorySystem16, ROM16, Register};
-use simulator::component::{Buffer, Computational, WiredRegister};
-
-use simulator::declare::BusRef;
-use simulator::nat::{N1, N8, N16};
+use simulator::component::{Combinational, Computational16, MemorySystem16, ROM16};
+use simulator::component::{Buffer, Computational};
+use simulator::nat::N16;
 use simulator::{
-    Chip, Component, IC, Input, Input1, Input16, Interface, Output, Output16, OutputBus, Reflect,
-    expand, fixed,
+    Chip, Component, IC, Input1, Input16, Interface, Output, Output16, Reflect,
+    expand, fixed, declare::BusRef
 };
 
-type Input8 = Input<N8>;
-type Output8 = OutputBus<N8>;
+use crate::component::{EightDecode, EightMemSys, EightROM, Input8, Latch1, Latch8, Output8, Register8};
 
 /// Selects between two 8-bit inputs bit-by-bit, using a single sel bit.
 #[derive(Clone, Reflect, Chip)]
@@ -311,7 +308,7 @@ impl Component for Join {
 pub enum Combinational8 {
     #[delegate]
     Project02(project_02::Project02Component),
-    // Decode(Decode),
+    Decode(EightDecode),
     Mux8(Mux8),
     Not8(Not8),
     And8(And8),
@@ -351,32 +348,6 @@ pub fn flatten_to_nands<C: Reflect + Component<Target = Combinational8>>(
     }
 }
 
-/// Wrap an 8-bit register as a (trivial) component with its own distinct type, because Rust's
-/// cross-crate trait resolution is happier that way.
-#[derive(Clone, Reflect, Chip)]
-pub struct Register8 {
-    pub data_in: Input8,
-    pub write: Input1,
-    pub data_out: Output8,
-}
-
-impl From<Register8> for WiredRegister {
-    fn from(r: Register8) -> Self {
-        WiredRegister {
-            width: 8,
-            data_in: BusRef::from_input(r.data_in),
-            write: BusRef::from_input(r.write),
-            data_out: BusRef::from_output(r.data_out),
-        }
-    }
-}
-
-#[derive(Clone, Reflect, Chip)]
-pub struct Latch8 {
-    pub data_in: Input8,
-    pub data_out: Output8,
-}
-
 impl Component for Latch8 {
     type Target = EightComponent;
 
@@ -385,22 +356,14 @@ impl Component for Latch8 {
     }}
 }
 
-/// Wrap a single-bit latch as a (trivial) component with its own distinct type, because Rust's
-/// cross-crate trait resolution is happier that way.
-#[derive(Clone, Reflect, Chip)]
-pub struct Latch1 {
-    pub data_in: Input1,
-    pub data_out: Output,
-}
-
-impl From<Latch1> for WiredRegister {
-    fn from(r: Latch1) -> Self {
-        WiredRegister {
-            width: 1,
-            data_in: BusRef::from_input(r.data_in),
-            write: BusRef::from_input(fixed::<N1>(1)),
-            data_out: BusRef::from_output(r.data_out),
-        }
+impl Component for EightDecode {
+    type Target = Combinational8;
+    fn expand(&self) -> Option<IC<Combinational8>> {
+        self.0.expand().map(|ic| IC {
+            name: ic.name,
+            intf: ic.intf,
+            components: ic.components.into_iter().map(Into::into).collect(),
+        })
     }
 }
 
@@ -504,7 +467,7 @@ impl Component for CPU {
         reg_d_lo_out: forward Output8::new(),
         reg_d_hi_out: forward Output8::new(),
 
-        decode: Decode {
+        decode: EightDecode(Decode {
             instr: this.instr,
 
             is_c: Output::new(),
@@ -519,7 +482,7 @@ impl Component for CPU {
             write_a: Output::new(), write_m: Output::new(), write_d: Output::new(),
 
             jmp_lt:  Output::new(), jmp_eq:  Output::new(), jmp_gt:  Output::new(),
-        },
+        }),
 
         x_src: Mux8 { a0: reg_d_lo_out.into(), a1: reg_d_hi_out.into(), sel: bottom_half.into(), out: Output8::new() },
 
@@ -636,11 +599,11 @@ impl Component for Computer {
     expand! { |this| {
         mem_out: forward Output16::new(),
 
-        rom: ROM16 {
+        rom: EightROM(ROM16 {
             size: 32 * 1024,
             addr: this.pc.into(),
             out:  Output16::new(),
-        },
+        }),
 
         cpu: CPU {
             reset:        this.reset,
@@ -652,12 +615,12 @@ impl Component for Computer {
             mem_data_in:  mem_out.into(),
         },
 
-        memory: MemorySystem16 {
+        memory: EightMemSys(MemorySystem16 {
             addr:     cpu.mem_addr.into(),
             write:    cpu.mem_write.into(),
             data_in:  cpu.mem_data_out.into(),
             data_out: mem_out,
-        },
+        }),
     }}
 }
 
@@ -672,13 +635,22 @@ pub enum EightComponent {
     #[primitive]
     Latch1(Latch1),
     #[primitive]
-    ROM(ROM16),
+    ROM(EightROM),
     #[primitive]
-    MemorySystem(MemorySystem16),
+    MemorySystem(EightMemSys),
     Latch8(Latch8),
     PC(PC),
     CPU(CPU),
     Computer(Computer),
+}
+
+
+impl From<EightROM> for Computational16 {
+    fn from(r: EightROM) -> Self { Computational::ROM(r.0) }
+}
+
+impl From<EightMemSys> for Computational16 {
+    fn from(m: EightMemSys) -> Self { Computational::MemorySystem(m.0) }
 }
 
 /// Recursively expand until only Nands, Registers, RAMs, ROMs, and MemorySystems are left.
@@ -702,6 +674,9 @@ pub fn flatten<C: Reflect + Into<EightComponent>>(chip: C) -> IC<Computational16
                 .collect(),
             },
             EightComponent::Register(r) => vec![Computational::Register(r.into())],
+            EightComponent::Latch1(l) => vec![Computational::Register(l.into())],
+            EightComponent::ROM(r) => vec![Computational::ROM(r.0)],
+            EightComponent::MemorySystem(m) => vec![Computational::MemorySystem(m.0)],
             other => match other.expand() {
                 Some(ic) => ic.components.into_iter().flat_map(go).collect(),
                 None => panic!("Did not reduce to primitive: {:?}", other.name()),
@@ -725,13 +700,15 @@ pub fn flatten_for_simulation<C: Reflect + Into<EightComponent>>(
         // if let EightComponent::Project05(p) = comp {
         //     return project_05::flatten_for_simulation(p).components;
         // }
-        if let EightComponent::Register(reg) = comp {
-            vec![Computational::Register(reg.into()).into()]
-        } else {
-            match comp.expand() {
+        match comp {
+            EightComponent::Register(r) => vec![Computational::Register(r.into()).into()],
+            EightComponent::Latch1(l) => vec![Computational::Register(l.into()).into()],
+            EightComponent::ROM(r) => vec![Computational::ROM(r.0).into()],
+            EightComponent::MemorySystem(m) => vec![Computational::MemorySystem(m.0).into()],
+            other => match other.expand() {
                 Some(ic) => ic.components.into_iter().flat_map(go).collect(),
-                None => panic!("Did not reduce to primitive: {:?}", comp.name()),
-            }
+                None => panic!("Did not reduce to primitive: {:?}", other.name()),
+            },
         }
     }
     IC {
@@ -1097,8 +1074,8 @@ mod test {
     fn cpu_optimal() {
         let chip = flatten(CPU::chip());
         let counts = count_computational(&chip.components);
-        assert_eq!(counts.nands, 0);  // Compare to 1126
-        assert_eq!(counts.registers, 3);
+        assert_eq!(counts.nands, 776);  // Compare to 1126
+        assert_eq!(counts.registers, 11); // 6 8-bit registers, 2 8-bit latches (ALU and PC), and a couple of 1-bit latches for carries and the zr condition
     }
 
     #[test]
@@ -1115,8 +1092,8 @@ mod test {
     fn computer_optimal() {
         let chip = flatten(Computer::chip());
         let counts = count_computational(&chip.components);
-        assert_eq!(counts.nands, 0);  // Compare to 1126
-        assert_eq!(counts.registers, 3);
+        assert_eq!(counts.nands, 776);  // Compare to 1126
+        assert_eq!(counts.registers, 11);
         assert_eq!(counts.roms, 1);
         assert_eq!(counts.memory_systems, 1);
     }
