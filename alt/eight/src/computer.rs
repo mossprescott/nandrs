@@ -547,13 +547,17 @@ impl Component for CPU {
         j_lt_eq:  Or  { a: jlt_and.out.into(), b: jeq_and.out.into(), out: Output::new() },
         jump_any: Or  { a: j_lt_eq.out.into(), b: jgt_and.out.into(), out: Output::new() },
 
+        // Gate all the jump logic to bottom_half cycle. Note: this is really just (jump_any && bottom_half), but
+        // makes the jump condition calculation explicitly unused on every other cycle.
+        jump_any_gate: Mux { a0: fixed(0), a1: jump_any.out.into(), sel: bottom_half.into(), out: Output::new() },
+
         reg_a_joined: Join { lo: reg_a_lo_out.into(), hi: reg_a_hi_out.into(), out: Output16::new() },
 
         pc: PC {
             top_half: top_half.into(),
             bottom_half: bottom_half.into(),
             addr:  reg_a_joined.out.into(),
-            load:  jump_any.out.into(),
+            load:  jump_any_gate.out.into(),
             inc:   fixed(1),
             reset: this.reset.into(),
             out:   this.pc,
