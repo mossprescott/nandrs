@@ -232,13 +232,12 @@ pub struct Decode {
 }
 
 impl Component for Decode {
-    // Note: in fact, this is only using Buffer and And, which is only Combinational, but it keeps
-    // life simple if everything in this file flattens to the same type.
-    type Target = Project05Component;
+    // Note: this only using Buffer, Not, and And, which are all only Combinational
+    type Target = Project01Component;
 
     expand! { |this| {
         // TODO: buffers don't need to be named. Or declared in this way at all, maybe?
-        _15: Buffer { a: this.instr.bit(15), out: this.is_c },
+        _is_c: Buffer { a: this.instr.bit(15), out: this.is_c },
 
         _is_a: Not { a: this.instr.bit(15), out: this.is_a },
 
