@@ -171,4 +171,6 @@ fn parse_hex_constants() {
     assert_eq!(parse_statement("@0x00"), Some(Literal(0x0000)));
     assert_eq!(parse_statement("@0x0100"), Some(Literal(0x0100)));
     assert_eq!(parse_statement("@0x7ABC"), Some(Literal(0x7abc)));
+
+    assert_eq!(parse_statement("@0x8000"), None);
 }

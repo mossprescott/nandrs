@@ -100,7 +100,10 @@ pub fn parse_statement(line: &str) -> Option<Statement> {
         }
         // Hex literal: @0x...
         if let Some(hex) = rest.strip_prefix("0x").or_else(|| rest.strip_prefix("0X")) {
-            return u16::from_str_radix(hex, 16).ok().map(Statement::Literal);
+            return u16::from_str_radix(hex, 16)
+                .ok()
+                .filter(|&n| n <= 0x7fff)
+                .map(Statement::Literal);
         }
         // Decimal literal: starts with a digit, must be in 15-bit range
         if rest.chars().next().unwrap().is_ascii_digit() {
