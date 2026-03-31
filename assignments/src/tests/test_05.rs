@@ -236,9 +236,10 @@ pub fn computer_max_behavior() {
     let rom = find_rom(&state);
 
     let pgm = max_program();
-    rom.flash(pgm.clone());
+    let max_cycles = pgm.len() as u64;
+    rom.flash(pgm);
 
-    test_computer_max_behavior(state, pgm.len() as u64);
+    test_computer_max_behavior(state, max_cycles);
 }
 
 /// Run the faster, "flattened for simulation" graph.
@@ -258,9 +259,10 @@ pub fn computer_max_behavior_fast() {
     let rom = find_rom(&state);
 
     let pgm = max_program();
-    rom.flash(pgm.clone());
+    let max_cycles = pgm.len() as u64;
+    rom.flash(pgm);
 
-    test_computer_max_behavior(state, pgm.len() as u64);
+    test_computer_max_behavior(state, max_cycles);
 }
 
 /// Run the simulation in the presence of "max_program" (assumed to be in ROM already) and verify

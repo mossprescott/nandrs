@@ -1100,9 +1100,11 @@ mod test {
         let chip = flatten(Computer::chip());
         let state = simulate::<_, N16, N16>(&chip, memory_system());
 
-        find_rom(&state).flash(max_program());
+        let pgm = max_program();
+        let max_cycles = pgm.len() as u64 * 2;
+        find_rom(&state).flash(pgm);
 
-        test_05::test_computer_max_behavior(state, 100);
+        test_05::test_computer_max_behavior(state, max_cycles);
     }
 
     #[test]
