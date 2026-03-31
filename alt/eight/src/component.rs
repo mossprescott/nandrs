@@ -22,7 +22,12 @@ pub struct Register8 {
 
 impl From<Register8> for WiredRegister {
     fn from(r: Register8) -> Self {
-        Register { data_in: r.data_in, write: r.write, data_out: r.data_out }.into()
+        Register {
+            data_in: r.data_in,
+            write: r.write,
+            data_out: r.data_out,
+        }
+        .into()
     }
 }
 
@@ -58,18 +63,28 @@ impl From<Latch1> for WiredRegister {
 pub struct EightDecode(pub Decode);
 
 impl Reflect for EightDecode {
-    fn name(&self) -> String { self.0.name() }
-    fn reflect(&self) -> Interface { self.0.reflect() }
+    fn name(&self) -> String {
+        self.0.name()
+    }
+    fn reflect(&self) -> Interface {
+        self.0.reflect()
+    }
 }
 impl Chip for EightDecode {
-    fn chip() -> Self { EightDecode(Decode::chip()) }
+    fn chip() -> Self {
+        EightDecode(Decode::chip())
+    }
 }
 impl std::ops::Deref for EightDecode {
     type Target = Decode;
-    fn deref(&self) -> &Decode { &self.0 }
+    fn deref(&self) -> &Decode {
+        &self.0
+    }
 }
 impl std::ops::DerefMut for EightDecode {
-    fn deref_mut(&mut self) -> &mut Decode { &mut self.0 }
+    fn deref_mut(&mut self) -> &mut Decode {
+        &mut self.0
+    }
 }
 
 /// Local newtype for ROM16, so `From<EightROM> for EightComponent` is coherent.
@@ -77,18 +92,28 @@ impl std::ops::DerefMut for EightDecode {
 pub struct EightROM(pub ROM16);
 
 impl Reflect for EightROM {
-    fn name(&self) -> String { self.0.name() }
-    fn reflect(&self) -> Interface { self.0.reflect() }
+    fn name(&self) -> String {
+        self.0.name()
+    }
+    fn reflect(&self) -> Interface {
+        self.0.reflect()
+    }
 }
 impl Chip for EightROM {
-    fn chip() -> Self { EightROM(ROM16::chip(0)) }
+    fn chip() -> Self {
+        EightROM(ROM16::chip(0))
+    }
 }
 impl std::ops::Deref for EightROM {
     type Target = ROM16;
-    fn deref(&self) -> &ROM16 { &self.0 }
+    fn deref(&self) -> &ROM16 {
+        &self.0
+    }
 }
 impl std::ops::DerefMut for EightROM {
-    fn deref_mut(&mut self) -> &mut ROM16 { &mut self.0 }
+    fn deref_mut(&mut self) -> &mut ROM16 {
+        &mut self.0
+    }
 }
 
 /// Local newtype for MemorySystem16, so `From<EightMemSys> for EightComponent` is coherent.
@@ -96,16 +121,26 @@ impl std::ops::DerefMut for EightROM {
 pub struct EightMemSys(pub MemorySystem16);
 
 impl Reflect for EightMemSys {
-    fn name(&self) -> String { self.0.name() }
-    fn reflect(&self) -> Interface { self.0.reflect() }
+    fn name(&self) -> String {
+        self.0.name()
+    }
+    fn reflect(&self) -> Interface {
+        self.0.reflect()
+    }
 }
 impl Chip for EightMemSys {
-    fn chip() -> Self { EightMemSys(MemorySystem16::chip()) }
+    fn chip() -> Self {
+        EightMemSys(MemorySystem16::chip())
+    }
 }
 impl std::ops::Deref for EightMemSys {
     type Target = MemorySystem16;
-    fn deref(&self) -> &MemorySystem16 { &self.0 }
+    fn deref(&self) -> &MemorySystem16 {
+        &self.0
+    }
 }
 impl std::ops::DerefMut for EightMemSys {
-    fn deref_mut(&mut self) -> &mut MemorySystem16 { &mut self.0 }
+    fn deref_mut(&mut self) -> &mut MemorySystem16 {
+        &mut self.0
+    }
 }
