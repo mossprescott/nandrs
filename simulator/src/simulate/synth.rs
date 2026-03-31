@@ -532,12 +532,16 @@ where
         let id = &WireID::from(b);
         if let Some((offset, src, _)) = renamed.get(id) {
             wiring::BitRef {
-                id: wire_indexes[src],
+                id: *wire_indexes.get(src).unwrap_or_else(|| {
+                    panic!("ref_for: renamed wire source not in wire_indexes (width={}, offset={})", b.width, b.offset)
+                }),
                 offset: *offset as u8,
             }
         } else {
             wiring::BitRef {
-                id: wire_indexes[id],
+                id: *wire_indexes.get(id).unwrap_or_else(|| {
+                    panic!("ref_for: wire not in wire_indexes (width={}, offset={})", b.width, b.offset)
+                }),
                 offset: b.offset as u8,
             }
         }
