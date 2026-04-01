@@ -73,7 +73,8 @@ fn simulate_loud(chip: &IC<Computational16>, mmap: MemoryMap) -> ChipState<N16, 
 }
 
 fn instr(stmt: &str) -> u16 {
-    parse_statement(stmt).unwrap().raw().unwrap()
+    // FIXME: if you're gonna panic, at least show the offending instruction
+    parse_statement(stmt).unwrap().unwrap().raw().unwrap()
 }
 
 #[test]
