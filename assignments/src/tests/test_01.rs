@@ -1,7 +1,7 @@
 use crate::project_01::{And, And16, Dmux, Mux, Mux16, Nand, Not, Not16, Or, Xor, flatten};
 use simulator::Chip as _;
-use simulator::component::{Combinational, count_combinational};
-use simulator::eval::eval;
+use simulator::component::{Combinational, CombinationalT, count_combinational};
+use simulator::eval::{eval, eval_t};
 use simulator::nat::{N1, N16};
 use simulator::word::Word;
 use simulator::{Component, IC, Input1, Output, Reflect, print_graph};
@@ -11,14 +11,16 @@ fn eval1<'a>(
     chip: &IC<Combinational>,
     inputs: impl IntoIterator<Item = (&'a str, Word<N1>)>,
 ) -> HashMap<String, Word<N1>> {
-    eval(chip, inputs)
+    let chip: IC<CombinationalT> = chip.map(Into::into);
+    eval_t(&chip, inputs)
 }
 
 fn eval16<'a>(
     chip: &IC<Combinational>,
     inputs: impl IntoIterator<Item = (&'a str, Word<N16>)>,
 ) -> HashMap<String, Word<N16>> {
-    eval(chip, inputs)
+    let chip: IC<CombinationalT> = chip.map(Into::into);
+    eval_t(&chip, inputs)
 }
 
 #[test]

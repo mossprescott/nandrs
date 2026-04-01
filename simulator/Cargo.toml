@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 simulator-derive = { path = "../simulator-derive" }
+frunk = "0.4"

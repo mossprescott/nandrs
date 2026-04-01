@@ -1,5 +1,7 @@
 //! Combinational primitives: `Nand` and `Buffer`, plus the `Combinational` enum that wraps them.
 
+use frunk::Coproduct;
+
 use crate::declare::BusRef;
 use crate::{Chip, Component, IC, Input1, Interface, Output, Reflect};
 
@@ -34,7 +36,7 @@ impl Component for Buffer {
 /// Type of components that participate in "combinational" circuits:
 /// - most importantly `Nand`
 /// - `Buffer` for pass-through connections
-#[derive(Reflect)]
+#[derive(Clone, Reflect)]
 pub enum Combinational {
     Nand(Nand),
     Buffer(Buffer),
@@ -48,6 +50,23 @@ impl From<Nand> for Combinational {
 impl From<Buffer> for Combinational {
     fn from(c: Buffer) -> Self {
         Combinational::Buffer(c)
+    }
+}
+
+/// Coproduct equivalent of `Combinational`; the eventual replacement.
+///
+/// Note: this explicit enumeration of types is what you use when you wnant to *consume*
+/// a component of one of these types; you know exctly what types you know how to deal with
+/// and need it to be one of them. Normally when you're producing a component, you want to
+/// use a type constraint that just says which types need to be allowed.
+pub type CombinationalT = frunk::Coprod!(Nand, Buffer);
+
+impl From<Combinational> for CombinationalT {
+    fn from(c: Combinational) -> Self {
+        match c {
+            Combinational::Nand(n) => Coproduct::inject(n),
+            Combinational::Buffer(b) => Coproduct::inject(b),
+        }
     }
 }
 

@@ -345,11 +345,14 @@ pub struct IC<C> {
 }
 
 impl<C> IC<C> {
-    pub fn map<D>(self, f: impl FnMut(C) -> D) -> IC<D> {
+    pub fn map<D>(&self, f: impl FnMut(C) -> D) -> IC<D>
+    where
+        C: Clone,
+    {
         IC {
-            name: self.name,
-            intf: self.intf,
-            components: self.components.into_iter().map(f).collect(),
+            name: self.name.clone(),
+            intf: self.intf.clone(),
+            components: self.components.iter().cloned().map(f).collect(),
         }
     }
 }
@@ -361,6 +364,31 @@ impl<C> Reflect for IC<C> {
 
     fn name(&self) -> String {
         self.name.clone()
+    }
+}
+
+/// Blanket `Reflect` for frunk `Coproduct`/`CNil`: delegates to whichever variant is active.
+impl Reflect for frunk::coproduct::CNil {
+    fn reflect(&self) -> Interface {
+        unreachable!()
+    }
+    fn name(&self) -> String {
+        unreachable!()
+    }
+}
+
+impl<Head: Reflect, Tail: Reflect> Reflect for frunk::Coproduct<Head, Tail> {
+    fn reflect(&self) -> Interface {
+        match self {
+            frunk::Coproduct::Inl(h) => h.reflect(),
+            frunk::Coproduct::Inr(t) => t.reflect(),
+        }
+    }
+    fn name(&self) -> String {
+        match self {
+            frunk::Coproduct::Inl(h) => h.name(),
+            frunk::Coproduct::Inr(t) => t.name(),
+        }
     }
 }
 
