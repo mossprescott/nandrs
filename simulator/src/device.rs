@@ -174,7 +174,10 @@ impl<A: Nat + Storable, D: Nat + Storable> MemoryDevice<A, D> for RAM<A, D> {
 
     fn write(&mut self, word: Word<D>) -> Result<(), Error> {
         if DEBUG_MEMORY {
-            println!("RAM write({}) @ addr={}; extent: {}", word, self.addr, self.size);
+            println!(
+                "RAM write({}) @ addr={}; extent: {}",
+                word, self.addr, self.size
+            );
         }
         if self.valid {
             self.data[self.addr.unsigned() as usize] = word;
