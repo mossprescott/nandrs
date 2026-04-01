@@ -506,10 +506,12 @@ impl Component for CPU {
             out: Output8::new(),
         },
 
+        carry_in: And { a: carry_latch_out.into(), b: bottom_half.into(), out: Output::new() },
+
         alu: ALU {
             x:   x_src.out.into(),
             y:   y_src.out.into(),
-            carry_in: carry_latch_out.into(),
+            carry_in: carry_in.out.into(),
             zx:  decode.zx.into(), nx: decode.nx.into(),
             zy:  decode.zy.into(), ny: decode.ny.into(),
             f:   decode.f.into(),  no: decode.no.into(),
@@ -572,7 +574,6 @@ impl Component for CPU {
         zr_latch: Latch1 { data_in: alu.zr.into(), data_out: zr_latch_out },
         carry_latch: Latch1 { data_in: alu.carry_out.into(), data_out: carry_latch_out },
 
-        // FIXME: gated here, but not above?
         reg_a_lo: Register8 { data_in: a_data_lo.out.into(), write: load_a.out.into(), data_out: reg_a_lo_out },
         reg_a_hi: Register8 { data_in: a_data_hi.out.into(), write: load_a.out.into(), data_out: reg_a_hi_out },
 
