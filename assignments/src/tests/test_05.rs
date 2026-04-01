@@ -86,7 +86,7 @@ fn decode_truth_table() {
 
     let chip = flatten(chip);
 
-    let no_ram = MemoryMap::new(vec![]);
+    let no_ram = MemoryMap::empty();
     let mut state = simulate_loud(&chip, no_ram);
 
     state.set("instr", instr("@1234").into());
@@ -107,7 +107,7 @@ fn decode_strict_truth_table() {
 
     let chip = flatten(chip);
 
-    let no_ram = MemoryMap::new(vec![]);
+    let no_ram = MemoryMap::empty();
     let mut state = simulate_loud(&chip, no_ram);
 
     // Every possible bit set:
@@ -141,7 +141,7 @@ fn cpu_behavior() {
 
     let chip = flatten(chip);
 
-    let no_ram = MemoryMap::new(vec![]);
+    let no_ram = MemoryMap::empty();
     let mut state = simulate_loud(&chip, no_ram);
 
     // Load constant 1234 into A

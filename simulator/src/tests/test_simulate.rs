@@ -11,7 +11,7 @@ fn register_behavior() {
         intf: reg.reflect(),
         components: vec![reg.into()],
     };
-    let mut state = simulate::<_, N16, N16>(&chip, MemoryMap::new(vec![]));
+    let mut state = simulate::<_, N16, N16>(&chip, MemoryMap::empty());
 
     assert_eq!(state.get("data_out"), 0u16.into());
 
@@ -43,7 +43,7 @@ fn ram_behavior() {
         intf: ram.reflect(),
         components: vec![Computational16::RAM(ram)],
     };
-    let mut state = simulate(&chip, MemoryMap::new(vec![]));
+    let mut state = simulate(&chip, MemoryMap::empty());
 
     assert_eq!(state.get("data_out"), 0u16.into());
 
@@ -93,7 +93,7 @@ fn serial_behavior() {
         intf: serial.reflect(),
         components: vec![Computational16::Serial(serial)],
     };
-    let mut state = simulate(&chip, MemoryMap::new(vec![]));
+    let mut state = simulate(&chip, MemoryMap::empty());
 
     let handle = state
         .bus_residents()

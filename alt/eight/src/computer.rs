@@ -1001,7 +1001,7 @@ mod test {
 
         let chip = flatten(chip);
 
-        let no_ram = MemoryMap::new(vec![]);
+        let no_ram = MemoryMap::empty();
         let mut state = simulate::<_, N16, N16>(&chip, no_ram);
 
         let tick = |state: &mut simulator::simulate::ChipState<N16, N16>| {

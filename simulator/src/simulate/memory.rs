@@ -28,7 +28,7 @@ pub struct MemoryMap {
 }
 
 impl MemoryMap {
-    pub fn new(regions: Vec<RegionMap>) -> Self {
-        MemoryMap { regions }
+    pub fn empty() -> Self {
+        MemoryMap { regions: vec![] }
     }
 }
