@@ -1137,6 +1137,6 @@ mod test {
         println!("{wiring}");
 
         let ops = wiring.op_counts();
-        assert_eq!(ops.shifts, 8);
+        assert_eq!(ops.shifts, 8, "2 half-words get moved in and out of address and data buses 4 times, empirically");
     }
 }
