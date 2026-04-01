@@ -1,4 +1,4 @@
-use crate::project_01::{And, And16, Dmux, Mux, Mux16, Nand, Not, Not16, Or, Xor, flatten};
+use crate::project_01::{And, And16, Dmux, Mux, Mux16, Nand, Not, Not16, Or, Xor, flatten, flatten_t};
 use simulator::Chip as _;
 use simulator::component::{Combinational, CombinationalT, count_combinational};
 use simulator::eval::{eval, eval_t};
@@ -47,29 +47,28 @@ fn nand_reflect() {
 
 #[test]
 fn nand_truth_table() {
-    let chip = flatten(Nand::chip());
+    let chip = flatten_t(Nand::chip());
     assert_eq!(
-        eval1(&chip, [("a", false.into()), ("b", false.into())])["out"].unsigned(),
+        eval1_t(&chip, [("a", false.into()), ("b", false.into())])["out"].unsigned(),
         1
     );
     assert_eq!(
-        eval1(&chip, [("a", false.into()), ("b", true.into())])["out"].unsigned(),
+        eval1_t(&chip, [("a", false.into()), ("b", true.into())])["out"].unsigned(),
         1
     );
     assert_eq!(
-        eval1(&chip, [("a", true.into()), ("b", false.into())])["out"].unsigned(),
+        eval1_t(&chip, [("a", true.into()), ("b", false.into())])["out"].unsigned(),
         1
     );
     assert_eq!(
-        eval1(&chip, [("a", true.into()), ("b", true.into())])["out"].unsigned(),
+        eval1_t(&chip, [("a", true.into()), ("b", true.into())])["out"].unsigned(),
         0
     );
 }
 
 #[test]
 fn not_truth_table() {
-    // let chip = flatten(Not::chip());
-    let chip = Not::chip().expand_t();
+    let chip = flatten_t(Not::chip());
     assert_eq!(eval1_t(&chip, [("a", false.into())])["out"].unsigned(), 1);
     assert_eq!(eval1_t(&chip, [("a", true.into())])["out"].unsigned(), 0);
 }
@@ -82,21 +81,21 @@ fn not_optimal() {
 
 #[test]
 fn and_truth_table() {
-    let chip = flatten(And::chip());
+    let chip = flatten_t(And::chip());
     assert_eq!(
-        eval1(&chip, [("a", false.into()), ("b", false.into())])["out"].unsigned(),
+        eval1_t(&chip, [("a", false.into()), ("b", false.into())])["out"].unsigned(),
         0
     );
     assert_eq!(
-        eval1(&chip, [("a", false.into()), ("b", true.into())])["out"].unsigned(),
+        eval1_t(&chip, [("a", false.into()), ("b", true.into())])["out"].unsigned(),
         0
     );
     assert_eq!(
-        eval1(&chip, [("a", true.into()), ("b", false.into())])["out"].unsigned(),
+        eval1_t(&chip, [("a", true.into()), ("b", false.into())])["out"].unsigned(),
         0
     );
     assert_eq!(
-        eval1(&chip, [("a", true.into()), ("b", true.into())])["out"].unsigned(),
+        eval1_t(&chip, [("a", true.into()), ("b", true.into())])["out"].unsigned(),
         1
     );
 }

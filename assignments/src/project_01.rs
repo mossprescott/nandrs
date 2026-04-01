@@ -1,9 +1,11 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
+use frunk::Coprod;
 use frunk::coproduct::CoprodInjector;
 use simulator::Chip as _;
 use simulator::Reflect as _;
 use simulator::component::Combinational;
+use simulator::component::CombinationalT;
 use simulator::declare::Input;
 use simulator::declare::{BusRef, Interface};
 use simulator::nat::{N1, N16};
@@ -31,6 +33,8 @@ pub enum Project01Component {
     Mux16(Mux16),
 }
 
+type Project01ComponentT = Coprod!(Nand, Buffer, Not, And);  // TODO: remaining components
+
 /// Recursively expand() until only primitives are left.
 pub fn flatten<C: Reflect + Into<Project01Component>>(chip: C) -> IC<Combinational> {
     fn go(comp: Project01Component) -> Vec<Combinational> {
@@ -47,6 +51,28 @@ pub fn flatten<C: Reflect + Into<Project01Component>>(chip: C) -> IC<Combination
         name: format!("{} (flat)", chip.name()),
         intf: chip.reflect(),
         components: go(chip.into()),
+    }
+}
+
+pub fn flatten_t<C, Idx>(chip: C) -> IC<CombinationalT>
+where
+    C: Reflect,
+    Project01ComponentT: CoprodInjector<C, Idx>,
+{
+    use frunk::{Coproduct, hlist};
+
+    fn go(comp: Project01ComponentT) -> Vec<CombinationalT> {
+        comp.fold(hlist![
+            |nand: Nand|     vec![Coproduct::inject(nand)],
+            |buffer: Buffer| vec![Coproduct::inject(buffer)],
+            |not: Not|       not.expand_t::<CombinationalT, _>().components,
+            |and: And|       and.expand_t::<Project01ComponentT, _, _>().components.into_iter().flat_map(go).collect(),
+        ])
+    }
+    IC {
+        name: format!("{} (flat)", chip.name()),
+        intf: chip.reflect(),
+        components: go(Project01ComponentT::inject(chip)),
     }
 }
 
@@ -105,6 +131,24 @@ impl Component for And {
             out: this.out,
         },
     }}
+}
+impl And {
+    pub fn expand_t<C, NandIdx, NotIdx>(&self) -> IC<C>
+    where
+        C: CoprodInjector<Nand, NandIdx>,
+        C: CoprodInjector<Not, NotIdx>,
+    {
+        let nand = Nand { a: self.a, b: self.b, out: Output::new() };
+        let not = Not { a: nand.out.into(), out: self.out };
+        IC {
+            name: self.name(),
+            intf: self.reflect(),
+            components: vec![
+                C::inject(nand),
+                C::inject(not),
+            ],
+        }
+    }
 }
 
 /// True when at least one input is true.
