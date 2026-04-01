@@ -544,10 +544,11 @@ impl Component for CPU {
         // === Jump logic ===
         not_ng:   Not { a: alu.ng.into(), out: Output::new() },
         not_zr:   Nand { a: zr_latch_out.into(), b: alu.zr.into(), out: Output::new() },
+        zr_full:  Not { a: not_zr.out.into(), out: Output::new() },
         is_pos:   And { a: not_ng.out.into(), b: not_zr.out.into(), out: Output::new() },
         // Jump signals already gated with is_c in Decode.
         jlt_and:  And { a: decode.jmp_lt.into(), b: alu.ng.into(), out: Output::new() },
-        jeq_and:  And { a: decode.jmp_eq.into(), b: alu.zr.into(), out: Output::new() },
+        jeq_and:  And { a: decode.jmp_eq.into(), b: zr_full.out.into(), out: Output::new() },
         jgt_and:  And { a: decode.jmp_gt.into(), b: is_pos.out.into(), out: Output::new() },
         j_lt_eq:  Or  { a: jlt_and.out.into(), b: jeq_and.out.into(), out: Output::new() },
         jump_any: Or  { a: j_lt_eq.out.into(), b: jgt_and.out.into(), out: Output::new() },
@@ -1096,7 +1097,7 @@ mod test {
     fn cpu_optimal() {
         let chip = flatten(CPU::chip());
         let counts = count_computational(&chip.components);
-        assert_eq!(counts.nands, 844); // Compare to 1126
+        assert_eq!(counts.nands, 845); // Compare to 1126
         assert_eq!(counts.registers, 11); // 6 8-bit registers, 2 8-bit latches (ALU and PC), and a couple of 1-bit latches for carries and the zr condition
     }
 
@@ -1119,7 +1120,7 @@ mod test {
     fn computer_optimal() {
         let chip = flatten(Computer::chip());
         let counts = count_computational(&chip.components);
-        assert_eq!(counts.nands, 844); // Compare to 1126
+        assert_eq!(counts.nands, 845); // Compare to 1126
         assert_eq!(counts.registers, 11);
         assert_eq!(counts.roms, 1);
         assert_eq!(counts.memory_systems, 1);
