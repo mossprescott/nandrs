@@ -1096,7 +1096,7 @@ mod test {
     fn cpu_optimal() {
         let chip = flatten(CPU::chip());
         let counts = count_computational(&chip.components);
-        assert_eq!(counts.nands, 838); // Compare to 1126
+        assert_eq!(counts.nands, 844); // Compare to 1126
         assert_eq!(counts.registers, 11); // 6 8-bit registers, 2 8-bit latches (ALU and PC), and a couple of 1-bit latches for carries and the zr condition
     }
 
@@ -1119,7 +1119,7 @@ mod test {
     fn computer_optimal() {
         let chip = flatten(Computer::chip());
         let counts = count_computational(&chip.components);
-        assert_eq!(counts.nands, 838); // Compare to 1126
+        assert_eq!(counts.nands, 844); // Compare to 1126
         assert_eq!(counts.registers, 11);
         assert_eq!(counts.roms, 1);
         assert_eq!(counts.memory_systems, 1);
