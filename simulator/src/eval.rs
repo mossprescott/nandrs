@@ -47,8 +47,11 @@ where
         }
     }
 
-    // Evaluate each component in order.
-    for comp in &chip.components {
+    // Topological sort: evaluate dependencies before dependents.
+    let order = topo_sort(&chip.components);
+
+    for &idx in &order {
+        let comp = &chip.components[idx];
         match comp {
             Combinational::Nand(nand) => {
                 let intf = nand.reflect();
@@ -75,6 +78,45 @@ where
             )
         })
         .collect()
+}
+
+/// Topological sort of components by wire dependencies.
+fn topo_sort(components: &[Combinational]) -> Vec<usize> {
+    // Map output bus id → component index.
+    let mut producers: HashMap<usize, usize> = HashMap::new();
+    for (i, comp) in components.iter().enumerate() {
+        for busref in comp.reflect().outputs.values() {
+            producers.insert(busref.id.0, i);
+        }
+    }
+
+    let n = components.len();
+    let mut visited = vec![false; n];
+    let mut sorted = Vec::with_capacity(n);
+
+    fn visit(
+        i: usize,
+        components: &[Combinational],
+        producers: &HashMap<usize, usize>,
+        visited: &mut [bool],
+        sorted: &mut Vec<usize>,
+    ) {
+        if visited[i] {
+            return;
+        }
+        visited[i] = true;
+        for busref in components[i].reflect().inputs.values() {
+            if let Some(&dep) = producers.get(&busref.id.0) {
+                visit(dep, components, producers, visited, sorted);
+            }
+        }
+        sorted.push(i);
+    }
+
+    for i in 0..n {
+        visit(i, components, &producers, &mut visited, &mut sorted);
+    }
+    sorted
 }
 
 fn wire_id(busref: &BusRef) -> usize {

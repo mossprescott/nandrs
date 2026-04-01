@@ -29,6 +29,10 @@ pub struct Args {
     /// Double the window size
     #[arg(long = "2x")]
     pub scale_2x: bool,
+
+    /// Exit immediately when sys.halt is reached instead of keeping the window open
+    #[arg(long)]
+    pub exit_on_halt: bool,
 }
 
 impl Args {

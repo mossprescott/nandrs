@@ -1,9 +1,11 @@
+use std::collections::HashMap;
+
 use crate::component::{Computational, ComputationalCounts};
 use crate::declare::BusRef;
-use crate::nat::{IsGreater, N1, Nat};
+use crate::nat::Nat;
 /// Components that aren't strictly primitive (or don't need to be), but which are provided as
 /// "native" in that the simulator implements them directly for performance reasons.
-use crate::{Chip, Component, IC, Input, Input1, Interface, Output, OutputBus, Reflect};
+use crate::{Chip, Input, Input1, Interface, Output, OutputBus, Reflect};
 
 /// Mux: out = if sel { a1 } else { a0 }, applied bitwise across Width bits.
 #[derive(Clone, Reflect, Chip)]
@@ -14,12 +16,42 @@ pub struct Mux<Width: Nat> {
     pub out: OutputBus<Width>,
 }
 
-/// Nothing to expand.
-impl<Width: Nat> Component for Mux<Width> {
-    type Target = Mux<Width>;
+/// Runtime-width mux, produced by converting a `Mux<Width>`.  Used in `Simulational`.
+#[derive(Clone)]
+pub struct WiredMux {
+    pub width: usize,
+    pub a0: BusRef,
+    pub a1: BusRef,
+    pub sel: BusRef,
+    pub out: BusRef,
+}
 
-    fn expand(&self) -> Option<IC<Mux<Width>>> {
-        None
+impl Reflect for WiredMux {
+    fn name(&self) -> String {
+        "Mux".to_string()
+    }
+
+    fn reflect(&self) -> Interface {
+        Interface {
+            inputs: HashMap::from([
+                ("a0".to_string(), self.a0),
+                ("a1".to_string(), self.a1),
+                ("sel".to_string(), self.sel),
+            ]),
+            outputs: HashMap::from([("out".to_string(), self.out)]),
+        }
+    }
+}
+
+impl<Width: Nat> From<Mux<Width>> for WiredMux {
+    fn from(c: Mux<Width>) -> Self {
+        WiredMux {
+            width: Width::as_int(),
+            a0: BusRef::from_input(c.a0),
+            a1: BusRef::from_input(c.a1),
+            sel: BusRef::from_input(c.sel),
+            out: BusRef::from_output(c.out),
+        }
     }
 }
 
@@ -46,22 +78,12 @@ pub struct Adder {
     pub carry: Output,
 }
 
-/// Nothing to expand.
-impl Component for Adder {
-    type Target = Adder;
-
-    fn expand(&self) -> Option<IC<Adder>> {
-        None
-    }
-}
-
 /// The type of components that participate in computers for simulation purposes: this includes the
 /// native components here in addition to the actual primitives of the Computational type.
 #[derive(Clone, Reflect)]
 pub enum Simulational<A: Nat, D: Nat> {
     Primitive(Computational<A, D>),
-    Mux(Mux<D>),
-    Mux1(Mux<N1>),
+    Mux(WiredMux),
     Adder(Adder),
 }
 
@@ -71,8 +93,8 @@ impl<A: Nat, D: Nat> From<Computational<A, D>> for Simulational<A, D> {
     }
 }
 
-impl<A: Nat, D: Nat> From<crate::component::Sequential<D>> for Simulational<A, D> {
-    fn from(s: crate::component::Sequential<D>) -> Self {
+impl<A: Nat, D: Nat> From<crate::component::Sequential> for Simulational<A, D> {
+    fn from(s: crate::component::Sequential) -> Self {
         use crate::component::Sequential;
         Simulational::Primitive(match s {
             Sequential::Nand(n) => Computational::Nand(n),
@@ -82,18 +104,15 @@ impl<A: Nat, D: Nat> From<crate::component::Sequential<D>> for Simulational<A, D
     }
 }
 
-impl<A: Nat, D: Nat> From<Mux<D>> for Simulational<A, D>
-where
-    D: IsGreater<N1>,
-{
-    fn from(c: Mux<D>) -> Self {
+impl<A: Nat, D: Nat> From<WiredMux> for Simulational<A, D> {
+    fn from(c: WiredMux) -> Self {
         Simulational::Mux(c)
     }
 }
 
-impl<A: Nat, D: Nat> From<Mux<N1>> for Simulational<A, D> {
-    fn from(c: Mux<N1>) -> Self {
-        Simulational::Mux1(c)
+impl<A: Nat, D: Nat, Width: Nat> From<Mux<Width>> for Simulational<A, D> {
+    fn from(c: Mux<Width>) -> Self {
+        Simulational::Mux(c.into())
     }
 }
 
@@ -106,7 +125,6 @@ impl<A: Nat, D: Nat> From<Adder> for Simulational<A, D> {
 pub struct SimulationalCounts {
     pub primitive: ComputationalCounts,
     pub muxes: usize,
-    pub mux1s: usize,
     pub adders: usize,
 }
 
@@ -122,7 +140,6 @@ pub fn count_simulational<A: Nat, D: Nat>(components: &[Simulational<A, D>]) -> 
             memory_systems: 0,
         },
         muxes: 0,
-        mux1s: 0,
         adders: 0,
     };
     for comp in components {
@@ -137,7 +154,6 @@ pub fn count_simulational<A: Nat, D: Nat>(components: &[Simulational<A, D>]) -> 
                 Computational::MemorySystem(_) => counts.primitive.memory_systems += 1,
             },
             Simulational::Mux(_) => counts.muxes += 1,
-            Simulational::Mux1(_) => counts.mux1s += 1,
             Simulational::Adder(_) => counts.adders += 1,
         }
     }

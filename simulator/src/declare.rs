@@ -452,6 +452,13 @@ macro_rules! expand {
             __fold_tmp
         };
     };
+    (@lets $components:ident; $var:ident : $W:ident($T:ident { $($fields:tt)* }), $($rest:tt)*) => {
+        let $var = $W($T { $($fields)* });
+        $crate::expand!(@lets $components; $($rest)*);
+    };
+    (@lets $components:ident; $var:ident : $W:ident($T:ident { $($fields:tt)* })) => {
+        let $var = $W($T { $($fields)* });
+    };
     (@lets $components:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
         let $var = $T { $($fields)* };
         $crate::expand!(@lets $components; $($rest)*);
@@ -479,6 +486,13 @@ macro_rules! expand {
     (@pushes $components:ident; $var:ident : ($start:literal .. $end:literal) . fold ($init:expr, | $acc:ident, $i:ident | { $($inner:tt)* })) => {
         $components.extend($var);
     };
+    (@pushes $components:ident; $var:ident : $W:ident($T:ident { $($fields:tt)* }), $($rest:tt)*) => {
+        $components.push($var.into());
+        $crate::expand!(@pushes $components; $($rest)*);
+    };
+    (@pushes $components:ident; $var:ident : $W:ident($T:ident { $($fields:tt)* })) => {
+        $components.push($var.into());
+    };
     (@pushes $components:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
         $components.push($var.into());
         $crate::expand!(@pushes $components; $($rest)*);
@@ -487,12 +501,21 @@ macro_rules! expand {
         $components.push($var.into());
     };
 
-    // --- For loop body: construct and push in one step (loop-scoped) ---
+    // --- For loop body: construct, clone+push, repeat (clone keeps binding alive for later entries) ---
 
     (@for_body $components:ident;) => {};
+    (@for_body $components:ident; $var:ident : $W:ident($T:ident { $($fields:tt)* }), $($rest:tt)*) => {
+        let $var = $W($T { $($fields)* });
+        $components.push($var.clone().into());
+        $crate::expand!(@for_body $components; $($rest)*);
+    };
+    (@for_body $components:ident; $var:ident : $W:ident($T:ident { $($fields:tt)* })) => {
+        let $var = $W($T { $($fields)* });
+        $components.push($var.into());
+    };
     (@for_body $components:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
         let $var = $T { $($fields)* };
-        $components.push($var.into());
+        $components.push($var.clone().into());
         $crate::expand!(@for_body $components; $($rest)*);
     };
     (@for_body $components:ident; $var:ident : $T:ident { $($fields:tt)* }) => {

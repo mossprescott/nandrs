@@ -14,7 +14,7 @@ fn pc_behavior() {
 
     let chip = flatten(chip);
 
-    let no_ram = MemoryMap::new(vec![]);
+    let no_ram = MemoryMap::empty();
     let mut state = simulate::<_, N16, N16>(&chip, no_ram);
 
     assert_eq!(state.get("out"), 0u16.into());

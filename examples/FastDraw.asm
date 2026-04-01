@@ -26,8 +26,9 @@
   @loop
   D;JGT
 
-(halt)
-  @halt
+// Note: the harness treats this symbol as special
+(sys.halt)
+  @sys.halt
   0;JMP
 
 

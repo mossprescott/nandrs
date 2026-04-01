@@ -11,8 +11,11 @@ pub struct Nand {
     pub out: Output,
 }
 
-/// "Gate" that just connects its input to its output without modifying it. For our purposes,
-/// this is useful for connecting an input directly to an output in an IC.
+/// "Gate" that just connects its input to its output without modifying it. For our purposes, this
+/// is useful for connecting an input directly to an output in an IC.
+///
+/// Typically costs nothing at simulation time, and not counted as a gate when estimating chip
+/// sizes.
 #[derive(Clone, Reflect)]
 pub struct Buffer {
     pub a: Input1,

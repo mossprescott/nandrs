@@ -54,6 +54,7 @@ pub(super) enum ComponentWiring {
     ParallelNand(ParallelNandWiring),
     RippleAdder(RippleAdderWiring),
     ManyWayAnd(ManyWayAndWiring),
+    ShiftWiring(ShiftWiring),
 }
 
 //
@@ -195,11 +196,23 @@ pub(super) struct ManyWayAndWiring {
     pub(super) mask: u64,
 }
 
+/// Copy multiple bits at once, with shift and mask.
+#[derive(Clone)]
+pub(super) struct ShiftWiring {
+    pub(super) a: WireIndex,
+    pub(super) out: WireIndex,
+
+    /// How far to shift the bits left (positive) or right (negative) before masking
+    pub(super) offset: i8,
+    /// Bits to copy after shifting
+    pub(super) mask: u64,
+}
+
 //
 // Constant values: come from `fixed()` inputs in the graph.
 //
 
-/// Used during initialization, bot evaluated each cycle.
+/// Used during initialization, not evaluated each cycle.
 pub(super) struct ConstWiring {
     pub(super) value: u64,
     pub(super) out: WireIndex,

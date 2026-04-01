@@ -419,6 +419,16 @@ fn eval_logic(ws: &mut [u64], component_wiring: &[wiring::ComponentWiring]) {
                 let val = ws[m.a.0 as usize] & m.mask;
                 write_bit(ws, m.out, val == m.mask);
             }
+            wiring::ComponentWiring::ShiftWiring(s) => {
+                let a = ws[s.a.0 as usize];
+                let val = if s.offset >= 0 {
+                    (a << s.offset) & s.mask
+                } else {
+                    (a >> (-s.offset)) & s.mask
+                };
+                let out = &mut ws[s.out.0 as usize];
+                *out = (*out & !s.mask) | val;
+            }
             wiring::ComponentWiring::Adder(add) => {
                 let a = read_bit(ws, add.a) as u64;
                 let b = read_bit(ws, add.b) as u64;

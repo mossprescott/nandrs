@@ -24,7 +24,10 @@ fn main() {
         std::process::exit(1);
     });
 
-    let program = assemble(&src);
+    let program = assemble(&src).unwrap_or_else(|(e, line)| {
+        eprintln!("assembly error on {:?}: {:?}", line, e);
+        std::process::exit(1);
+    });
     println!(
         "Loaded {} instructions from {}",
         program.instructions.len(),

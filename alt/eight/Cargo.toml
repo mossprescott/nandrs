@@ -1,0 +1,13 @@
+[package]
+name = "eight"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+assignments = { path = "../../assignments" }
+simulator = { path = "../../simulator" }
+computer = { path = "../../computer" }
+clap = { version = "4.6.0", features = ["derive"] }
+
+[dev-dependencies]
+assignments = { path = "../../assignments", features = ["test-support"] }

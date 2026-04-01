@@ -1,4 +1,4 @@
-use crate::component::{Computational16, RAM16, Register16, Sequential16, Serial16};
+use crate::component::{Computational16, RAM16, Register16, Sequential, Serial16};
 use crate::declare::{Chip as _, IC, Reflect as _};
 use crate::nat::N16;
 use crate::simulate::{BusResident, MemoryMap, simulate};
@@ -6,12 +6,12 @@ use crate::simulate::{BusResident, MemoryMap, simulate};
 #[test]
 fn register_behavior() {
     let reg = Register16::chip();
-    let chip = IC {
+    let chip: IC<Sequential> = IC {
         name: reg.name().to_string(),
         intf: reg.reflect(),
-        components: vec![Sequential16::Register(reg)],
+        components: vec![reg.into()],
     };
-    let mut state = simulate::<_, N16, N16>(&chip, MemoryMap::new(vec![]));
+    let mut state = simulate::<_, N16, N16>(&chip, MemoryMap::empty());
 
     assert_eq!(state.get("data_out"), 0u16.into());
 
@@ -43,7 +43,7 @@ fn ram_behavior() {
         intf: ram.reflect(),
         components: vec![Computational16::RAM(ram)],
     };
-    let mut state = simulate(&chip, MemoryMap::new(vec![]));
+    let mut state = simulate(&chip, MemoryMap::empty());
 
     assert_eq!(state.get("data_out"), 0u16.into());
 
@@ -93,7 +93,7 @@ fn serial_behavior() {
         intf: serial.reflect(),
         components: vec![Computational16::Serial(serial)],
     };
-    let mut state = simulate(&chip, MemoryMap::new(vec![]));
+    let mut state = simulate(&chip, MemoryMap::empty());
 
     let handle = state
         .bus_residents()

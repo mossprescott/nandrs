@@ -142,6 +142,9 @@ pub fn run(
 
                 if halt_addr == Some(pc) {
                     println!("Halted at sys.halt (cycle {})", fmt_commas(cycle));
+                    if args.exit_on_halt {
+                        return;
+                    }
                     halted = true;
                     break;
                 }

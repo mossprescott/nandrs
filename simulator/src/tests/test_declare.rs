@@ -1,6 +1,6 @@
 use crate::component::{Buffer, Combinational, Nand, Register, Sequential};
 use crate::declare::{BusRef, Interface};
-use crate::nat::{N1, N8};
+use crate::nat::N8;
 use crate::{Chip, Component, Input, Input1, Output, OutputBus, Reflect, expand, fixed};
 
 /// Really just about trivial component for testing the expand! macro.
@@ -152,7 +152,7 @@ pub struct TestFlipFlop {
 }
 
 impl Component for TestFlipFlop {
-    type Target = Sequential<N1>;
+    type Target = Sequential;
 
     expand! { |this| {
         // Declare the register's output so we can refer to it circularly

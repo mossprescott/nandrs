@@ -11,7 +11,7 @@ fn synth<C: Reflect + Clone + Into<crate::project_02::Project02Component>>(
     chip: C,
 ) -> ChipWiring<N16> {
     let flat = flatten_for_simulation(chip);
-    synthesize(&flat, MemoryMap::new(vec![]))
+    synthesize(&flat, MemoryMap::empty())
 }
 
 /// Test that the adder bit-slices in Add16 get coalesced into a single ripple-add operation.

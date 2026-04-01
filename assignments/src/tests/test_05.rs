@@ -73,7 +73,8 @@ fn simulate_loud(chip: &IC<Computational16>, mmap: MemoryMap) -> ChipState<N16, 
 }
 
 fn instr(stmt: &str) -> u16 {
-    parse_statement(stmt).unwrap().raw().unwrap()
+    // FIXME: if you're gonna panic, at least show the offending instruction
+    parse_statement(stmt).unwrap().unwrap().raw().unwrap()
 }
 
 #[test]
@@ -85,7 +86,7 @@ fn decode_truth_table() {
 
     let chip = flatten(chip);
 
-    let no_ram = MemoryMap::new(vec![]);
+    let no_ram = MemoryMap::empty();
     let mut state = simulate_loud(&chip, no_ram);
 
     state.set("instr", instr("@1234").into());
@@ -106,7 +107,7 @@ fn decode_strict_truth_table() {
 
     let chip = flatten(chip);
 
-    let no_ram = MemoryMap::new(vec![]);
+    let no_ram = MemoryMap::empty();
     let mut state = simulate_loud(&chip, no_ram);
 
     // Every possible bit set:
@@ -140,7 +141,7 @@ fn cpu_behavior() {
 
     let chip = flatten(chip);
 
-    let no_ram = MemoryMap::new(vec![]);
+    let no_ram = MemoryMap::empty();
     let mut state = simulate_loud(&chip, no_ram);
 
     // Load constant 1234 into A
@@ -236,9 +237,10 @@ pub fn computer_max_behavior() {
     let rom = find_rom(&state);
 
     let pgm = max_program();
-    rom.flash(pgm.clone());
+    let max_cycles = pgm.len() as u64;
+    rom.flash(pgm);
 
-    test_computer_max_behavior(state, pgm.len() as u64);
+    test_computer_max_behavior(state, max_cycles);
 }
 
 /// Run the faster, "flattened for simulation" graph.
@@ -258,9 +260,10 @@ pub fn computer_max_behavior_fast() {
     let rom = find_rom(&state);
 
     let pgm = max_program();
-    rom.flash(pgm.clone());
+    let max_cycles = pgm.len() as u64;
+    rom.flash(pgm);
 
-    test_computer_max_behavior(state, pgm.len() as u64);
+    test_computer_max_behavior(state, max_cycles);
 }
 
 /// Run the simulation in the presence of "max_program" (assumed to be in ROM already) and verify
@@ -417,6 +420,9 @@ fn computer_optimal() {
 }
 
 /// Component counts when flattened for simulation (with native Adder/Mux).
+///
+/// Note: this is more a test of the machinery for efficient simulation, not of the Computer
+/// implementation.
 #[test]
 fn computer_graph_for_simulation() {
     use simulator::component::native::count_simulational;
@@ -426,7 +432,6 @@ fn computer_graph_for_simulation() {
     assert_eq!(counts.primitive.registers, 3);
     assert_eq!(counts.primitive.roms, 1);
     assert_eq!(counts.primitive.memory_systems, 1);
-    assert_eq!(counts.muxes, 15);
-    assert_eq!(counts.mux1s, 1);
+    assert_eq!(counts.muxes, 16);
     assert_eq!(counts.adders, 31);
 }

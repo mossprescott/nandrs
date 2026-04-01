@@ -1,5 +1,6 @@
+//! HACK Assembly translation
+
 use crate::project_05::{KEYBOARD, SCREEN_BASE};
-/// HACK Assembly translation
 use std::collections::HashMap;
 
 #[derive(Debug, PartialEq)]
@@ -59,6 +60,20 @@ impl Statement {
     }
 }
 
+fn is_valid_symbol(s: &str) -> bool {
+    !s.is_empty()
+        && s.chars()
+            .next()
+            .map_or(false, |c| c.is_alphabetic() || c == '_')
+        && !s.chars().any(|c| c.is_whitespace())
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Error {
+    InvalidSymbolName,
+    OutOfRange,
+}
+
 /// Decode a single assembly `Statement` from one line of source text.
 ///
 /// Returns `None` for blank lines, comment-only lines, and unrecognized input.
@@ -68,53 +83,49 @@ impl Statement {
 /// - multiple destinations: "DM=0", "DA=!D"; set both destinations to the output value
 ///   (even A and M but that might be undefined depending on your CPU)
 /// - hex constants: "@0x007f"
-fn is_valid_symbol(s: &str) -> bool {
-    !s.is_empty()
-        && s.chars()
-            .next()
-            .map_or(false, |c| c.is_alphabetic() || c == '_')
-        && !s.chars().any(|c| c.is_whitespace())
-}
-
-pub fn parse_statement(line: &str) -> Option<Statement> {
+pub fn parse_statement(line: &str) -> Result<Option<Statement>, Error> {
     // Strip comments and whitespace
     let line = line.split("//").next().unwrap().trim();
     if line.is_empty() {
-        return None;
+        return Ok(None);
     }
 
     // Label: (name)
     if line.starts_with('(') && line.ends_with(')') {
         let name = &line[1..line.len() - 1];
         return if is_valid_symbol(name) {
-            Some(Statement::Label(Label(name.to_string())))
+            Ok(Some(Statement::Label(Label(name.to_string()))))
         } else {
-            None
+            Err(Error::InvalidSymbolName)
         };
     }
 
     // A-instruction: @value or @symbol
     if let Some(rest) = line.strip_prefix('@') {
         if rest.is_empty() {
-            return None;
+            return Err(Error::InvalidSymbolName);
         }
         // Hex literal: @0x...
         if let Some(hex) = rest.strip_prefix("0x").or_else(|| rest.strip_prefix("0X")) {
-            return u16::from_str_radix(hex, 16).ok().map(Statement::Literal);
+            return match u16::from_str_radix(hex, 16) {
+                Ok(n) if n <= 0x7fff => Ok(Some(Statement::Literal(n))),
+                Ok(_) => Err(Error::OutOfRange),
+                Err(_) => Err(Error::InvalidSymbolName),
+            };
         }
-        // Decimal literal: starts with a digit, must be in 15-bit range
-        if rest.chars().next().unwrap().is_ascii_digit() {
-            return rest
-                .parse::<u16>()
-                .ok()
-                .filter(|&n| n <= 0x7fff)
-                .map(Statement::Literal);
+        // Decimal literal: starts with a digit or '-', must be in 15-bit range
+        if rest.chars().next().unwrap().is_ascii_digit() || rest.starts_with('-') {
+            return match rest.parse::<i32>() {
+                Ok(n) if (0..=0x7fff).contains(&n) => Ok(Some(Statement::Literal(n as u16))),
+                Ok(_) => Err(Error::OutOfRange),
+                Err(_) => Err(Error::InvalidSymbolName),
+            };
         }
         // Symbolic address
         return if is_valid_symbol(rest) {
-            Some(Statement::Address(Label(rest.to_string())))
+            Ok(Some(Statement::Address(Label(rest.to_string()))))
         } else {
-            None
+            Err(Error::InvalidSymbolName)
         };
     }
 
@@ -152,7 +163,7 @@ pub fn parse_statement(line: &str) -> Option<Statement> {
         "JNE" => 0b101,
         "JLE" => 0b110,
         "JMP" => 0b111,
-        _ => return None,
+        _ => return Ok(None),
     };
 
     // comp: (a-bit, cccccc)
@@ -185,7 +196,7 @@ pub fn parse_statement(line: &str) -> Option<Statement> {
         "M-D" => (1, 0b000111),
         "D&M" | "M&D" => (1, 0b000000),
         "D|M" | "M|D" => (1, 0b010101),
-        _ => return None,
+        _ => return Ok(None),
     };
 
     let bits = 0b111_0_000000_000_000_u16
@@ -194,7 +205,7 @@ pub fn parse_statement(line: &str) -> Option<Statement> {
         | (dest_bits << 3)
         | jump_bits;
 
-    Some(Statement::Instruction(bits))
+    Ok(Some(Statement::Instruction(bits)))
 }
 
 pub struct Program {
@@ -203,7 +214,7 @@ pub struct Program {
 }
 
 /// Consume source text, producing a buffer of 16-bit instruction values.
-pub fn assemble(src: &str) -> Program {
+pub fn assemble(src: &str) -> Result<Program, (Error, String)> {
     // Predefined symbols
     let mut symbols: HashMap<String, u16> = HashMap::new();
     for i in 0u16..=15 {
@@ -217,7 +228,15 @@ pub fn assemble(src: &str) -> Program {
     symbols.insert("SCREEN".into(), SCREEN_BASE);
     symbols.insert("KBD".into(), KEYBOARD);
 
-    let stmts: Vec<Statement> = src.lines().filter_map(parse_statement).collect();
+    let stmts: Vec<Statement> = src
+        .lines()
+        .map(|line| {
+            parse_statement(line)
+                .map_err(|e| (e, line.to_string()))
+                .transpose()
+        })
+        .flatten()
+        .collect::<Result<Vec<_>, _>>()?;
 
     // Pass 1: assign ROM addresses to labels.
     let mut labels: HashMap<String, u16> = HashMap::new();
@@ -252,8 +271,8 @@ pub fn assemble(src: &str) -> Program {
             }
         }
     }
-    Program {
+    Ok(Program {
         instructions: out,
         symbols: labels,
-    }
+    })
 }

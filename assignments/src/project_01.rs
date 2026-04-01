@@ -208,47 +208,12 @@ pub struct Mux16 {
 impl Component for Mux16 {
     type Target = Project01Component;
 
-    /*
-     let not_sel = Not { a: sel }
-     for i in 0..16:
-       let nand0      = Nand { a: not_sel.out, b: a0[i]    }
-       let nand1      = Nand { a: sel,         b: a1[i]    }
-       outputs.out[i] = Nand { a: nand0.out,   b: nand1.out }
-    */
-    fn expand(&self) -> Option<IC<Project01Component>> {
-        let not_sel = Not {
-            a: self.sel.clone(),
-            out: Output::new(),
-        };
-        let not_sel_out: Input1 = not_sel.out.clone().into();
-
-        let mut components = vec![not_sel.into()];
-        components.extend(
-            (0..16)
-                .flat_map(|i| {
-                    let nand0 = Nand {
-                        a: not_sel_out.clone(),
-                        b: self.a0.bit(i),
-                        out: Output::new(),
-                    };
-                    let nand1 = Nand {
-                        a: self.sel.clone(),
-                        b: self.a1.bit(i),
-                        out: Output::new(),
-                    };
-                    let out = Nand {
-                        a: nand0.out.clone().into(),
-                        b: nand1.out.clone().into(),
-                        out: self.out.bit(i),
-                    };
-                    vec![nand0.into(), nand1.into(), out.into()]
-                })
-                .collect::<Vec<_>>(),
-        );
-        Some(IC {
-            name: self.name().to_string(),
-            intf: self.reflect(),
-            components,
-        })
-    }
+    expand! { |this| {
+        not_sel: Not { a: this.sel, out: Output::new() },
+        for i in 0..16 {
+            nand0: Nand { a: not_sel.out.clone().into(), b: this.a0.bit(i),           out: Output::new() },
+            nand1: Nand { a: this.sel,                   b: this.a1.bit(i),           out: Output::new() },
+            _out:  Nand { a: nand0.out.clone().into(),   b: nand1.out.clone().into(), out: this.out.bit(i) }
+        }
+    }}
 }
