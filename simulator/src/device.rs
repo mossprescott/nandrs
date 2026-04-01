@@ -4,7 +4,7 @@ use crate::word::{Storable, Word};
 /// Enable crude but sometimes helpful logging of _all_ writes; reads can't really be logged
 /// usefully because at the moment the RAM _always_ "reads" from teh current address, even if the
 /// value isn't used.
-const DEBUG_MEMORY: bool = true;
+const DEBUG_MEMORY: bool = false;
 
 pub enum Error {
     AddressOutOfRange(usize),
@@ -23,7 +23,7 @@ pub trait MemoryDevice<A: Nat + Storable, D: Nat + Storable> {
     /// Receive the address to be used for future reads and writes.
     fn set_addr(&mut self, addr: Word<A>) -> Result<(), Error>;
 
-    /// Signals a chip/bus clock cycle boundary. Dependning on the device, the most-recently
+    /// Signals a chip/bus clock cycle boundary. Depending on the device, the most-recently
     /// provided address might take effect at this moment.
     fn ticktock(&mut self);
 
@@ -152,7 +152,7 @@ impl<A: Nat + Storable, D: Nat + Storable> MemoryDevice<A, D> for RAM<A, D> {
             Err(Error::AddressOutOfRange(a))
         } else {
             if DEBUG_MEMORY {
-                println!("RAM set_addr({})", a);
+                println!("RAM set_addr({}); extent: {}", a, self.size);
             }
             self.next_addr = addr;
             self.valid = true;
@@ -174,7 +174,7 @@ impl<A: Nat + Storable, D: Nat + Storable> MemoryDevice<A, D> for RAM<A, D> {
 
     fn write(&mut self, word: Word<D>) -> Result<(), Error> {
         if DEBUG_MEMORY {
-            println!("RAM write({}) @ addr={}", word, self.addr);
+            println!("RAM write({}) @ addr={}; extent: {}", word, self.addr, self.size);
         }
         if self.valid {
             self.data[self.addr.unsigned() as usize] = word;
