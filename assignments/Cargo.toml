@@ -8,3 +8,4 @@ test-support = []
 
 [dependencies]
 simulator = { path = "../simulator" }
+frunk = "0.4"

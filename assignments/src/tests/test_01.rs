@@ -23,6 +23,13 @@ fn eval16<'a>(
     eval_t(&chip, inputs)
 }
 
+fn eval1_t<'a>(
+    chip: &IC<CombinationalT>,
+    inputs: impl IntoIterator<Item = (&'a str, Word<N1>)>,
+) -> HashMap<String, Word<N1>> {
+    eval_t(&chip, inputs)
+}
+
 #[test]
 fn nand_reflect() {
     let chip = Nand {
@@ -61,9 +68,10 @@ fn nand_truth_table() {
 
 #[test]
 fn not_truth_table() {
-    let chip = flatten(Not::chip());
-    assert_eq!(eval1(&chip, [("a", false.into())])["out"].unsigned(), 1);
-    assert_eq!(eval1(&chip, [("a", true.into())])["out"].unsigned(), 0);
+    // let chip = flatten(Not::chip());
+    let chip = Not::chip().expand_t();
+    assert_eq!(eval1_t(&chip, [("a", false.into())])["out"].unsigned(), 1);
+    assert_eq!(eval1_t(&chip, [("a", true.into())])["out"].unsigned(), 0);
 }
 
 #[test]

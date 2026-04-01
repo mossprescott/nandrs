@@ -1,8 +1,10 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
+use frunk::coproduct::CoprodInjector;
 use simulator::Chip as _;
 use simulator::Reflect as _;
 use simulator::component::Combinational;
+use simulator::declare::Input;
 use simulator::declare::{BusRef, Interface};
 use simulator::nat::{N1, N16};
 use simulator::{self, Chip, Component, IC, Input1, Input16, Output, Output16, Reflect, expand};
@@ -10,7 +12,6 @@ use std::collections::HashMap;
 
 // Re-export since the other components here parallel Nand:
 pub use simulator::component::{Buffer, Nand};
-use simulator::declare::Input;
 
 /// Components implemented in this project: simple, logical components for 1 and 16 bits.
 #[derive(Clone, Reflect, Component)]
@@ -65,6 +66,22 @@ impl Component for Not {
             out: this.out,
         }
     }}
+}
+impl Not {
+    pub fn expand_t<C, NandIdx>(&self) -> IC<C>
+    where
+        C: CoprodInjector<Nand, NandIdx>,
+    {
+        IC {
+            name: self.name(),
+            intf: self.reflect(),
+            components: vec![C::inject(Nand {
+                a: self.a,
+                b: self.a, // also the "a" input
+                out: self.out,
+            })],
+        }
+    }
 }
 
 /// True only when both inputs are true.
