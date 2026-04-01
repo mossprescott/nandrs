@@ -745,11 +745,13 @@ pub fn flatten_for_simulation<C: Reflect + Into<EightComponent>>(
 mod test {
     use std::collections::HashMap;
 
-    use crate::computer::{ALU, CPU, Computer, PC, flatten, flatten_to_nands};
+    use crate::computer::{
+        ALU, CPU, Computer, PC, flatten, flatten_for_simulation, flatten_to_nands,
+    };
     use assignments::tests::test_05;
     use simulator::component::{Combinational, count_combinational, count_computational};
     use simulator::nat::N16;
-    use simulator::simulate::{MemoryMap, simulate};
+    use simulator::simulate::{MemoryMap, simulate, synthesize};
     use simulator::word::Word;
     use simulator::{Chip as _, eval, print_graph};
 
@@ -1124,5 +1126,17 @@ mod test {
         assert_eq!(counts.registers, 11);
         assert_eq!(counts.roms, 1);
         assert_eq!(counts.memory_systems, 1);
+    }
+
+    #[test]
+    fn computer_wiring() {
+        let chip = flatten_for_simulation(Computer::chip());
+
+        let wiring = synthesize(&chip, MemoryMap::empty());
+
+        println!("{wiring}");
+
+        let ops = wiring.op_counts();
+        assert_eq!(ops.shifts, 8);
     }
 }

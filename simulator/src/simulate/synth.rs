@@ -218,6 +218,12 @@ fn fmt_component_tree(
             m.mask,
             fmt_bit(m.out)
         ),
+
+        wiring::ComponentWiring::ShiftWiring(s) => writeln!(
+            f,
+            "shift a=w{}[..] offset={} mask={:#06x} out=w{}[..]",
+            s.a.0, s.offset, s.mask, s.out.0
+        ),
     }
 }
 
@@ -355,7 +361,12 @@ pub struct OpCounts {
     pub parallel_nands: usize,
     pub ripple_adders: usize,
     pub many_way_ands: usize,
+    pub shifts: usize,
     pub registers: usize,
+    pub rams: usize,
+    pub roms: usize,
+    pub serials: usize,
+    pub memory_systems: usize,
 }
 
 impl<Width: Storable> ChipWiring<Width> {
@@ -365,14 +376,18 @@ impl<Width: Storable> ChipWiring<Width> {
         for comp in &self.component_wiring {
             match comp {
                 wiring::ComponentWiring::Nand(_) => c.nands += 1,
-                wiring::ComponentWiring::And(_) => c.ands += 1,
-                wiring::ComponentWiring::Adder(_) => c.adders += 1,
                 wiring::ComponentWiring::Mux(_) => c.muxes += 1,
+                wiring::ComponentWiring::Adder(_) => c.adders += 1,
+                wiring::ComponentWiring::Register(_) => c.registers += 1,
+                wiring::ComponentWiring::ROM(_) => c.roms += 1,
+                wiring::ComponentWiring::RAM(_) => c.rams += 1,
+                wiring::ComponentWiring::Serial(_) => c.serials += 1,
+                wiring::ComponentWiring::MemorySystem(_) => c.memory_systems += 1,
+                wiring::ComponentWiring::And(_) => c.ands += 1,
                 wiring::ComponentWiring::ParallelNand(_) => c.parallel_nands += 1,
                 wiring::ComponentWiring::RippleAdder(_) => c.ripple_adders += 1,
                 wiring::ComponentWiring::ManyWayAnd(_) => c.many_way_ands += 1,
-                wiring::ComponentWiring::Register(_) => c.registers += 1,
-                _ => {}
+                wiring::ComponentWiring::ShiftWiring(_) => c.shifts += 1,
             }
         }
         c
@@ -694,6 +709,7 @@ where
     eliminate_dead_gates(&mut component_wiring, &output_wires);
 
     // Coalesce bit-parallel operations into single word-wide ops.
+    coalesce_shift_copies(&mut component_wiring);
     coalesce_parallel_nands(&mut component_wiring);
     coalesce_many_way_ands(&mut component_wiring);
     let zero_wires: std::collections::HashSet<wiring::WireIndex> = const_wiring
@@ -856,6 +872,9 @@ fn peephole_nand_not(
                 bus_consumed.insert(m.data_in.0);
                 bus_consumed.insert(m.addr.0);
             }
+            CW::ShiftWiring(s) => {
+                bus_consumed.insert(s.a.0);
+            }
         }
     }
 
@@ -989,6 +1008,9 @@ fn eliminate_dead_gates(
                     bus_consumed.insert(m.data_in.0);
                     bus_consumed.insert(m.addr.0);
                 }
+                CW::ShiftWiring(s) => {
+                    bus_consumed.insert(s.a.0);
+                }
             }
         }
 
@@ -1015,6 +1037,81 @@ fn eliminate_dead_gates(
             break;
         }
     }
+}
+
+/// Coalesce self-`And` ops (a == b, i.e. identity/copy) that share the same source wire,
+/// destination wire, and bit-shift into a single `ShiftWiring`. Positive offset shifts left,
+/// negative shifts right.
+///
+/// Groups non-consecutively: all self-ands with the same key are merged regardless of
+/// interleaving. The `ShiftWiring` is placed at the first occurrence's position. Groups of
+/// fewer than 2 are left as individual `And` ops.
+///
+/// Note: `ShiftWiring` is intentionally absent from the producers map in `populate_mux_branches`,
+/// so the resulting ops stay at the top level rather than being hoisted into mux branches.
+fn coalesce_shift_copies(components: &mut Vec<wiring::ComponentWiring>) {
+    use std::collections::{HashMap, HashSet};
+    use wiring::ComponentWiring as CW;
+
+    fn self_copy_key(n: &wiring::AndWiring) -> Option<(u32, u32, i8)> {
+        if n.a.id == n.b.id && n.a.offset == n.b.offset {
+            let shift = n.out.offset as i8 - n.a.offset as i8;
+            Some((n.a.id.0, n.out.id.0, shift))
+        } else {
+            None
+        }
+    }
+
+    // Count each key and accumulate the destination-bit mask.
+    let mut counts: HashMap<(u32, u32, i8), usize> = HashMap::new();
+    let mut masks: HashMap<(u32, u32, i8), u64> = HashMap::new();
+    for comp in components.iter() {
+        if let CW::And(n) = comp {
+            if let Some(key) = self_copy_key(n) {
+                *counts.entry(key).or_insert(0) += 1;
+                *masks.entry(key).or_insert(0) |= 1u64 << n.out.offset;
+            }
+        }
+    }
+
+    // Only merge groups with >= 2 members.
+    let groups: HashMap<(u32, u32, i8), u64> = counts
+        .into_iter()
+        .filter(|(_, count)| *count >= 2)
+        .map(|(key, _)| (key, masks[&key]))
+        .collect();
+
+    if groups.is_empty() {
+        return;
+    }
+
+    // Rebuild the list: replace the first occurrence of each group with a ShiftWiring,
+    // drop all subsequent occurrences.
+    let mut emitted: HashSet<(u32, u32, i8)> = HashSet::new();
+    let mut result: Vec<CW> = Vec::with_capacity(components.len());
+    for comp in components.drain(..) {
+        let key_opt = match &comp {
+            CW::And(n) => self_copy_key(n),
+            _ => None,
+        };
+        if let Some(key) = key_opt {
+            if let Some(&mask) = groups.get(&key) {
+                if emitted.insert(key) {
+                    let (src, dst, shift) = key;
+                    result.push(CW::ShiftWiring(wiring::ShiftWiring {
+                        a: wiring::WireIndex(src),
+                        out: wiring::WireIndex(dst),
+                        offset: shift,
+                        mask,
+                    }));
+                }
+                continue; // drop all occurrences of the merged group
+            }
+        }
+        result.push(comp);
+    }
+
+    *components = result;
 }
 
 /// Coalesce consecutive `NandWiring` or `AndWiring` entries that operate on different bits of the
@@ -1476,6 +1573,9 @@ fn populate_mux_branches(
                 add_consumer(m.data_in, j);
                 add_consumer(m.addr, j);
             }
+            CW::ShiftWiring(s) => {
+                add_consumer(s.a, j);
+            }
         }
     }
     // Extra consumers (chip outputs) use a sentinel index that will never be claimed.
@@ -1496,6 +1596,7 @@ fn populate_mux_branches(
                 producers.entry(a.out).or_default().push(j);
                 producers.entry(a.carry_out.id).or_default().push(j);
             }
+            CW::ShiftWiring(s) => producers.entry(s.out).or_default().push(j),
             CW::Mux(m) => producers.entry(m.out).or_default().push(j),
             CW::Adder(a) => {
                 producers.entry(a.sum.id).or_default().push(j);
@@ -1521,6 +1622,7 @@ fn populate_mux_branches(
             CW::ROM(r) => vec![r.addr],
             CW::Serial(s) => vec![s.write.id, s.data_in],
             CW::MemorySystem(m) => vec![m.write.id, m.data_in, m.addr],
+            CW::ShiftWiring(s) => vec![s.a],
         }
     }
 
@@ -1782,6 +1884,7 @@ fn topo_sort_wiring(components: &mut Vec<wiring::ComponentWiring>) {
                 | CW::ParallelNand(_)
                 | CW::RippleAdder(_)
                 | CW::ManyWayAnd(_)
+                | CW::ShiftWiring(_)
                 | CW::Mux(_)
                 | CW::Adder(_)
         )
@@ -1794,6 +1897,7 @@ fn topo_sort_wiring(components: &mut Vec<wiring::ComponentWiring>) {
             CW::ParallelNand(n) => vec![n.out],
             CW::RippleAdder(a) => vec![a.out],
             CW::ManyWayAnd(m) => vec![m.out.id],
+            CW::ShiftWiring(s) => vec![s.out],
             CW::Mux(m) => vec![m.out],
             CW::Adder(a) => vec![a.sum.id, a.carry.id],
             _ => vec![],
@@ -1807,6 +1911,7 @@ fn topo_sort_wiring(components: &mut Vec<wiring::ComponentWiring>) {
             CW::ParallelNand(n) => vec![n.a, n.b],
             CW::RippleAdder(a) => vec![a.a, a.b, a.carry_in.id],
             CW::ManyWayAnd(m) => vec![m.a],
+            CW::ShiftWiring(s) => vec![s.a],
             CW::Mux(m) => vec![m.sel.id, m.a0, m.a1],
             CW::Adder(a) => vec![a.a.id, a.b.id, a.c.id],
             _ => vec![],
