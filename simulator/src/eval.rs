@@ -3,12 +3,11 @@
 /// There is no clock and no state.
 use std::collections::HashMap;
 
-use frunk::Coproduct;
-
-use crate::component::{Combinational, CombinationalT};
+use crate::component::{Buffer, Combinational, CombinationalT, Nand};
 use crate::declare::{BusRef, IC, Reflect};
 use crate::nat::Nat;
 use crate::word::{Storable, Word};
+use frunk::hlist;
 
 /// Evaluate a chip statelessly; given named input values, return named output values.
 ///
@@ -119,20 +118,20 @@ where
     let order = topo_sort(&chip.components);
 
     for &idx in &order {
-        match &chip.components[idx] {
-            Coproduct::Inl(nand) => {
+        let (out, val) = chip.components[idx].clone().fold(hlist![
+            |nand: Nand| {
                 let intf = nand.reflect();
                 let a = read_bit(&wire_state, &intf.inputs["a"]);
                 let b = read_bit(&wire_state, &intf.inputs["b"]);
-                write_bit(&mut wire_state, &intf.outputs["out"], !(a & b));
-            }
-            Coproduct::Inr(Coproduct::Inl(buffer)) => {
+                (intf.outputs["out"].clone(), !(a & b))
+            },
+            |buffer: Buffer| {
                 let intf = buffer.reflect();
                 let a = read_bit(&wire_state, &intf.inputs["a"]);
-                write_bit(&mut wire_state, &intf.outputs["out"], a);
-            }
-            Coproduct::Inr(Coproduct::Inr(_)) => unreachable!(),
-        }
+                (intf.outputs["out"].clone(), a)
+            },
+        ]);
+        write_bit(&mut wire_state, &out, val);
     }
 
     intf.outputs
