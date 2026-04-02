@@ -1,9 +1,12 @@
-use crate::project_02::{ALU, Add16, FullAdder, HalfAdder, Inc16, Neg16, Zero16, flatten_t};
+use crate::project_01::Project01ComponentT;
+use crate::project_02::{
+    ALU, Add16, FullAdder, HalfAdder, Inc16, Neg16, Project02ComponentT, Zero16, flatten_t,
+};
 use simulator::component::{Combinational, count_combinational};
 use simulator::eval::eval;
 use simulator::nat::{N1, N16};
 use simulator::word::Word;
-use simulator::{Chip as _, IC, print_graph, print_ic_graph};
+use simulator::{Chip as _, IC, print_ic_graph};
 use std::collections::HashMap;
 
 fn eval1<'a>(
@@ -117,7 +120,10 @@ fn inc16_truth_table() {
     let chip = Inc16::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    print!("{}", print_graph(&chip));
+    print!(
+        "{}",
+        print_ic_graph(&chip.expand_t::<Project02ComponentT, _, _>())
+    );
 
     let chip = flatten_t(chip);
 
@@ -142,7 +148,10 @@ fn add16_truth_table() {
     let chip = Add16::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    print!("{}", print_graph(&chip));
+    print!(
+        "{}",
+        print_ic_graph(&chip.expand_t::<Project02ComponentT, _>())
+    );
 
     let chip = flatten_t(chip);
 
@@ -185,7 +194,10 @@ fn zero16_truth_table() {
     let chip = Zero16::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    print!("{}", print_graph(&chip));
+    print!(
+        "{}",
+        print_ic_graph(&chip.expand_t::<Project02ComponentT, _, _, _>())
+    );
 
     let chip = flatten_t(chip);
 
@@ -215,7 +227,10 @@ fn neg16_truth_table() {
     let chip = Neg16::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    print!("{}", print_graph(&chip));
+    print!(
+        "{}",
+        print_ic_graph(&chip.expand_t::<Project02ComponentT, _>())
+    );
 
     let chip = flatten_t(chip);
 
@@ -246,7 +261,10 @@ fn alu_truth_table() {
     let chip = ALU::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    print!("{}", print_graph(&chip));
+    print!(
+        "{}",
+        print_ic_graph(&chip.expand_t::<Project02ComponentT, _, _, _, _, _, _, _, _, _>())
+    );
 
     let chip = flatten_t(chip);
 
@@ -419,11 +437,12 @@ fn alu_optimal() {
     assert_eq!(count_combinational(&chip.components).nands, 720);
 }
 
+/// Sanity check that the format doesn't drift.
 #[test]
 fn alu_graph() {
     let chip = ALU::chip();
     assert_eq!(
-        print_graph(&chip),
+        print_ic_graph(&chip.expand_t::<Project02ComponentT, _, _, _, _, _, _, _, _, _>()),
         "ALU:
   mux16_0.a0[0..15] <- x[0..15]
   mux16_0.a1[0..15] <- 0

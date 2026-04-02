@@ -2,9 +2,7 @@
 //!
 //! Note: when these tests fail, the problem is in `synthesize`, or maybe the components in
 //! test_02 have been implemented in a new way that isn't handled yet.
-use crate::project_02::{
-    Add16, Inc16, Project02ComponentT, Zero16, flatten, flatten_for_simulation,
-};
+use crate::project_02::{Add16, Inc16, Project02ComponentT, Zero16, flatten_for_simulation};
 use frunk::coproduct::CoprodInjector;
 use simulator::nat::N16;
 use simulator::simulate::{ChipWiring, MemoryMap, synthesize};

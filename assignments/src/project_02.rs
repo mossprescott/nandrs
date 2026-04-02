@@ -17,119 +17,10 @@ use simulator::{
     fixed, flatten_g,
 };
 
-#[derive(Clone, Reflect, Component)]
-pub enum Project02Component {
-    #[delegate]
-    Project01(Project01Component),
-    HalfAdder(HalfAdder),
-    FullAdder(FullAdder),
-    Inc16(Inc16),
-    Add16(Add16),
-    Nand16Way(Nand16Way),
-    Zero16(Zero16),
-    Neg16(Neg16),
-    ALU(ALU),
-}
-
 pub type Project02ComponentT = Coprod!(
     Nand, Buffer, Not, And, Or, Mux, Mux16, Not16, And16, HalfAdder, FullAdder, Inc16, Add16,
     Nand16Way, Zero16, Neg16, ALU
 );
-
-impl From<Project02ComponentT> for Project02Component {
-    fn from(comp: Project02ComponentT) -> Self {
-        comp.fold(hlist![
-            |c: Nand| Project02Component::Project01(Project01Component::Nand(c)),
-            |c: Buffer| Project02Component::Project01(Project01Component::Buffer(c)),
-            |c: Not| Project02Component::Project01(Project01Component::Not(c)),
-            |c: And| Project02Component::Project01(Project01Component::And(c)),
-            |c: Or| Project02Component::Project01(Project01Component::Or(c)),
-            |c: Mux| Project02Component::Project01(Project01Component::Mux(c)),
-            |c: Mux16| Project02Component::Project01(Project01Component::Mux16(c)),
-            |c: Not16| Project02Component::Project01(Project01Component::Not16(c)),
-            |c: And16| Project02Component::Project01(Project01Component::And16(c)),
-            Project02Component::HalfAdder,
-            Project02Component::FullAdder,
-            Project02Component::Inc16,
-            Project02Component::Add16,
-            Project02Component::Nand16Way,
-            Project02Component::Zero16,
-            Project02Component::Neg16,
-            Project02Component::ALU,
-        ])
-    }
-}
-
-/// TEMP.
-impl From<Project02Component> for Project02ComponentT {
-    fn from(comp: Project02Component) -> Self {
-        use frunk::coproduct::CoprodInjector;
-        match comp {
-            Project02Component::Project01(Project01Component::Nand(c)) => {
-                <Self as CoprodInjector<Nand, _>>::inject(c)
-            }
-            Project02Component::Project01(Project01Component::Buffer(c)) => {
-                <Self as CoprodInjector<Buffer, _>>::inject(c)
-            }
-            Project02Component::Project01(Project01Component::Not(c)) => {
-                <Self as CoprodInjector<Not, _>>::inject(c)
-            }
-            Project02Component::Project01(Project01Component::And(c)) => {
-                <Self as CoprodInjector<And, _>>::inject(c)
-            }
-            Project02Component::Project01(Project01Component::Or(c)) => {
-                <Self as CoprodInjector<Or, _>>::inject(c)
-            }
-            Project02Component::Project01(Project01Component::Mux(c)) => {
-                <Self as CoprodInjector<Mux, _>>::inject(c)
-            }
-            Project02Component::Project01(Project01Component::Mux16(c)) => {
-                <Self as CoprodInjector<Mux16, _>>::inject(c)
-            }
-            Project02Component::Project01(Project01Component::Not16(c)) => {
-                <Self as CoprodInjector<Not16, _>>::inject(c)
-            }
-            Project02Component::Project01(Project01Component::And16(c)) => {
-                <Self as CoprodInjector<And16, _>>::inject(c)
-            }
-            Project02Component::Project01(p) => {
-                panic!(
-                    "Project01Component variant {:?} not in Project02ComponentT",
-                    p.name()
-                )
-            }
-            Project02Component::HalfAdder(c) => <Self as CoprodInjector<HalfAdder, _>>::inject(c),
-            Project02Component::FullAdder(c) => <Self as CoprodInjector<FullAdder, _>>::inject(c),
-            Project02Component::Inc16(c) => <Self as CoprodInjector<Inc16, _>>::inject(c),
-            Project02Component::Add16(c) => <Self as CoprodInjector<Add16, _>>::inject(c),
-            Project02Component::Nand16Way(c) => <Self as CoprodInjector<Nand16Way, _>>::inject(c),
-            Project02Component::Zero16(c) => <Self as CoprodInjector<Zero16, _>>::inject(c),
-            Project02Component::Neg16(c) => <Self as CoprodInjector<Neg16, _>>::inject(c),
-            Project02Component::ALU(c) => <Self as CoprodInjector<ALU, _>>::inject(c),
-        }
-    }
-}
-
-/// Recursively expand until only primitives are left.
-///
-/// Deprecated.
-pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Combinational> {
-    fn go(comp: Project02Component) -> Vec<Combinational> {
-        match comp.expand() {
-            None => match comp {
-                Project02Component::Project01(Project01Component::Nand(c)) => vec![c.into()],
-                Project02Component::Project01(Project01Component::Buffer(c)) => vec![c.into()],
-                _ => panic!("Did not reduce to primitive: {:?}", comp.name()),
-            },
-            Some(ic) => ic.components.into_iter().flat_map(go).collect(),
-        }
-    }
-    IC {
-        name: format!("{} (flat)", chip.name()),
-        intf: chip.reflect(),
-        components: go(chip.into()),
-    }
-}
 
 /// Recursively expand_t() until only primitives are left.
 pub fn flatten_t<C, Idx>(chip: C) -> IC<Combinational>
@@ -246,13 +137,6 @@ pub struct HalfAdder {
     pub carry: Output,
 }
 
-impl Component for HalfAdder {
-    type Target = Project01Component;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(self.expand_t::<Project01ComponentT, _>().map(Into::into))
-    }
-}
 impl HalfAdder {
     /*
     Equivalent to:
@@ -283,13 +167,6 @@ pub struct FullAdder {
     pub carry: Output,
 }
 
-impl Component for FullAdder {
-    type Target = Project01Component;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(self.expand_t::<Project01ComponentT, _>().map(Into::into))
-    }
-}
 impl FullAdder {
     /*
     Some sharing of common gates to get down to the minimal 9 gates.
@@ -315,13 +192,6 @@ pub struct Inc16 {
     pub out: Output16,
 }
 
-impl Component for Inc16 {
-    type Target = Project02Component;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(self.expand_t::<Project02ComponentT, _, _>().map(Into::into))
-    }
-}
 impl Inc16 {
     expand_t!([Not, HalfAdder], |this| {
         // bit 0: out[0] = NOT(a[0]); carry = a[0] (the carry-in is implicitly 1)
@@ -347,13 +217,6 @@ pub struct Add16 {
     pub out: Output16,
 }
 
-impl Component for Add16 {
-    type Target = Project02Component;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(self.expand_t::<Project02ComponentT, _>().map(Into::into))
-    }
-}
 impl Add16 {
     expand_t!([FullAdder], |this| {
         // bit 0: half-add (carry-in is 0)
@@ -389,13 +252,6 @@ pub struct Nand16Way {
     pub out: Output,
 }
 
-impl Component for Nand16Way {
-    type Target = Project02Component;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(self.expand_t::<Project02ComponentT, _, _>().map(Into::into))
-    }
-}
 impl Nand16Way {
     expand_t!([And, Not], |this| {
         // Level 1
@@ -429,16 +285,6 @@ pub struct Zero16 {
     pub out: Output,
 }
 
-impl Component for Zero16 {
-    type Target = Project02Component;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(
-            self.expand_t::<Project02ComponentT, _, _, _>()
-                .map(Into::into),
-        )
-    }
-}
 impl Zero16 {
     expand_t!([Not16, Nand16Way, Not], |this| {
         // Negate into a single bus; the simulator makes this parallel.
@@ -459,13 +305,6 @@ pub struct Neg16 {
     pub out: Output,
 }
 
-impl Component for Neg16 {
-    type Target = Project02Component;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(self.expand_t::<Project02ComponentT, _>().map(Into::into))
-    }
-}
 impl Neg16 {
     /*
      out = a[15]
@@ -507,16 +346,6 @@ pub struct ALU {
     pub disable: Input1,
 }
 
-impl Component for ALU {
-    type Target = Project02Component;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(
-            self.expand_t::<Project02ComponentT, _, _, _, _, _, _, _, _, _>()
-                .map(Into::into),
-        )
-    }
-}
 impl ALU {
     expand_t!([Mux16, Not16, And16, Add16, Mux, Zero16, Neg16, Not, And], |this| {
          // zx/nx: conditionally zero then negate x

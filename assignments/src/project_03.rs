@@ -4,8 +4,7 @@ use crate::project_01::{
     And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, Project01Component, Project01ComponentT,
 };
 use crate::project_02::{
-    ALU, Add16, FullAdder, HalfAdder, Inc16, Nand16Way, Neg16, Project02Component,
-    Project02ComponentT, Zero16,
+    ALU, Add16, FullAdder, HalfAdder, Inc16, Nand16Way, Neg16, Project02ComponentT, Zero16,
 };
 use frunk::coproduct::CoprodInjector;
 use frunk::{Coprod, hlist};
