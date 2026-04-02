@@ -62,7 +62,7 @@ pub enum Flat<S, T> {
 /// `expand_t`'s type is smaller than `S` — it's at least missing the component being expanded.
 /// Strictly speaking, nothing stops you from expanding A → B, then B → A, etc. Probably not worth
 /// trying to bake that kind of guarantee into these types.
-pub fn flatten_g<C, S, Idx, T, F>(folder: F, chip: C) -> IC<T>
+pub fn flatten_g<C, S, Idx, T, F>(chip: C, label: &str, folder: F) -> IC<T>
 where
     C: Reflect,
     S: frunk::coproduct::CoprodInjector<C, Idx>,
@@ -86,7 +86,7 @@ where
         }
     }
     IC {
-        name: format!("{} (flat)", chip.name()),
+        name: format!("{} ({})", chip.name(), label),
         intf: chip.reflect(),
         components: go(folder, S::inject(chip)),
     }

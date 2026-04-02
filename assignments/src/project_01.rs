@@ -84,6 +84,8 @@ where
     Project01ComponentT: CoprodInjector<C, Idx>,
 {
     flatten_g::<C, Project01ComponentT, Idx, CombinationalT, _>(
+        chip,
+        "flat",
         hlist![
             |c: Nand| Flat::Flat(CombinationalT::inject(c)),
             |c: Buffer| Flat::Flat(CombinationalT::inject(c)),
@@ -97,7 +99,6 @@ where
             |c: And16| Flat::Continue(c.expand_t()),
             |c: Mux16| Flat::Continue(c.expand_t()),
         ],
-        chip,
     )
 }
 
