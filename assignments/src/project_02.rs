@@ -9,7 +9,6 @@ use frunk::{Coprod, hlist};
 use simulator::Chip as _;
 use simulator::Reflect as _;
 use simulator::component::Combinational;
-use simulator::component::CombinationalT;
 use simulator::component::native;
 use simulator::declare::{BusRef, Interface};
 use simulator::nat::{N16, Nat};
@@ -60,37 +59,9 @@ impl From<Project02ComponentT> for Project02Component {
     }
 }
 
-/// Recursively expand_t() until only primitives are left.
-pub fn flatten_t<C, Idx>(chip: C) -> IC<CombinationalT>
-where
-    C: Reflect,
-    Project02ComponentT: CoprodInjector<C, Idx>,
-{
-    flatten_g::<C, Project02ComponentT, Idx, CombinationalT, _>(
-        chip,
-        "flat",
-        hlist![
-            |c: Nand| Flat::Flat(CombinationalT::inject(c)),
-            |c: Buffer| Flat::Flat(CombinationalT::inject(c)),
-            |c: Not| Flat::Continue(c.expand_t()),
-            |c: And| Flat::Continue(c.expand_t()),
-            |c: Mux| Flat::Continue(c.expand_t()),
-            |c: Mux16| Flat::Continue(c.expand_t()),
-            |c: Not16| Flat::Continue(c.expand_t()),
-            |c: And16| Flat::Continue(c.expand_t()),
-            |c: HalfAdder| Flat::Continue(c.expand_t()),
-            |c: FullAdder| Flat::Continue(c.expand_t()),
-            |c: Inc16| Flat::Continue(c.expand_t()),
-            |c: Add16| Flat::Continue(c.expand_t()),
-            |c: Nand16Way| Flat::Continue(c.expand_t()),
-            |c: Zero16| Flat::Continue(c.expand_t()),
-            |c: Neg16| Flat::Continue(c.expand_t()),
-            |c: ALU| Flat::Continue(c.expand_t()),
-        ],
-    )
-}
-
 /// Recursively expand until only primitives are left.
+///
+/// Deprecated.
 pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Combinational> {
     fn go(comp: Project02Component) -> Vec<Combinational> {
         match comp.expand() {
@@ -109,6 +80,35 @@ pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Combination
     }
 }
 
+/// Recursively expand_t() until only primitives are left.
+pub fn flatten_t<C, Idx>(chip: C) -> IC<Combinational>
+where
+    C: Reflect,
+    Project02ComponentT: CoprodInjector<C, Idx>,
+{
+    flatten_g::<C, Project02ComponentT, Idx, Combinational, _>(
+        chip,
+        "flat",
+        hlist![
+            |c: Nand| Flat::Flat(Combinational::Nand(c)),
+            |c: Buffer| Flat::Flat(Combinational::Buffer(c)),
+            |c: Not| Flat::Continue(c.expand_t()),
+            |c: And| Flat::Continue(c.expand_t()),
+            |c: Mux| Flat::Continue(c.expand_t()),
+            |c: Mux16| Flat::Continue(c.expand_t()),
+            |c: Not16| Flat::Continue(c.expand_t()),
+            |c: And16| Flat::Continue(c.expand_t()),
+            |c: HalfAdder| Flat::Continue(c.expand_t()),
+            |c: FullAdder| Flat::Continue(c.expand_t()),
+            |c: Inc16| Flat::Continue(c.expand_t()),
+            |c: Add16| Flat::Continue(c.expand_t()),
+            |c: Nand16Way| Flat::Continue(c.expand_t()),
+            |c: Zero16| Flat::Continue(c.expand_t()),
+            |c: Neg16| Flat::Continue(c.expand_t()),
+            |c: ALU| Flat::Continue(c.expand_t()),
+        ],
+    )
+}
 /// Like `flatten`, but replaces HalfAdder/FullAdder with native Adder and Mux/Mux16 with
 /// native Mux for efficient simulation.
 ///

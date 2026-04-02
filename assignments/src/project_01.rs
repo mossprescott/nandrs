@@ -5,7 +5,6 @@ use frunk::{Coprod, Coproduct, hlist};
 use simulator::Chip as _;
 use simulator::Reflect as _;
 use simulator::component::Combinational;
-use simulator::component::CombinationalT;
 use simulator::declare::Input;
 use simulator::declare::{BusRef, Interface};
 use simulator::nat::{N1, N16};
@@ -59,6 +58,8 @@ impl From<Project01ComponentT> for Project01Component {
 }
 
 /// Recursively expand() until only primitives are left.
+///
+/// Deprecated.
 pub fn flatten<C: Reflect + Into<Project01Component>>(chip: C) -> IC<Combinational> {
     fn go(comp: Project01Component) -> Vec<Combinational> {
         match comp.expand() {
@@ -78,17 +79,17 @@ pub fn flatten<C: Reflect + Into<Project01Component>>(chip: C) -> IC<Combination
 }
 
 /// Recursively expand_t() until only primitives are left.
-pub fn flatten_t<C, Idx>(chip: C) -> IC<CombinationalT>
+pub fn flatten_t<C, Idx>(chip: C) -> IC<Combinational>
 where
     C: Reflect,
     Project01ComponentT: CoprodInjector<C, Idx>,
 {
-    flatten_g::<C, Project01ComponentT, Idx, CombinationalT, _>(
+    flatten_g::<C, Project01ComponentT, Idx, Combinational, _>(
         chip,
         "flat",
         hlist![
-            |c: Nand| Flat::Flat(CombinationalT::inject(c)),
-            |c: Buffer| Flat::Flat(CombinationalT::inject(c)),
+            |c: Nand| Flat::Flat(Combinational::Nand(c)),
+            |c: Buffer| Flat::Flat(Combinational::Buffer(c)),
             |c: Not| Flat::Continue(c.expand_t()),
             |c: And| Flat::Continue(c.expand_t()),
             |c: Or| Flat::Continue(c.expand_t()),

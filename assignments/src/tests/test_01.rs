@@ -1,24 +1,24 @@
 use crate::project_01::{And, And16, Dmux, Mux, Mux16, Nand, Not, Not16, Or, Xor, flatten_t};
 use simulator::Chip as _;
-use simulator::component::{CombinationalT, count_combinational_t};
-use simulator::eval::{eval, eval_t};
+use simulator::component::{Combinational, count_combinational};
+use simulator::eval::eval;
 use simulator::nat::{N1, N16};
 use simulator::word::Word;
 use simulator::{Component, IC, Input1, Output, Reflect, print_graph};
 use std::collections::HashMap;
 
-fn eval1_t<'a>(
-    chip: &IC<CombinationalT>,
+fn eval1<'a>(
+    chip: &IC<Combinational>,
     inputs: impl IntoIterator<Item = (&'a str, Word<N1>)>,
 ) -> HashMap<String, Word<N1>> {
-    eval_t(&chip, inputs)
+    eval(&chip, inputs)
 }
 
-fn eval16_t<'a>(
-    chip: &IC<CombinationalT>,
+fn eval16<'a>(
+    chip: &IC<Combinational>,
     inputs: impl IntoIterator<Item = (&'a str, Word<N16>)>,
 ) -> HashMap<String, Word<N16>> {
-    eval_t(&chip, inputs)
+    eval(&chip, inputs)
 }
 
 #[test]
@@ -40,19 +40,19 @@ fn nand_reflect() {
 fn nand_truth_table() {
     let chip = flatten_t(Nand::chip());
     assert_eq!(
-        eval1_t(&chip, [("a", false.into()), ("b", false.into())])["out"].unsigned(),
+        eval1(&chip, [("a", false.into()), ("b", false.into())])["out"].unsigned(),
         1
     );
     assert_eq!(
-        eval1_t(&chip, [("a", false.into()), ("b", true.into())])["out"].unsigned(),
+        eval1(&chip, [("a", false.into()), ("b", true.into())])["out"].unsigned(),
         1
     );
     assert_eq!(
-        eval1_t(&chip, [("a", true.into()), ("b", false.into())])["out"].unsigned(),
+        eval1(&chip, [("a", true.into()), ("b", false.into())])["out"].unsigned(),
         1
     );
     assert_eq!(
-        eval1_t(&chip, [("a", true.into()), ("b", true.into())])["out"].unsigned(),
+        eval1(&chip, [("a", true.into()), ("b", true.into())])["out"].unsigned(),
         0
     );
 }
@@ -60,33 +60,33 @@ fn nand_truth_table() {
 #[test]
 fn not_truth_table() {
     let chip = flatten_t(Not::chip());
-    assert_eq!(eval1_t(&chip, [("a", false.into())])["out"].unsigned(), 1);
-    assert_eq!(eval1_t(&chip, [("a", true.into())])["out"].unsigned(), 0);
+    assert_eq!(eval1(&chip, [("a", false.into())])["out"].unsigned(), 1);
+    assert_eq!(eval1(&chip, [("a", true.into())])["out"].unsigned(), 0);
 }
 
 #[test]
 fn not_optimal() {
     let chip = flatten_t(Not::chip());
-    assert_eq!(count_combinational_t(&chip.components).nands, 1);
+    assert_eq!(count_combinational(&chip.components).nands, 1);
 }
 
 #[test]
 fn and_truth_table() {
     let chip = flatten_t(And::chip());
     assert_eq!(
-        eval1_t(&chip, [("a", false.into()), ("b", false.into())])["out"].unsigned(),
+        eval1(&chip, [("a", false.into()), ("b", false.into())])["out"].unsigned(),
         0
     );
     assert_eq!(
-        eval1_t(&chip, [("a", false.into()), ("b", true.into())])["out"].unsigned(),
+        eval1(&chip, [("a", false.into()), ("b", true.into())])["out"].unsigned(),
         0
     );
     assert_eq!(
-        eval1_t(&chip, [("a", true.into()), ("b", false.into())])["out"].unsigned(),
+        eval1(&chip, [("a", true.into()), ("b", false.into())])["out"].unsigned(),
         0
     );
     assert_eq!(
-        eval1_t(&chip, [("a", true.into()), ("b", true.into())])["out"].unsigned(),
+        eval1(&chip, [("a", true.into()), ("b", true.into())])["out"].unsigned(),
         1
     );
 }
@@ -94,26 +94,26 @@ fn and_truth_table() {
 #[test]
 fn and_optimal() {
     let chip = flatten_t(And::chip());
-    assert_eq!(count_combinational_t(&chip.components).nands, 2);
+    assert_eq!(count_combinational(&chip.components).nands, 2);
 }
 
 #[test]
 fn or_truth_table() {
     let chip = flatten_t(Or::chip());
     assert_eq!(
-        eval1_t(&chip, [("a", false.into()), ("b", false.into())])["out"].unsigned(),
+        eval1(&chip, [("a", false.into()), ("b", false.into())])["out"].unsigned(),
         0
     );
     assert_eq!(
-        eval1_t(&chip, [("a", false.into()), ("b", true.into())])["out"].unsigned(),
+        eval1(&chip, [("a", false.into()), ("b", true.into())])["out"].unsigned(),
         1
     );
     assert_eq!(
-        eval1_t(&chip, [("a", true.into()), ("b", false.into())])["out"].unsigned(),
+        eval1(&chip, [("a", true.into()), ("b", false.into())])["out"].unsigned(),
         1
     );
     assert_eq!(
-        eval1_t(&chip, [("a", true.into()), ("b", true.into())])["out"].unsigned(),
+        eval1(&chip, [("a", true.into()), ("b", true.into())])["out"].unsigned(),
         1
     );
 }
@@ -121,26 +121,26 @@ fn or_truth_table() {
 #[test]
 fn or_optimal() {
     let chip = flatten_t(Or::chip());
-    assert_eq!(count_combinational_t(&chip.components).nands, 3);
+    assert_eq!(count_combinational(&chip.components).nands, 3);
 }
 
 #[test]
 fn xor_truth_table() {
     let chip = flatten_t(Xor::chip());
     assert_eq!(
-        eval1_t(&chip, [("a", false.into()), ("b", false.into())])["out"].unsigned(),
+        eval1(&chip, [("a", false.into()), ("b", false.into())])["out"].unsigned(),
         0
     );
     assert_eq!(
-        eval1_t(&chip, [("a", false.into()), ("b", true.into())])["out"].unsigned(),
+        eval1(&chip, [("a", false.into()), ("b", true.into())])["out"].unsigned(),
         1
     );
     assert_eq!(
-        eval1_t(&chip, [("a", true.into()), ("b", false.into())])["out"].unsigned(),
+        eval1(&chip, [("a", true.into()), ("b", false.into())])["out"].unsigned(),
         1
     );
     assert_eq!(
-        eval1_t(&chip, [("a", true.into()), ("b", true.into())])["out"].unsigned(),
+        eval1(&chip, [("a", true.into()), ("b", true.into())])["out"].unsigned(),
         0
     );
 }
@@ -148,14 +148,14 @@ fn xor_truth_table() {
 #[test]
 fn xor_optimal() {
     let chip = flatten_t(Xor::chip());
-    assert_eq!(count_combinational_t(&chip.components).nands, 4);
+    assert_eq!(count_combinational(&chip.components).nands, 4);
 }
 
 #[test]
 fn mux_truth_table() {
     let chip = flatten_t(Mux::chip());
     assert_eq!(
-        eval1_t(
+        eval1(
             &chip,
             [
                 ("a0", false.into()),
@@ -167,7 +167,7 @@ fn mux_truth_table() {
         0
     );
     assert_eq!(
-        eval1_t(
+        eval1(
             &chip,
             [
                 ("a0", false.into()),
@@ -179,7 +179,7 @@ fn mux_truth_table() {
         0
     );
     assert_eq!(
-        eval1_t(
+        eval1(
             &chip,
             [
                 ("a0", true.into()),
@@ -191,7 +191,7 @@ fn mux_truth_table() {
         1
     );
     assert_eq!(
-        eval1_t(
+        eval1(
             &chip,
             [
                 ("a0", true.into()),
@@ -203,7 +203,7 @@ fn mux_truth_table() {
         1
     );
     assert_eq!(
-        eval1_t(
+        eval1(
             &chip,
             [
                 ("a0", false.into()),
@@ -215,7 +215,7 @@ fn mux_truth_table() {
         0
     );
     assert_eq!(
-        eval1_t(
+        eval1(
             &chip,
             [
                 ("a0", false.into()),
@@ -227,7 +227,7 @@ fn mux_truth_table() {
         1
     );
     assert_eq!(
-        eval1_t(
+        eval1(
             &chip,
             [
                 ("a0", true.into()),
@@ -239,7 +239,7 @@ fn mux_truth_table() {
         0
     );
     assert_eq!(
-        eval1_t(
+        eval1(
             &chip,
             [
                 ("a0", true.into()),
@@ -255,45 +255,45 @@ fn mux_truth_table() {
 #[test]
 fn mux_optimal() {
     let chip = flatten_t(Mux::chip());
-    assert_eq!(count_combinational_t(&chip.components).nands, 4);
+    assert_eq!(count_combinational(&chip.components).nands, 4);
 }
 
 #[test]
 fn dmux_truth_table() {
     let chip = flatten_t(Dmux::chip());
-    let r = eval1_t(&chip, [("input", false.into()), ("sel", false.into())]);
+    let r = eval1(&chip, [("input", false.into()), ("sel", false.into())]);
     assert_eq!((r["a"].unsigned(), r["b"].unsigned()), (0, 0));
-    let r = eval1_t(&chip, [("input", true.into()), ("sel", false.into())]);
+    let r = eval1(&chip, [("input", true.into()), ("sel", false.into())]);
     assert_eq!((r["a"].unsigned(), r["b"].unsigned()), (1, 0));
-    let r = eval1_t(&chip, [("input", false.into()), ("sel", true.into())]);
+    let r = eval1(&chip, [("input", false.into()), ("sel", true.into())]);
     assert_eq!((r["a"].unsigned(), r["b"].unsigned()), (0, 0));
-    let r = eval1_t(&chip, [("input", true.into()), ("sel", true.into())]);
+    let r = eval1(&chip, [("input", true.into()), ("sel", true.into())]);
     assert_eq!((r["a"].unsigned(), r["b"].unsigned()), (0, 1));
 }
 
 #[test]
 fn dmux_optimal() {
     let chip = flatten_t(Dmux::chip());
-    assert_eq!(count_combinational_t(&chip.components).nands, 5);
+    assert_eq!(count_combinational(&chip.components).nands, 5);
 }
 
 #[test]
 fn not16_truth_table() {
     let chip = flatten_t(Not16::chip());
     assert_eq!(
-        eval16_t(&chip, [("a", 0x0000u16.into())])["out"].unsigned(),
+        eval16(&chip, [("a", 0x0000u16.into())])["out"].unsigned(),
         0xFFFF
     );
     assert_eq!(
-        eval16_t(&chip, [("a", 0xFFFFu16.into())])["out"].unsigned(),
+        eval16(&chip, [("a", 0xFFFFu16.into())])["out"].unsigned(),
         0x0000
     );
     assert_eq!(
-        eval16_t(&chip, [("a", 0xAAAAu16.into())])["out"].unsigned(),
+        eval16(&chip, [("a", 0xAAAAu16.into())])["out"].unsigned(),
         0x5555
     );
     assert_eq!(
-        eval16_t(&chip, [("a", 0x1234u16.into())])["out"].unsigned(),
+        eval16(&chip, [("a", 0x1234u16.into())])["out"].unsigned(),
         0xEDCB
     );
 }
@@ -301,26 +301,26 @@ fn not16_truth_table() {
 #[test]
 fn not16_optimal() {
     let chip = flatten_t(Not16::chip());
-    assert_eq!(count_combinational_t(&chip.components).nands, 16);
+    assert_eq!(count_combinational(&chip.components).nands, 16);
 }
 
 #[test]
 fn and16_truth_table() {
     let chip = flatten_t(And16::chip());
     assert_eq!(
-        eval16_t(&chip, [("a", 0xFFFFu16.into()), ("b", 0xAAAAu16.into())])["out"].unsigned(),
+        eval16(&chip, [("a", 0xFFFFu16.into()), ("b", 0xAAAAu16.into())])["out"].unsigned(),
         0xAAAA
     );
     assert_eq!(
-        eval16_t(&chip, [("a", 0x0000u16.into()), ("b", 0xFFFFu16.into())])["out"].unsigned(),
+        eval16(&chip, [("a", 0x0000u16.into()), ("b", 0xFFFFu16.into())])["out"].unsigned(),
         0x0000
     );
     assert_eq!(
-        eval16_t(&chip, [("a", 0xFF00u16.into()), ("b", 0x0FF0u16.into())])["out"].unsigned(),
+        eval16(&chip, [("a", 0xFF00u16.into()), ("b", 0x0FF0u16.into())])["out"].unsigned(),
         0x0F00
     );
     assert_eq!(
-        eval16_t(&chip, [("a", 0xFFFFu16.into()), ("b", 0xFFFFu16.into())])["out"].unsigned(),
+        eval16(&chip, [("a", 0xFFFFu16.into()), ("b", 0xFFFFu16.into())])["out"].unsigned(),
         0xFFFF
     );
 }
@@ -328,7 +328,7 @@ fn and16_truth_table() {
 #[test]
 fn and16_optimal() {
     let chip = flatten_t(And16::chip());
-    assert_eq!(count_combinational_t(&chip.components).nands, 32);
+    assert_eq!(count_combinational(&chip.components).nands, 32);
 }
 
 // #[test]
@@ -350,7 +350,7 @@ fn and16_optimal() {
 fn mux16_truth_table() {
     let chip = flatten_t(Mux16::chip());
     assert_eq!(
-        eval16_t(
+        eval16(
             &chip,
             [
                 ("a0", 0xAAAAu16.into()),
@@ -362,7 +362,7 @@ fn mux16_truth_table() {
         0xAAAA
     );
     assert_eq!(
-        eval16_t(
+        eval16(
             &chip,
             [
                 ("a0", 0xAAAAu16.into()),
@@ -374,7 +374,7 @@ fn mux16_truth_table() {
         0x5555
     );
     assert_eq!(
-        eval16_t(
+        eval16(
             &chip,
             [
                 ("a0", 0x1234u16.into()),
@@ -386,7 +386,7 @@ fn mux16_truth_table() {
         0x1234
     );
     assert_eq!(
-        eval16_t(
+        eval16(
             &chip,
             [
                 ("a0", 0x1234u16.into()),
@@ -402,7 +402,7 @@ fn mux16_truth_table() {
 #[test]
 fn mux16_optimal() {
     let chip = flatten_t(Mux16::chip());
-    assert_eq!(count_combinational_t(&chip.components).nands, 49);
+    assert_eq!(count_combinational(&chip.components).nands, 49);
 }
 
 #[test]

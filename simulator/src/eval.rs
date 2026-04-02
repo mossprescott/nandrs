@@ -3,11 +3,10 @@
 /// There is no clock and no state.
 use std::collections::HashMap;
 
-use crate::component::{Buffer, Combinational, CombinationalT, Nand};
+use crate::component::Combinational;
 use crate::declare::{BusRef, IC, Reflect};
 use crate::nat::Nat;
 use crate::word::{Storable, Word};
-use frunk::hlist;
 
 /// Evaluate a chip statelessly; given named input values, return named output values.
 ///
@@ -69,71 +68,6 @@ where
     }
 
     // Read named outputs.
-    intf.outputs
-        .iter()
-        .map(|(name, busref)| {
-            let val = wire_state.get(&wire_id(busref)).copied().unwrap_or(0);
-            (
-                name.clone(),
-                Word::new((val >> busref.offset) & width_mask(busref.width)),
-            )
-        })
-        .collect()
-}
-
-/// Coproduct-based parallel of `eval`, for comparing ergonomics.
-pub fn eval_t<'a, Width: Nat + Clone, I>(
-    chip: &IC<CombinationalT>,
-    inputs: I,
-) -> HashMap<String, Word<Width>>
-where
-    Width: Storable,
-    I: IntoIterator<Item = (&'a str, Word<Width>)>,
-{
-    let intf = chip.reflect();
-
-    let mut wire_state: HashMap<usize, u64> = HashMap::new();
-
-    for (name, value) in inputs {
-        if let Some(busref) = intf.inputs.get(name) {
-            let id = wire_id(busref);
-            let mask = bus_mask(busref);
-            let entry = wire_state.entry(id).or_insert(0);
-            *entry = (*entry & !mask) | ((value.unsigned() << busref.offset) & mask);
-        }
-    }
-
-    for comp in &chip.components {
-        let comp_intf = comp.reflect();
-        for busref in comp_intf.inputs.values() {
-            if let Some(value) = busref.fixed {
-                let id = wire_id(busref);
-                let mask = bus_mask(busref);
-                let entry = wire_state.entry(id).or_insert(0);
-                *entry = (*entry & !mask) | ((value << busref.offset) & mask);
-            }
-        }
-    }
-
-    let order = topo_sort(&chip.components);
-
-    for &idx in &order {
-        let (out, val) = chip.components[idx].clone().fold(hlist![
-            |nand: Nand| {
-                let intf = nand.reflect();
-                let a = read_bit(&wire_state, &intf.inputs["a"]);
-                let b = read_bit(&wire_state, &intf.inputs["b"]);
-                (intf.outputs["out"].clone(), !(a & b))
-            },
-            |buffer: Buffer| {
-                let intf = buffer.reflect();
-                let a = read_bit(&wire_state, &intf.inputs["a"]);
-                (intf.outputs["out"].clone(), a)
-            },
-        ]);
-        write_bit(&mut wire_state, &out, val);
-    }
-
     intf.outputs
         .iter()
         .map(|(name, busref)| {

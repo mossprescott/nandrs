@@ -1,7 +1,5 @@
 //! Combinational primitives: `Nand` and `Buffer`, plus the `Combinational` enum that wraps them.
 
-use frunk::{Coproduct, hlist};
-
 use crate::declare::BusRef;
 use crate::{Chip, Component, IC, Input1, Interface, Output, Reflect};
 
@@ -53,43 +51,9 @@ impl From<Buffer> for Combinational {
     }
 }
 
-/// Coproduct equivalent of `Combinational`; the eventual replacement.
-///
-/// Note: this explicit enumeration of types is what you use when you want to *consume* a component
-/// of one of these types; you know exactly what types you know how to deal with and need it to be
-/// one of them. Normally when you're *producing* a component, you want to use a type constraint
-/// that just says which types need to be allowed.
-pub type CombinationalT = frunk::Coprod!(Nand, Buffer);
-
-impl From<Combinational> for CombinationalT {
-    fn from(c: Combinational) -> Self {
-        match c {
-            Combinational::Nand(n) => Coproduct::inject(n),
-            Combinational::Buffer(b) => Coproduct::inject(b),
-        }
-    }
-}
-
-impl From<CombinationalT> for Combinational {
-    fn from(c: CombinationalT) -> Self {
-        c.fold(frunk::hlist![Combinational::Nand, Combinational::Buffer])
-    }
-}
-
 pub struct CombinationalCounts {
     pub nands: usize,
     pub buffers: usize,
-}
-
-impl std::ops::Add for CombinationalCounts {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self {
-        CombinationalCounts {
-            nands: self.nands + rhs.nands,
-            buffers: self.buffers + rhs.buffers,
-        }
-    }
 }
 
 pub fn count_combinational(components: &[Combinational]) -> CombinationalCounts {
@@ -104,26 +68,4 @@ pub fn count_combinational(components: &[Combinational]) -> CombinationalCounts 
         }
     }
     counts
-}
-
-pub fn count_combinational_t(components: &[CombinationalT]) -> CombinationalCounts {
-    components.iter().cloned().fold(
-        CombinationalCounts {
-            nands: 0,
-            buffers: 0,
-        },
-        |counts, comp| {
-            counts
-                + comp.fold(hlist![
-                    |_: Nand| CombinationalCounts {
-                        nands: 1,
-                        buffers: 0
-                    },
-                    |_: Buffer| CombinationalCounts {
-                        nands: 0,
-                        buffers: 1
-                    },
-                ])
-        },
-    )
 }
