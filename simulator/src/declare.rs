@@ -618,6 +618,32 @@ macro_rules! expand_t {
         }
         $crate::expand_t!(@lets $c; $($rest)*);
     };
+    // Fold: collect injected components into a saved vec; extend into $c during @pushes.
+    (@lets $c:ident; $var:ident : ($start:literal .. $end:literal) . fold ($init:expr, | $acc:ident, $i:ident | { $($body:tt)* }) , $($rest:tt)*) => {
+        let $var = {
+            let mut __fold_tmp = vec![];
+            let _ = ($start..$end).fold($init, |$acc, $i| {
+                $crate::expand_t!(@fold_bind $($body)*);
+                let __fold_next = { $crate::expand_t!(@fold_accum $($body)*) };
+                $crate::expand_t!(@fold_push __fold_tmp; $($body)*);
+                __fold_next
+            });
+            __fold_tmp
+        };
+        $crate::expand_t!(@lets $c; $($rest)*);
+    };
+    (@lets $c:ident; $var:ident : ($start:literal .. $end:literal) . fold ($init:expr, | $acc:ident, $i:ident | { $($body:tt)* })) => {
+        let $var = {
+            let mut __fold_tmp = vec![];
+            let _ = ($start..$end).fold($init, |$acc, $i| {
+                $crate::expand_t!(@fold_bind $($body)*);
+                let __fold_next = { $crate::expand_t!(@fold_accum $($body)*) };
+                $crate::expand_t!(@fold_push __fold_tmp; $($body)*);
+                __fold_next
+            });
+            __fold_tmp
+        };
+    };
     (@lets $c:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
         let $var = $T { $($fields)* };
         $crate::expand_t!(@lets $c; $($rest)*);
@@ -626,11 +652,19 @@ macro_rules! expand_t {
         let $var = $T { $($fields)* };
     };
 
-    // --- Phase 2: push via C::inject (skip for loops, already pushed during @lets) ---
+    // --- Phase 2: push via C::inject (skip for loops and folds, already handled during @lets) ---
 
     (@pushes $c:ident;) => {};
     (@pushes $c:ident; for $i:ident in $start:literal .. $end:literal { $($inner:tt)* } $($rest:tt)*) => {
         $crate::expand_t!(@pushes $c; $($rest)*);
+    };
+    // Folds: extend with saved vec (collected during @lets)
+    (@pushes $c:ident; $var:ident : ($start:literal .. $end:literal) . fold ($init:expr, | $acc:ident, $i:ident | { $($inner:tt)* }) , $($rest:tt)*) => {
+        $c.extend($var);
+        $crate::expand_t!(@pushes $c; $($rest)*);
+    };
+    (@pushes $c:ident; $var:ident : ($start:literal .. $end:literal) . fold ($init:expr, | $acc:ident, $i:ident | { $($inner:tt)* })) => {
+        $c.extend($var);
     };
     (@pushes $c:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
         $c.push(C::inject($var));
@@ -652,4 +686,26 @@ macro_rules! expand_t {
         let $var = $T { $($fields)* };
         $c.push(C::inject($var));
     };
+
+    // --- Fold sub-phases ---
+
+    // @fold_bind: create let bindings for each component entry, skip the final accumulator
+    (@fold_bind $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+        let $var = $T { $($fields)* };
+        $crate::expand_t!(@fold_bind $($rest)*);
+    };
+    (@fold_bind $next:expr) => {};
+
+    // @fold_accum: skip component entries, return the final accumulator expression
+    (@fold_accum $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+        $crate::expand_t!(@fold_accum $($rest)*)
+    };
+    (@fold_accum $next:expr) => { $next };
+
+    // @fold_push: inject each component entry, skip the final accumulator
+    (@fold_push $c:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+        $c.push(C::inject($var));
+        $crate::expand_t!(@fold_push $c; $($rest)*);
+    };
+    (@fold_push $c:ident; $next:expr) => {};
 }
