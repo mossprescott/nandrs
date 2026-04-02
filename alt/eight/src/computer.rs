@@ -1,24 +1,22 @@
-/// Alternate Hack CPU implementation, using only 8-bit registers and adders.
-///
-/// This design uses ~20% fewer gates, but requires 2 cycles to execute each Hack instruction.
-/// Mostly, it's a test case for simulating an alternative architecure; this one shares no
-/// components with the standard CPU beyond the primitives and single-bit logic.
+//! Alternate Hack CPU implementation, using only 8-bit registers and adders.
+//!
+//! This design uses ~20% fewer gates, but requires 2 cycles to execute each Hack instruction.
+//! Mostly, it's a test case for simulating an alternative architecure; this one shares no
+//! components with the standard CPU beyond the primitives and single-bit logic.
 use assignments::project_01::{And, Mux, Nand, Not, Or};
-use assignments::project_02::FullAdder;
-use assignments::project_02::{self, HalfAdder};
+use assignments::project_02::{FullAdder, HalfAdder};
 use assignments::project_05::Decode;
-use simulator::component::native;
-use simulator::component::{Buffer, Computational};
+use frunk::coproduct::CoprodInjector;
+use frunk::{Coprod, hlist};
+use simulator::component::{Buffer, Computational, WiredRegister, native};
 use simulator::component::{Combinational, Computational16, MemorySystem16, ROM16};
 use simulator::nat::N16;
 use simulator::{
-    Chip, Component, IC, Input1, Input16, Interface, Output, Output16, Reflect, declare::BusRef,
-    expand, fixed,
+    Chip, Flat, IC, Input1, Input16, Interface, Output, Output16, Reflect, declare::BusRef,
+    expand_t, fixed, flatten_g,
 };
 
-use crate::component::{
-    EightDecode, EightMemSys, EightROM, Input8, Latch1, Latch8, Output8, Register8,
-};
+use crate::component::{Input8, Latch1, Latch8, Output8, Register8};
 
 /// Selects between two 8-bit inputs bit-by-bit, using a single sel bit.
 #[derive(Clone, Reflect, Chip)]
@@ -28,17 +26,15 @@ pub struct Mux8 {
     pub sel: Input1,
     pub out: Output8,
 }
-impl Component for Mux8 {
-    type Target = project_02::Project02Component;
-
-    expand! { |this| {
+impl Mux8 {
+    expand_t!([Not, Nand], |this| {
         not_sel: Not { a: this.sel, out: Output::new() },
         for i in 0..8 {
             nand0: Nand { a: not_sel.out.clone().into(), b: this.a0.bit(i),           out: Output::new() },
             nand1: Nand { a: this.sel,                   b: this.a1.bit(i),           out: Output::new() },
             _out:  Nand { a: nand0.out.clone().into(),   b: nand1.out.clone().into(), out: this.out.bit(i) }
         }
-    }}
+    });
 }
 
 /// Inverts each bit of an 8-bit input.
@@ -47,14 +43,12 @@ pub struct Not8 {
     pub a: Input8,
     pub out: Output8,
 }
-impl Component for Not8 {
-    type Target = project_02::Project02Component;
-
-    expand! { |this| {
+impl Not8 {
+    expand_t!([Not], |this| {
         for i in 0..8 {
             _not: Not { a: this.a.bit(i), out: this.out.bit(i) }
         }
-    }}
+    });
 }
 
 /// Bitwise `And` across two 8-bit inputs.
@@ -64,14 +58,12 @@ pub struct And8 {
     pub b: Input8,
     pub out: Output8,
 }
-impl Component for And8 {
-    type Target = project_02::Project02Component;
-
-    expand! { |this| {
+impl And8 {
+    expand_t!([And], |this| {
         for i in 0..8 {
             _and: And { a: this.a.bit(i), b: this.b.bit(i), out: this.out.bit(i) }
         }
-    }}
+    });
 }
 
 /// out = a + carry_in (8-bit, with carry out)
@@ -82,10 +74,8 @@ pub struct Inc8 {
     pub out: Output8,
     pub carry_out: Output,
 }
-impl Component for Inc8 {
-    type Target = project_02::Project02Component;
-
-    expand! { |this| {
+impl Inc8 {
+    expand_t!([HalfAdder], |this| {
         _carry_out: (0..8).fold(this.carry_in, |carry, i| {
             add: HalfAdder {
                 a: this.a.bit(i),
@@ -95,7 +85,7 @@ impl Component for Inc8 {
             },
             add.carry.into()
         }),
-    }}
+    });
 }
 
 /// out = a + b + carry_in (8-bit, with carry out)
@@ -107,10 +97,8 @@ pub struct Add8 {
     pub out: Output8,
     pub carry_out: Output,
 }
-impl Component for Add8 {
-    type Target = project_02::Project02Component;
-
-    expand! { |this| {
+impl Add8 {
+    expand_t!([FullAdder], |this| {
         _carry_out: (0..8).fold(this.carry_in, |carry, i| {
             add: FullAdder {
                 a: this.a.bit(i),
@@ -121,7 +109,7 @@ impl Component for Add8 {
             },
             add.carry.into()
         }),
-    }}
+    });
 }
 
 /// 8-way NAND: AND-tree of all 8 input bits, then invert. Used by Zero8 for efficient simulation
@@ -131,10 +119,8 @@ pub struct Nand8Way {
     pub a: Input8,
     pub out: Output,
 }
-impl Component for Nand8Way {
-    type Target = project_02::Project02Component;
-
-    expand! { |this| {
+impl Nand8Way {
+    expand_t!([And, Not], |this| {
         // Level 1: pair up adjacent bits
         and_01: And { a: this.a.bit(0).into(), b: this.a.bit(1).into(), out: Output::new() },
         and_23: And { a: this.a.bit(2).into(), b: this.a.bit(3).into(), out: Output::new() },
@@ -147,7 +133,7 @@ impl Component for Nand8Way {
         and_all: And { a: and_0123.out.into(), b: and_4567.out.into(), out: Output::new() },
 
         _not: Not { a: and_all.out.into(), out: this.out },
-    }}
+    });
 }
 
 /// Returns 1 if all bits of the 8-bit input are 0.
@@ -156,11 +142,8 @@ pub struct Zero8 {
     pub a: Input8,
     pub out: Output,
 }
-impl Component for Zero8 {
-    type Target = Combinational8;
-
-    // zero = (!a[0]) & (!a[1]) & ... & (!a[7])
-    expand! { |this| {
+impl Zero8 {
+    expand_t!([Not8, Nand8Way, Not], |this| {
         // Negate into a single bus; the simulator makes this parallel.
         not: Not8 { a: this.a, out: Output8::new() },
 
@@ -169,7 +152,7 @@ impl Component for Zero8 {
         nand_all: Nand8Way { a: not.out.into(), out: Output::new() },
 
         _f: Not { a: nand_all.out.into(), out: this.out },
-    }}
+    });
 }
 
 /// out = true if the most-significant bit of a is 1 (i.e., input is negative in two's complement).
@@ -178,12 +161,10 @@ pub struct Neg8 {
     pub a: Input8,
     pub out: Output,
 }
-impl Component for Neg8 {
-    type Target = project_02::Project02Component;
-
-    expand! { |this| {
+impl Neg8 {
+    expand_t!([Buffer], |this| {
         _sign: Buffer { a: this.a.bit(7), out: this.out },
-    }}
+    });
 }
 
 /// 8-bit ALU, which handles one-half word in a single cycle.
@@ -224,10 +205,8 @@ pub struct ALU {
     pub carry_out: Output,
 }
 
-impl Component for ALU {
-    type Target = Combinational8;
-
-    expand! { |this| {
+impl ALU {
+    expand_t!([Mux8, Not8, And8, Add8, Zero8, Neg8, Not, And, Mux], |this| {
         // zx/nx: conditionally zero then negate x
          x1: Mux8 { sel: this.zx, a0: this.x, a1: fixed(0), out: Output8::new() },
          x2_not: Not8 { a: x1.out.into(), out: Output8::new() },
@@ -264,7 +243,7 @@ impl Component for ALU {
          // ng reads from the gated output; when disabled out=0 so ng=0 (correct).
          // Neg8 is 0 nands (just a buffer) so there's nothing to skip.
          rneg: Neg8 { a: this.out.into(), out: this.ng },
-    }}
+    });
 }
 
 /// Slice a 16-bit bus into high and low half-words.
@@ -276,15 +255,13 @@ pub struct Split {
     pub lo: Output8,
 }
 
-impl Component for Split {
-    type Target = Combinational8;
-
-    expand! { |this| {
+impl Split {
+    expand_t!([Buffer], |this| {
         for i in 0..8 {
             _lo: Buffer { a: this.a.bit(i), out: this.lo.bit(i) },
             _hi: Buffer { a: this.a.bit(8+i), out: this.hi.bit(i) },
         }
-    }}
+    });
 }
 
 /// Assemble high and low half-words into a 16-bit signal.
@@ -296,78 +273,89 @@ pub struct Join {
     pub out: Output16,
 }
 
-impl Component for Join {
-    type Target = Combinational8;
-
-    expand! { |this| {
+impl Join {
+    expand_t!([Buffer], |this| {
         for i in 0..8 {
             _lo: Buffer { a: this.lo.bit(i), out: this.out.bit(i) },
             _hi: Buffer { a: this.hi.bit(i), out: this.out.bit(8+i) },
         }
-    }}
+    });
 }
 
-#[derive(Clone, Reflect, Component)]
-pub enum Combinational8 {
-    #[delegate]
-    Project02(project_02::Project02Component),
-    Decode(EightDecode),
-    Mux8(Mux8),
-    Not8(Not8),
-    And8(And8),
-    Inc8(Inc8),
-    Add8(Add8),
-    Nand8Way(Nand8Way),
-    Zero8(Zero8),
-    Neg8(Neg8),
-    ALU(ALU),
-    Split(Split),
-    Join(Join),
+pub type EightComponentT = Coprod!(
+    Nand,
+    Buffer,
+    Not,
+    And,
+    Or,
+    Mux,
+    HalfAdder,
+    FullAdder,
+    Mux8,
+    Not8,
+    And8,
+    Inc8,
+    Add8,
+    Nand8Way,
+    Zero8,
+    Neg8,
+    ALU,
+    Split,
+    Join,
+    Decode,
+    Register8,
+    Latch8,
+    Latch1,
+    ROM16,
+    MemorySystem16,
+    PC,
+    CPU,
+    Computer
+);
+
+pub type Combinational8T = Coprod!(
+    Nand, Buffer, Not, And, Or, Mux, HalfAdder, FullAdder, Mux8, Not8, And8, Inc8, Add8, Nand8Way,
+    Zero8, Neg8, ALU, Split, Join, Decode
+);
+
+/// Recursively expand until only Nands and Buffers are left (combinational only).
+pub fn flatten_to_nands_t<C, Idx>(chip: C) -> IC<Combinational>
+where
+    C: Reflect,
+    Combinational8T: CoprodInjector<C, Idx>,
+{
+    flatten_g::<C, Combinational8T, Idx, Combinational, _>(
+        chip,
+        "flat",
+        hlist![
+            |c: Nand| Flat::Done(vec![Combinational::Nand(c)]),
+            |c: Buffer| Flat::Done(vec![Combinational::Buffer(c)]),
+            |c: Not| Flat::Continue(c.expand_t()),
+            |c: And| Flat::Continue(c.expand_t()),
+            |c: Or| Flat::Continue(c.expand_t()),
+            |c: Mux| Flat::Continue(c.expand_t()),
+            |c: HalfAdder| Flat::Continue(c.expand_t()),
+            |c: FullAdder| Flat::Continue(c.expand_t()),
+            |c: Mux8| Flat::Continue(c.expand_t()),
+            |c: Not8| Flat::Continue(c.expand_t()),
+            |c: And8| Flat::Continue(c.expand_t()),
+            |c: Inc8| Flat::Continue(c.expand_t()),
+            |c: Add8| Flat::Continue(c.expand_t()),
+            |c: Nand8Way| Flat::Continue(c.expand_t()),
+            |c: Zero8| Flat::Continue(c.expand_t()),
+            |c: Neg8| Flat::Continue(c.expand_t()),
+            |c: ALU| Flat::Continue(c.expand_t()),
+            |c: Split| Flat::Continue(c.expand_t()),
+            |c: Join| Flat::Continue(c.expand_t()),
+            |c: Decode| Flat::Continue(c.expand_t()),
+        ],
+    )
 }
 
-/// Recursively expand until only Nands and Buffers are left.
-pub fn flatten_to_nands<C: Reflect + Component<Target = Combinational8>>(
-    chip: C,
-) -> IC<Combinational> {
-    fn go(comp: Combinational8) -> Vec<Combinational> {
-        match comp {
-            Combinational8::Project02(p) => project_02::flatten(p).components,
-            other => match other.expand() {
-                Some(ic) => ic.components.into_iter().flat_map(go).collect(),
-                None => panic!("Did not reduce to primitive: {:?}", other.name()),
-            },
-        }
-    }
-    IC {
-        name: format!("{} (flat)", chip.name()),
-        intf: chip.reflect(),
-        components: chip
-            .expand()
-            .expect("flatten_to_nands() requires a non-primitive component")
-            .components
-            .into_iter()
-            .flat_map(go)
-            .collect(),
-    }
-}
-
-impl Component for Latch8 {
-    type Target = EightComponent;
-
-    expand! { |this| {
+impl Latch8 {
+    expand_t!([Register8], |this| {
         reg: Register8 { data_in: this.data_in, write: fixed(1), data_out: this.data_out },
-    }}
-}
-
-impl Component for EightDecode {
-    type Target = Combinational8;
-    fn expand(&self) -> Option<IC<Combinational8>> {
-        self.0.expand().map(|ic| IC {
-            name: ic.name,
-            intf: ic.intf,
-            components: ic.components.into_iter().map(Into::into).collect(),
-        })
-    }
+    });
 }
 
 /// PC maintaining a 16-bit instruction address which is actually stored in a pair of 8-bit
@@ -398,10 +386,8 @@ pub struct PC {
     pub out: Output16,
 }
 
-impl Component for PC {
-    type Target = EightComponent;
-
-    expand! { |this| {
+impl PC {
+    expand_t!([Mux8, Not, And, Or, Inc8, Split, Join, Register8, Latch8], |this| {
         lo_out: forward Output8::new(),
         hi_out: forward Output8::new(),
         latch_out: forward Output8::new(),
@@ -432,7 +418,7 @@ impl Component for PC {
 
         // Latch Inc result for next cycle.
         latch: Latch8 { data_in: inc.out.into(), data_out: latch_out },
-    }}
+    });
 }
 
 #[derive(Clone, Reflect, Chip)]
@@ -455,10 +441,8 @@ pub struct CPU {
     pub mem_data_in: Input16,
 }
 
-impl Component for CPU {
-    type Target = EightComponent;
-
-    expand! { |this| {
+impl CPU {
+    expand_t!([Decode, Mux8, Or, And, Nand, Not, ALU, Split, Join, PC, Latch8, Latch1, Register8, Mux], |this| {
         top_half: forward Output::new(),
         bottom_half: forward Output::new(),
 
@@ -472,7 +456,7 @@ impl Component for CPU {
         reg_d_lo_out: forward Output8::new(),
         reg_d_hi_out: forward Output8::new(),
 
-        decode: EightDecode(Decode {
+        decode: Decode {
             instr: this.instr,
 
             is_c: Output::new(),
@@ -487,7 +471,7 @@ impl Component for CPU {
             write_a: Output::new(), write_m: Output::new(), write_d: Output::new(),
 
             jmp_lt:  Output::new(), jmp_eq:  Output::new(), jmp_gt:  Output::new(),
-        }),
+        },
 
         x_src: Mux8 { a0: reg_d_lo_out.into(), a1: reg_d_hi_out.into(), sel: bottom_half.into(), out: Output8::new() },
 
@@ -586,7 +570,7 @@ impl Component for CPU {
         not_top: Not { a: top_half.into(), out: bottom_half },
         next_cycle: Or { a: not_top.out.into(), b: this.reset, out: Output::new() },
         cycle_dff: Latch1 { data_in: next_cycle.out.into(), data_out: top_half },
-    }}
+    });
 }
 
 #[derive(Clone, Reflect, Chip)]
@@ -598,17 +582,15 @@ pub struct Computer {
     pub pc: Output16,
 }
 
-impl Component for Computer {
-    type Target = EightComponent;
-
-    expand! { |this| {
+impl Computer {
+    expand_t!([ROM16, CPU, MemorySystem16], |this| {
         mem_out: forward Output16::new(),
 
-        rom: EightROM(ROM16 {
+        rom: ROM16 {
             size: 32 * 1024,
             addr: this.pc.into(),
             out:  Output16::new(),
-        }),
+        },
 
         cpu: CPU {
             reset:        this.reset,
@@ -620,125 +602,111 @@ impl Component for Computer {
             mem_data_in:  mem_out.into(),
         },
 
-        memory: EightMemSys(MemorySystem16 {
+        memory: MemorySystem16 {
             addr:     cpu.mem_addr.into(),
             write:    cpu.mem_write.into(),
             data_in:  cpu.mem_data_out.into(),
             data_out: mem_out,
-        }),
-    }}
-}
-
-#[derive(Reflect, Component)]
-pub enum EightComponent {
-    #[delegate]
-    Combinational8(Combinational8),
-    #[primitive]
-    Register(Register8),
-    #[primitive]
-    Latch1(Latch1),
-    #[primitive]
-    ROM(EightROM),
-    #[primitive]
-    MemorySystem(EightMemSys),
-    Latch8(Latch8),
-    PC(PC),
-    CPU(CPU),
-    Computer(Computer),
-}
-
-impl From<EightROM> for Computational16 {
-    fn from(r: EightROM) -> Self {
-        Computational::ROM(r.0)
-    }
-}
-
-impl From<EightMemSys> for Computational16 {
-    fn from(m: EightMemSys) -> Self {
-        Computational::MemorySystem(m.0)
-    }
+        },
+    });
 }
 
 /// Recursively expand until only Nands, Registers, RAMs, ROMs, and MemorySystems are left.
-pub fn flatten<C: Reflect + Into<EightComponent>>(chip: C) -> IC<Computational16> {
-    fn go(comp: EightComponent) -> Vec<Computational16> {
-        match comp {
-            EightComponent::Combinational8(c) => match c.expand() {
-                Some(ic) => ic
-                    .components
-                    .into_iter()
-                    .flat_map(|c| go(c.into()))
-                    .collect(),
-                None => project_02::flatten(match c {
-                    Combinational8::Project02(p) => p,
-                    other => panic!("Did not reduce to primitive: {:?}", other.name()),
-                })
-                .components
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-            },
-            EightComponent::Register(r) => vec![Computational::Register(r.into())],
-            EightComponent::Latch1(l) => vec![Computational::Register(l.into())],
-            EightComponent::ROM(r) => vec![Computational::ROM(r.0)],
-            EightComponent::MemorySystem(m) => vec![Computational::MemorySystem(m.0)],
-            other => match other.expand() {
-                Some(ic) => ic.components.into_iter().flat_map(go).collect(),
-                None => panic!("Did not reduce to primitive: {:?}", other.name()),
-            },
-        }
-    }
-    IC {
-        name: format!("{} (flat)", chip.name()),
-        intf: chip.reflect(),
-        components: go(chip.into()),
-    }
+pub fn flatten_t<C, Idx>(chip: C) -> IC<Computational16>
+where
+    C: Reflect,
+    EightComponentT: CoprodInjector<C, Idx>,
+{
+    flatten_g::<C, EightComponentT, Idx, Computational16, _>(
+        chip,
+        "flat",
+        hlist![
+            |c: Nand| Flat::Done(vec![Computational::Nand(c)]),
+            |c: Buffer| Flat::Done(vec![Computational::Buffer(c)]),
+            |c: Not| Flat::Continue(c.expand_t()),
+            |c: And| Flat::Continue(c.expand_t()),
+            |c: Or| Flat::Continue(c.expand_t()),
+            |c: Mux| Flat::Continue(c.expand_t()),
+            |c: HalfAdder| Flat::Continue(c.expand_t()),
+            |c: FullAdder| Flat::Continue(c.expand_t()),
+            |c: Mux8| Flat::Continue(c.expand_t()),
+            |c: Not8| Flat::Continue(c.expand_t()),
+            |c: And8| Flat::Continue(c.expand_t()),
+            |c: Inc8| Flat::Continue(c.expand_t()),
+            |c: Add8| Flat::Continue(c.expand_t()),
+            |c: Nand8Way| Flat::Continue(c.expand_t()),
+            |c: Zero8| Flat::Continue(c.expand_t()),
+            |c: Neg8| Flat::Continue(c.expand_t()),
+            |c: ALU| Flat::Continue(c.expand_t()),
+            |c: Split| Flat::Continue(c.expand_t()),
+            |c: Join| Flat::Continue(c.expand_t()),
+            |c: Decode| Flat::Continue(c.expand_t()),
+            |c: Register8| Flat::Done(vec![Computational::Register(WiredRegister::from(c))]),
+            |c: Latch8| Flat::Continue(c.expand_t()),
+            |c: Latch1| Flat::Done(vec![Computational::Register(WiredRegister::from(c))]),
+            |c: ROM16| Flat::Done(vec![Computational::ROM(c)]),
+            |c: MemorySystem16| Flat::Done(vec![Computational::MemorySystem(c)]),
+            |c: PC| Flat::Continue(c.expand_t()),
+            |c: CPU| Flat::Continue(c.expand_t()),
+            |c: Computer| Flat::Continue(c.expand_t()),
+        ],
+    )
 }
 
-/// Like `flatten`, but uses native Mux/Adder components for efficient simulation.
-pub fn flatten_for_simulation<C: Reflect + Into<EightComponent>>(
-    chip: C,
-) -> IC<simulator::component::native::Simulational<N16, N16>> {
-    use simulator::component::native::Simulational;
-    fn go(comp: EightComponent) -> Vec<Simulational<N16, N16>> {
-        match comp {
-            EightComponent::Combinational8(Combinational8::Project02(p)) => {
-                todo!()
-            }
-            EightComponent::Combinational8(Combinational8::Mux8(c)) => {
-                vec![
-                    native::Mux {
-                        a0: c.a0,
-                        a1: c.a1,
-                        sel: c.sel,
-                        out: c.out,
-                    }
-                    .into(),
-                ]
-            }
-            EightComponent::Combinational8(c) => match c.expand() {
-                Some(ic) => ic
-                    .components
-                    .into_iter()
-                    .flat_map(|c| go(c.into()))
-                    .collect(),
-                None => panic!("Did not reduce to primitive: {:?}", c.name()),
-            },
-            EightComponent::Register(r) => vec![Computational::Register(r.into()).into()],
-            EightComponent::Latch1(l) => vec![Computational::Register(l.into()).into()],
-            EightComponent::ROM(r) => vec![Computational::ROM(r.0).into()],
-            EightComponent::MemorySystem(m) => vec![Computational::MemorySystem(m.0).into()],
-            other => match other.expand() {
-                Some(ic) => ic.components.into_iter().flat_map(go).collect(),
-                None => panic!("Did not reduce to primitive: {:?}", other.name()),
-            },
-        }
-    }
-    IC {
-        name: format!("{} (flat/sim)", chip.name()),
-        intf: chip.reflect(),
-        components: go(chip.into()),
-    }
+/// Like `flatten_t`, but uses native Mux/Adder components for efficient simulation.
+pub fn flatten_for_simulation<C, Idx>(chip: C) -> IC<native::Simulational<N16, N16>>
+where
+    C: Reflect,
+    EightComponentT: CoprodInjector<C, Idx>,
+{
+    flatten_g::<C, EightComponentT, Idx, native::Simulational<N16, N16>, _>(
+        chip,
+        "flat/sim",
+        hlist![
+            // Delegate project_02 types:
+            |c: Nand| Flat::Done(assignments::project_02::flatten_for_simulation(c).components),
+            |c: Buffer| Flat::Done(assignments::project_02::flatten_for_simulation(c).components),
+            |c: Not| Flat::Done(assignments::project_02::flatten_for_simulation(c).components),
+            |c: And| Flat::Done(assignments::project_02::flatten_for_simulation(c).components),
+            |c: Or| Flat::Done(assignments::project_02::flatten_for_simulation(c).components),
+            |c: Mux| Flat::Done(assignments::project_02::flatten_for_simulation(c).components),
+            |c: HalfAdder| Flat::Done(
+                assignments::project_02::flatten_for_simulation(c).components
+            ),
+            |c: FullAdder| Flat::Done(
+                assignments::project_02::flatten_for_simulation(c).components
+            ),
+            // Mux8 → native mux
+            |c: Mux8| Flat::Done(vec![
+                native::Mux {
+                    a0: c.a0,
+                    a1: c.a1,
+                    sel: c.sel,
+                    out: c.out
+                }
+                .into()
+            ]),
+            |c: Not8| Flat::Continue(c.expand_t()),
+            |c: And8| Flat::Continue(c.expand_t()),
+            |c: Inc8| Flat::Continue(c.expand_t()),
+            |c: Add8| Flat::Continue(c.expand_t()),
+            |c: Nand8Way| Flat::Continue(c.expand_t()),
+            |c: Zero8| Flat::Continue(c.expand_t()),
+            |c: Neg8| Flat::Continue(c.expand_t()),
+            |c: ALU| Flat::Continue(c.expand_t()),
+            |c: Split| Flat::Continue(c.expand_t()),
+            |c: Join| Flat::Continue(c.expand_t()),
+            |c: Decode| Flat::Continue(c.expand_t()),
+            |c: Register8| Flat::Done(vec![Computational::Register(WiredRegister::from(c)).into()]),
+            |c: Latch8| Flat::Continue(c.expand_t()),
+            |c: Latch1| Flat::Done(vec![Computational::Register(WiredRegister::from(c)).into()]),
+            |c: ROM16| Flat::Done(vec![Computational::ROM(c).into()]),
+            |c: MemorySystem16| Flat::Done(vec![Computational::MemorySystem(c).into()]),
+            |c: PC| Flat::Continue(c.expand_t()),
+            |c: CPU| Flat::Continue(c.expand_t()),
+            |c: Computer| Flat::Continue(c.expand_t()),
+        ],
+    )
 }
 
 #[cfg(test)]
@@ -746,14 +714,15 @@ mod test {
     use std::collections::HashMap;
 
     use crate::computer::{
-        ALU, CPU, Computer, PC, flatten, flatten_for_simulation, flatten_to_nands,
+        ALU, CPU, Computer, EightComponentT, PC, flatten_for_simulation, flatten_t,
+        flatten_to_nands_t,
     };
     use assignments::tests::test_05;
     use simulator::component::{Combinational, count_combinational, count_computational};
     use simulator::nat::N16;
     use simulator::simulate::{MemoryMap, simulate, synthesize};
     use simulator::word::Word;
-    use simulator::{Chip as _, eval, print_graph};
+    use simulator::{Chip as _, eval, print_ic_graph};
 
     // Note: the ALU and related components are all 8-bit, but end up embedded in a 16-bit circuit, so for simplicity,
     // treat values as 16-bits
@@ -769,9 +738,12 @@ mod test {
         let chip = ALU::chip();
 
         // When it breaks, it's nice to see what it tried to do
-        print!("{}", print_graph(&chip));
+        print!(
+            "{}",
+            print_ic_graph(&chip.expand_t::<EightComponentT, _, _, _, _, _, _, _, _, _>())
+        );
 
-        let chip = flatten_to_nands(chip);
+        let chip = flatten_to_nands_t(chip);
 
         // 0 = 0 + 0
         let r = eval16(
@@ -990,7 +962,7 @@ mod test {
 
     #[test]
     fn alu_optimal() {
-        let chip = flatten_to_nands(ALU::chip());
+        let chip = flatten_to_nands_t(ALU::chip());
         assert_eq!(count_combinational(&chip.components).nands, 368); // Compare to 720
     }
 
@@ -999,9 +971,12 @@ mod test {
         let chip = PC::chip();
 
         // When it breaks, it's nice to see what it tried to do
-        print!("{}", print_graph(&chip));
+        print!(
+            "{}",
+            print_ic_graph(&chip.expand_t::<EightComponentT, _, _, _, _, _, _, _, _, _>())
+        );
 
-        let chip = flatten(chip);
+        let chip = flatten_t(chip);
 
         let no_ram = MemoryMap::empty();
         let mut state = simulate::<_, N16, N16>(&chip, no_ram);
@@ -1088,7 +1063,7 @@ mod test {
 
     #[test]
     fn pc_optimal() {
-        let chip = flatten(PC::chip());
+        let chip = flatten_t(PC::chip());
         // Note: flattening to computational for simplicity, even though only register is needed
         let counts = count_computational(&chip.components);
         assert_eq!(counts.nands, 224); // Compare to 223
@@ -1097,7 +1072,7 @@ mod test {
 
     #[test]
     fn cpu_optimal() {
-        let chip = flatten(CPU::chip());
+        let chip = flatten_t(CPU::chip());
         let counts = count_computational(&chip.components);
         assert_eq!(counts.nands, 845); // Compare to 1126
         assert_eq!(counts.registers, 11); // 6 8-bit registers, 2 8-bit latches (ALU and PC), and a couple of 1-bit latches for carries and the zr condition
@@ -1108,7 +1083,7 @@ mod test {
         use assignments::project_05::{find_rom, memory_system};
         use assignments::tests::test_05::max_program;
 
-        let chip = flatten(Computer::chip());
+        let chip = flatten_t(Computer::chip());
         let state = simulate::<_, N16, N16>(&chip, memory_system());
 
         let pgm = max_program();
@@ -1120,7 +1095,7 @@ mod test {
 
     #[test]
     fn computer_optimal() {
-        let chip = flatten(Computer::chip());
+        let chip = flatten_t(Computer::chip());
         let counts = count_computational(&chip.components);
         assert_eq!(counts.nands, 845); // Compare to 1126
         assert_eq!(counts.registers, 11);
@@ -1138,8 +1113,17 @@ mod test {
 
         let ops = wiring.op_counts();
         assert_eq!(
+            ops.nands + ops.ands,
+            29,
+            "Really, any reasonable number; just not hundreds"
+        );
+        assert_eq!(
             ops.shifts, 8,
             "2 half-words get moved in and out of address and data buses 4 times, empirically"
+        );
+        assert_eq!(
+            ops.muxes, 16,
+            "Enough to feel like we're skipping some work"
         );
     }
 }

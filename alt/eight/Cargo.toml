@@ -7,6 +7,7 @@ edition = "2024"
 assignments = { path = "../../assignments" }
 simulator = { path = "../../simulator" }
 computer = { path = "../../computer" }
+frunk = "0.4"
 clap = { version = "4.6.0", features = ["derive"] }
 
 [dev-dependencies]
