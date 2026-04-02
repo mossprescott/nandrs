@@ -113,16 +113,20 @@ fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
 
 /// Show the connections of a chip after one level of expansion.
 ///
-/// Each line is `source -> sink`. Chip inputs are sources; chip outputs are sinks.
-/// Sub-component ports are labelled `{typename}{index}.{port}`.
+/// Each line is `source -> sink`. Chip inputs are sources; chip outputs are sinks. Sub-component
+/// ports are labelled `{typename}{index}.{port}`.
 ///
 /// ```ignore
 /// let chip = And { a: Input1::new(), b: Input1::new(), out: Output::new() };
 /// assert_eq!(print_graph(&chip), "And:\nnand0.a <- a\nnand0.b <- b\nnot1.a <- nand0.out\nout <- not1.out");
 /// ```
 ///
-/// Note: Claude has been given full latitude here as long as the output looks right,
-/// and it's elected to sort strings at the end.
+/// Note: Claude has been given full latitude here as long as the output looks right, and it's
+/// elected to sort strings at the end.
+///
+/// TODO: nobody can actually use this anymore, because every `expand` fn has a flexible type, and
+/// there's no Component impl to supply a canonical type. But there could be, just to make this work
+/// again.
 pub fn print_graph<C>(chip: &C) -> String
 where
     C: Component + Reflect,
