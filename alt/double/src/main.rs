@@ -9,8 +9,8 @@ use assignments::project_06::{Program, assemble};
 use computer::cli::Args;
 use computer::disasm::disassemble;
 use double::computer::{
-    Computer, DoubleComponent, find_roms, flatten as flatten_double,
-    flatten_for_simulation as flatten_double_sim,
+    Computer, DoubleComponent, find_roms, flatten_for_simulation as flatten_double_sim,
+    flatten_t as flatten_double,
 };
 use simulator::simulate::{initialize, synthesize};
 use simulator::word::Word16;

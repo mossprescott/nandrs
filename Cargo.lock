@@ -194,6 +194,7 @@ dependencies = [
  "assignments",
  "clap",
  "computer",
+ "frunk",
  "simulator",
 ]
 
