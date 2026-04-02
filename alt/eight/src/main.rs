@@ -85,7 +85,7 @@ macro_rules! preserve {
 }
 
 /// Channeling dfithian. This stuff is just hard to look at.
-macro_rules! expand {
+macro_rules! eliminate {
     ($c:expr) => {
         Flat::Continue($c.expand_t())
     };
@@ -119,20 +119,20 @@ where
             |c: Nand8Way| preserve!(c),
             |c: Zero8| preserve!(c),
             |c: Neg8| preserve!(c),
-            |c: ALU| expand!(c),
+            |c: ALU| eliminate!(c),
             |c: Split| preserve!(c),
             |c: Join| preserve!(c),
             // Project 03+: stop registers, expand PC
             |c: Decode| preserve!(c),
             |c: Register8| preserve!(c),
-            |c: Latch8| expand!(c),
+            |c: Latch8| eliminate!(c),
             |c: Latch1| preserve!(c),
             |c: ROM16| preserve!(c),
             |c: MemorySystem16| preserve!(c),
-            |c: PC| expand!(c),
+            |c: PC| eliminate!(c),
             // Project 05+: expand
-            |c: CPU| expand!(c),
-            |c: Computer| expand!(c),
+            |c: CPU| eliminate!(c),
+            |c: Computer| eliminate!(c),
         ],
     )
 }

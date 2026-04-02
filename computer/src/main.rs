@@ -85,7 +85,7 @@ macro_rules! preserve {
     };
 }
 
-macro_rules! expand {
+macro_rules! eliminate {
     ($c:expr) => {
         Flat::Continue($c.expand_t())
     };
@@ -120,16 +120,16 @@ where
             |c: Nand16Way| preserve!(c),
             |c: Zero16| preserve!(c),
             |c: Neg16| preserve!(c),
-            |c: ALU| expand!(c),
+            |c: ALU| eliminate!(c),
             // Project 03+: stop registers, expand PC
             |c: Register16| preserve!(c),
-            |c: PC| expand!(c),
+            |c: PC| eliminate!(c),
             |c: ROM16| preserve!(c),
             |c: MemorySystem16| preserve!(c),
             // Project 05+: expand
-            |c: Decode| expand!(c),
-            |c: CPU| expand!(c),
-            |c: Computer| expand!(c),
+            |c: Decode| eliminate!(c),
+            |c: CPU| eliminate!(c),
+            |c: Computer| eliminate!(c),
         ],
     )
 }
