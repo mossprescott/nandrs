@@ -1,19 +1,12 @@
-#![allow(unused_variables, dead_code, unused_imports)]
-
-use crate::project_01::{
-    And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, Or, Project01ComponentT, Xor,
-};
+use crate::project_01::{And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, Or};
 use frunk::coproduct::CoprodInjector;
 use frunk::{Coprod, hlist};
-use simulator::Chip as _;
-use simulator::Reflect as _;
 use simulator::component::native;
 use simulator::component::{Combinational, Computational};
 use simulator::declare::{BusRef, Interface};
-use simulator::nat::{N16, Nat};
+use simulator::nat::N16;
 use simulator::{
-    self, Chip, Component, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand, expand_t,
-    fixed, flatten_g,
+    self, Chip, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand_t, fixed, flatten_g,
 };
 
 pub type Project02ComponentT = Coprod!(

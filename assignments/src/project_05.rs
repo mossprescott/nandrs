@@ -1,31 +1,20 @@
-#![allow(unused_variables, dead_code, unused_imports)]
-
-use crate::project_01::{
-    And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, Or, Project01ComponentT,
-};
-use crate::project_02::{
-    ALU, Add16, FullAdder, HalfAdder, Inc16, Nand16Way, Neg16, Project02ComponentT, Zero16,
-};
+use crate::project_01::{And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, Or};
+use crate::project_02::{ALU, Add16, FullAdder, HalfAdder, Inc16, Nand16Way, Neg16, Zero16};
 use crate::project_03::PC;
 use frunk::coproduct::CoprodInjector;
 use frunk::{Coprod, hlist};
-use simulator::Chip as _;
-use simulator::Reflect as _;
 use simulator::component::native;
 use simulator::component::{
-    Computational, Computational16, MemorySystem16, RAM16, ROM16, Register16, Sequential,
-    WiredRegister,
+    Computational, Computational16, MemorySystem16, ROM16, Register16, WiredRegister,
 };
 use simulator::declare::{BusRef, Interface};
 use simulator::nat::N16;
 use simulator::simulate::{
-    BusResident, ChipState, MemoryMap, RAMHandle, RAMMap, ROMHandle, ROMMap, RegionMap,
-    SerialHandle, SerialMap,
+    BusResident, ChipState, MemoryMap, RAMHandle, RAMMap, ROMHandle, RegionMap, SerialHandle,
+    SerialMap,
 };
-use simulator::word::Word16;
 use simulator::{
-    self, Chip, Component, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand, expand_t,
-    fixed, flatten_g,
+    self, Chip, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand_t, fixed, flatten_g,
 };
 
 pub type Project05ComponentT = Coprod!(

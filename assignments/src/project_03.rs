@@ -1,18 +1,12 @@
-#![allow(unused_variables, dead_code, unused_imports)]
-
-use crate::project_01::{And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, Project01ComponentT};
-use crate::project_02::{
-    ALU, Add16, FullAdder, HalfAdder, Inc16, Nand16Way, Neg16, Project02ComponentT, Zero16,
-};
+use crate::project_01::{And, And16, Buffer, Mux, Mux16, Nand, Not, Not16};
+use crate::project_02::{ALU, Add16, FullAdder, HalfAdder, Inc16, Nand16Way, Neg16, Zero16};
 use frunk::coproduct::CoprodInjector;
 use frunk::{Coprod, hlist};
-use simulator::Reflect as _;
-use simulator::component::{Combinational, Register16, Sequential, WiredRegister};
+use simulator::component::{Register16, Sequential, WiredRegister};
 use simulator::declare::{BusRef, Interface};
 use simulator::{
-    self, Chip, Component, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand_t, fixed,
+    self, Chip, Flat, IC, Input1, Input16, Output16, Reflect, expand_t, fixed, flatten_g,
 };
-use simulator::{Chip as _, flatten_g};
 
 pub type Project03ComponentT = Coprod!(
     Nand, Buffer, Not, And, Mux, Mux16, Not16, And16, HalfAdder, FullAdder, Inc16, Add16,

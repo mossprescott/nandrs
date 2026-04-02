@@ -1,12 +1,8 @@
-#![allow(unused_variables, dead_code, unused_imports)]
-
 use frunk::coproduct::CoprodInjector;
-use frunk::{Coprod, Coproduct, hlist};
-use simulator::Chip as _;
-use simulator::Reflect as _;
+use frunk::{Coprod, hlist};
 use simulator::component::Combinational;
 use simulator::declare::{BusRef, Interface};
-use simulator::nat::{N1, N16};
+
 use simulator::{Chip, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand_t, flatten_g};
 
 // Re-export since the other components here parallel Nand:
