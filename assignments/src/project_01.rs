@@ -35,7 +35,7 @@ pub enum Project01Component {
     Mux16(Mux16),
 }
 
-type Project01ComponentT = Coprod!(Nand, Buffer, Not, And); // TODO: remaining components
+type Project01ComponentT = Coprod!(Nand, Buffer, Not, And, Or, Xor, Mux, Dmux);
 
 impl From<Project01ComponentT> for Project01Component {
     fn from(comp: Project01ComponentT) -> Self {
@@ -44,6 +44,10 @@ impl From<Project01ComponentT> for Project01Component {
             Project01Component::Buffer,
             Project01Component::Not,
             Project01Component::And,
+            Project01Component::Or,
+            Project01Component::Xor,
+            Project01Component::Mux,
+            Project01Component::Dmux,
         ])
     }
 }
@@ -86,6 +90,25 @@ where
             |buffer: Buffer| vec![Coproduct::inject(buffer)],
             |not: Not| not.expand_t::<CombinationalT, _>().components,
             |and: And| and
+                .expand_t::<Project01ComponentT, _, _>()
+                .components
+                .into_iter()
+                .flat_map(go)
+                .collect(),
+            |or: Or| or
+                .expand_t::<Project01ComponentT, _, _>()
+                .components
+                .into_iter()
+                .flat_map(go)
+                .collect(),
+            |xor: Xor| xor.expand_t::<CombinationalT, _>().components,
+            |mux: Mux| mux
+                .expand_t::<Project01ComponentT, _, _>()
+                .components
+                .into_iter()
+                .flat_map(go)
+                .collect(),
+            |dmux: Dmux| dmux
                 .expand_t::<Project01ComponentT, _, _>()
                 .components
                 .into_iter()
@@ -157,11 +180,16 @@ pub struct Or {
 impl Component for Or {
     type Target = Project01Component;
 
-    expand! { |this| {
-        not_a: Not { a: this.a, out: Output::new() },
-        not_b: Not { a: this.b, out: Output::new() },
-        nand: Nand { a: not_a.out.into(), b: not_b.out.into(), out: this.out }
-    }}
+    fn expand(&self) -> Option<IC<Self::Target>> {
+        Some(self.expand_t::<Project01ComponentT, _, _>().map(Into::into))
+    }
+}
+impl Or {
+    expand_t!([Not, Nand], |this| {
+        not_a: Not  { a: this.a,           out: Output::new() },
+        not_b: Not  { a: this.b,           out: Output::new() },
+        nand:  Nand { a: not_a.out.into(), b: not_b.out.into(), out: this.out },
+    });
 }
 
 /// True when inputs differ.
@@ -174,12 +202,17 @@ pub struct Xor {
 impl Component for Xor {
     type Target = Project01Component;
 
-    expand! { |this| {
+    fn expand(&self) -> Option<IC<Self::Target>> {
+        Some(self.expand_t::<Project01ComponentT, _>().map(Into::into))
+    }
+}
+impl Xor {
+    expand_t!([Nand], |this| {
         n1:  Nand { a: this.a,        b: this.b,        out: Output::new() },
         n2:  Nand { a: this.a,        b: n1.out.into(), out: Output::new() },
         n3:  Nand { a: this.b,        b: n1.out.into(), out: Output::new() },
         out: Nand { a: n2.out.into(), b: n3.out.into(), out: this.out },
-    }}
+    });
 }
 
 /// Passes a0 through when sel is 0, a1 when sel is 1.
@@ -193,12 +226,17 @@ pub struct Mux {
 impl Component for Mux {
     type Target = Project01Component;
 
-    expand! { |this| {
+    fn expand(&self) -> Option<IC<Self::Target>> {
+        Some(self.expand_t::<Project01ComponentT, _, _>().map(Into::into))
+    }
+}
+impl Mux {
+    expand_t!([Not, Nand], |this| {
         not_sel: Not  { a: this.sel,            out: Output::new() },
         nand0:   Nand { a: not_sel.out.into(),  b: this.a0,          out: Output::new() },
         nand1:   Nand { a: this.sel,            b: this.a1,          out: Output::new() },
         out:     Nand { a: nand0.out.into(),    b: nand1.out.into(), out: this.out },
-    }}
+    });
 }
 
 /// Routes input to a when sel is 0, or b when sel is 1; the unused output is zero.
@@ -212,12 +250,16 @@ pub struct Dmux {
 impl Component for Dmux {
     type Target = Project01Component;
 
-    expand! { |this| {
+    fn expand(&self) -> Option<IC<Self::Target>> {
+        Some(self.expand_t::<Project01ComponentT, _, _>().map(Into::into))
+    }
+}
+impl Dmux {
+    expand_t!([Not, And], |this| {
         not_sel: Not { a: this.sel,   out: Output::new() },
-
         and_a:   And { a: this.input, b: not_sel.out.into(), out: this.a },
         and_b:   And { a: this.input, b: this.sel,           out: this.b },
-    }}
+    });
 }
 
 /// Inverts each bit of a 16-bit input.
