@@ -55,10 +55,10 @@ impl From<Buffer> for Combinational {
 
 /// Coproduct equivalent of `Combinational`; the eventual replacement.
 ///
-/// Note: this explicit enumeration of types is what you use when you wnant to *consume*
-/// a component of one of these types; you know exctly what types you know how to deal with
-/// and need it to be one of them. Normally when you're producing a component, you want to
-/// use a type constraint that just says which types need to be allowed.
+/// Note: this explicit enumeration of types is what you use when you want to *consume* a component
+/// of one of these types; you know exactly what types you know how to deal with and need it to be
+/// one of them. Normally when you're *producing* a component, you want to use a type constraint
+/// that just says which types need to be allowed.
 pub type CombinationalT = frunk::Coprod!(Nand, Buffer);
 
 impl From<Combinational> for CombinationalT {
@@ -90,6 +90,21 @@ pub fn count_combinational(components: &[Combinational]) -> CombinationalCounts 
         match comp {
             Combinational::Nand(_) => counts.nands += 1,
             Combinational::Buffer(_) => counts.buffers += 1,
+        }
+    }
+    counts
+}
+
+pub fn count_combinational_t(components: &[CombinationalT]) -> CombinationalCounts {
+    let mut counts = CombinationalCounts {
+        nands: 0,
+        buffers: 0,
+    };
+    for comp in components {
+        match comp {
+            frunk::Coproduct::Inl(_) => counts.nands += 1,
+            frunk::Coproduct::Inr(frunk::Coproduct::Inl(_)) => counts.buffers += 1,
+            frunk::Coproduct::Inr(frunk::Coproduct::Inr(c)) => match *c {},
         }
     }
     counts
