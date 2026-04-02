@@ -82,12 +82,12 @@ where
         hlist![
             |c: Nand| Flat::Flat(CombinationalT::inject(c)),
             |c: Buffer| Flat::Flat(CombinationalT::inject(c)),
-            |c: Not| Flat::Continue(c.expand_t::<Project01ComponentT, _>()),
-            |c: And| Flat::Continue(c.expand_t::<Project01ComponentT, _, _>()),
-            |c: Or| Flat::Continue(c.expand_t::<Project01ComponentT, _, _>()),
-            |c: Xor| Flat::Continue(c.expand_t::<Project01ComponentT, _>()),
-            |c: Mux| Flat::Continue(c.expand_t::<Project01ComponentT, _, _>()),
-            |c: Dmux| Flat::Continue(c.expand_t::<Project01ComponentT, _, _>()),
+            |c: Not| Flat::Continue(c.expand_t()),
+            |c: And| Flat::Continue(c.expand_t()),
+            |c: Or| Flat::Continue(c.expand_t()),
+            |c: Xor| Flat::Continue(c.expand_t()),
+            |c: Mux| Flat::Continue(c.expand_t()),
+            |c: Dmux| Flat::Continue(c.expand_t()),
         ],
         chip,
     )
