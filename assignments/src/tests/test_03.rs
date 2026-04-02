@@ -1,8 +1,8 @@
-use crate::project_03::{PC, flatten_t};
+use crate::project_03::{PC, Project03ComponentT, flatten_t};
 use simulator::component::{Sequential, count_sequential};
 use simulator::declare::Chip as _;
 use simulator::nat::N16;
-use simulator::print_graph;
+use simulator::print_ic_graph;
 use simulator::simulate::{MemoryMap, simulate};
 
 #[test]
@@ -10,7 +10,10 @@ fn pc_behavior() {
     let chip = PC::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    print!("{}", print_graph(&chip));
+    print!(
+        "{}",
+        print_ic_graph(&chip.expand_t::<Project03ComponentT, _, _, _>())
+    );
 
     let chip = flatten_t(chip);
 

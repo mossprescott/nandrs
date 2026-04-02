@@ -17,90 +17,10 @@ use simulator::{
 };
 use simulator::{Chip as _, flatten_g};
 
-/// Deprecated.
-#[derive(Clone, Reflect, Component)]
-pub enum Project03Component {
-    #[delegate]
-    Project02(Project02Component),
-    #[primitive]
-    Register(Register16),
-    PC(PC),
-}
-
 pub type Project03ComponentT = Coprod!(
     Nand, Buffer, Not, And, Mux, Mux16, Not16, And16, HalfAdder, FullAdder, Inc16, Add16,
     Nand16Way, Zero16, Neg16, ALU, Register16, PC
 );
-
-// TEMP
-impl From<Project03ComponentT> for Project03Component {
-    fn from(comp: Project03ComponentT) -> Self {
-        comp.fold(hlist![
-            |c: Nand| Project03Component::Project02(Project02Component::Project01(
-                Project01Component::Nand(c)
-            )),
-            |c: Buffer| Project03Component::Project02(Project02Component::Project01(
-                Project01Component::Buffer(c)
-            )),
-            |c: Not| Project03Component::Project02(Project02Component::Project01(
-                Project01Component::Not(c)
-            )),
-            |c: And| Project03Component::Project02(Project02Component::Project01(
-                Project01Component::And(c)
-            )),
-            |c: Mux| Project03Component::Project02(Project02Component::Project01(
-                Project01Component::Mux(c)
-            )),
-            |c: Mux16| Project03Component::Project02(Project02Component::Project01(
-                Project01Component::Mux16(c)
-            )),
-            |c: Not16| Project03Component::Project02(Project02Component::Project01(
-                Project01Component::Not16(c)
-            )),
-            |c: And16| Project03Component::Project02(Project02Component::Project01(
-                Project01Component::And16(c)
-            )),
-            |c: HalfAdder| Project03Component::Project02(Project02Component::HalfAdder(c)),
-            |c: FullAdder| Project03Component::Project02(Project02Component::FullAdder(c)),
-            |c: Inc16| Project03Component::Project02(Project02Component::Inc16(c)),
-            |c: Add16| Project03Component::Project02(Project02Component::Add16(c)),
-            |c: Nand16Way| Project03Component::Project02(Project02Component::Nand16Way(c)),
-            |c: Zero16| Project03Component::Project02(Project02Component::Zero16(c)),
-            |c: Neg16| Project03Component::Project02(Project02Component::Neg16(c)),
-            |c: ALU| Project03Component::Project02(Project02Component::ALU(c)),
-            |c: Register16| Project03Component::Register(c),
-            |c: PC| Project03Component::PC(c),
-        ])
-    }
-}
-
-/// Recursively expand until only Nands and Registers are left.
-///
-/// Deprecated.
-pub fn flatten<C: Reflect + Into<Project03Component>>(chip: C) -> IC<Sequential> {
-    fn go(comp: Project03Component) -> Vec<Sequential> {
-        match comp.expand() {
-            None => match comp {
-                Project03Component::Project02(p) => crate::project_02::flatten(p)
-                    .components
-                    .into_iter()
-                    .map(|c| match c {
-                        Combinational::Nand(n) => Sequential::Nand(n),
-                        Combinational::Buffer(c) => Sequential::Buffer(c),
-                    })
-                    .collect(),
-                Project03Component::Register(reg) => vec![reg.into()],
-                _ => panic!("Did not reduce to Nand/Register: {:?}", comp.name()),
-            },
-            Some(ic) => ic.components.into_iter().flat_map(go).collect(),
-        }
-    }
-    IC {
-        name: format!("{} (flat)", chip.name()),
-        intf: chip.reflect(),
-        components: go(chip.into()),
-    }
-}
 
 /// Recursively expand until only Nands and Registers are left.
 pub fn flatten_t<C, Idx>(chip: C) -> IC<Sequential>
@@ -150,17 +70,6 @@ pub struct PC {
     pub inc: Input1,
 
     pub out: Output16,
-}
-
-impl Component for PC {
-    type Target = Project03Component;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(
-            self.expand_t::<Project03ComponentT, _, _, _>()
-                .map(Into::into),
-        )
-    }
 }
 
 impl PC {

@@ -7,7 +7,7 @@ use crate::project_02::{
     ALU, Add16, FullAdder, HalfAdder, Inc16, Nand16Way, Neg16, Project02Component,
     Project02ComponentT, Zero16,
 };
-use crate::project_03::{PC, Project03Component, Project03ComponentT};
+use crate::project_03::PC;
 use frunk::coproduct::CoprodInjector;
 use frunk::{Coprod, hlist};
 use simulator::Chip as _;
