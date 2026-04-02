@@ -1,9 +1,10 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
 use crate::project_01::{
-    And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, Or, Project01Component, Xor,
+    And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, Or, Project01Component, Project01ComponentT,
+    Xor,
 };
-use frunk::{Coprod, Coproduct, hlist};
+use frunk::{Coprod, hlist};
 use simulator::Chip as _;
 use simulator::Reflect as _;
 use simulator::component::Combinational;
@@ -28,7 +29,7 @@ pub enum Project02Component {
     ALU(ALU),
 }
 
-type Project02ComponentT = Coprod!(
+pub type Project02ComponentT = Coprod!(
     Nand, Buffer, Not, And, Mux, Mux16, Not16, And16, HalfAdder, FullAdder, Add16, Nand16Way,
     Zero16, Neg16
 );
@@ -165,10 +166,7 @@ impl Component for HalfAdder {
     type Target = Project01Component;
 
     fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(
-            self.expand_t::<frunk::Coprod!(Nand), _>()
-                .map(|c| c.fold(frunk::hlist![Project01Component::Nand])),
-        )
+        Some(self.expand_t::<Project01ComponentT, _>().map(Into::into))
     }
 }
 impl HalfAdder {
@@ -205,10 +203,7 @@ impl Component for FullAdder {
     type Target = Project01Component;
 
     fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(
-            self.expand_t::<frunk::Coprod!(Nand), _>()
-                .map(|c| c.fold(frunk::hlist![Project01Component::Nand])),
-        )
+        Some(self.expand_t::<Project01ComponentT, _>().map(Into::into))
     }
 }
 impl FullAdder {

@@ -36,7 +36,7 @@ pub enum Project01Component {
     Mux16(Mux16),
 }
 
-type Project01ComponentT = Coprod!(
+pub type Project01ComponentT = Coprod!(
     Nand, Buffer, Not, And, Or, Xor, Mux, Dmux, Not16, And16, Mux16
 );
 
