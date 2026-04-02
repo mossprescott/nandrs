@@ -42,7 +42,10 @@ pub fn flatten<C: Reflect + Clone>(chip: C, label: &str, f: &dyn Fn(C) -> Option
     }
 }
 
-/// Either a terminal result already in T, or an IC<S> whose components need further flattening.
+/// Either a terminal result already in `T`, or an `IC<S>` whose components need further flattening.
+///
+/// Note: there's a middle case where a result `IC` already has components in the target type, but
+/// there seems to be no harm in using `Continue` for that case, at least for current purposes.
 pub enum Flat<S, T> {
     /// A result that is already in the target type.
     Flat(T),
@@ -51,14 +54,14 @@ pub enum Flat<S, T> {
 }
 
 /// Flatten to an arbitrary result type using a folder hlist. For each coproduct variant, the folder
-/// produces either a value already in T, or an IC<S> whose components recurse through go.
+/// produces either a value already in `T`, or an `IC<S>` whose components recurse through `go`.
 ///
 /// Note: the types here are stronger; if it terminates, everything is reduced. To make that work,
-/// every term in S has a well-defined expansion in that type. However, there's no structural
-/// guarantee that expansion actually makes progress. But we (usually, sort of) know that it does,
-/// because  in practice each expand_t's type is smaller than S – it's at least missing the
-/// component being expanded. On the third hand, nothing stops you from expanding A -> B, then B ->
-/// A, etc. Probably not worth trying to bake that kind of guarantee into these types.
+/// every term in `S` has a well-defined expansion in that type. However, there's no structural
+/// guarantee that expansion actually makes progress. We know that it does, because in practice each
+/// `expand_t`'s type is smaller than `S` — it's at least missing the component being expanded.
+/// Strictly speaking, nothing stops you from expanding A → B, then B → A, etc. Probably not worth
+/// trying to bake that kind of guarantee into these types.
 pub fn flatten_g<C, S, Idx, T, F>(folder: F, chip: C) -> IC<T>
 where
     C: Reflect,
