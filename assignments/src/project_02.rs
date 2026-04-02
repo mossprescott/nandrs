@@ -4,15 +4,18 @@ use crate::project_01::{
     And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, Or, Project01Component, Project01ComponentT,
     Xor,
 };
+use frunk::coproduct::CoprodInjector;
 use frunk::{Coprod, hlist};
 use simulator::Chip as _;
 use simulator::Reflect as _;
 use simulator::component::Combinational;
+use simulator::component::CombinationalT;
 use simulator::component::native;
 use simulator::declare::{BusRef, Interface};
 use simulator::nat::{N16, Nat};
 use simulator::{
-    self, Chip, Component, IC, Input1, Input16, Output, Output16, Reflect, expand, expand_t, fixed,
+    self, Chip, Component, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand, expand_t,
+    fixed, flatten_g,
 };
 
 #[derive(Clone, Reflect, Component)]
@@ -30,8 +33,8 @@ pub enum Project02Component {
 }
 
 pub type Project02ComponentT = Coprod!(
-    Nand, Buffer, Not, And, Mux, Mux16, Not16, And16, HalfAdder, FullAdder, Add16, Nand16Way,
-    Zero16, Neg16
+    Nand, Buffer, Not, And, Mux, Mux16, Not16, And16, HalfAdder, FullAdder, Inc16, Add16,
+    Nand16Way, Zero16, Neg16, ALU
 );
 
 impl From<Project02ComponentT> for Project02Component {
@@ -47,12 +50,43 @@ impl From<Project02ComponentT> for Project02Component {
             |c: And16| Project02Component::Project01(Project01Component::And16(c)),
             Project02Component::HalfAdder,
             Project02Component::FullAdder,
+            Project02Component::Inc16,
             Project02Component::Add16,
             Project02Component::Nand16Way,
             Project02Component::Zero16,
             Project02Component::Neg16,
+            Project02Component::ALU,
         ])
     }
+}
+
+/// Recursively expand_t() until only primitives are left.
+pub fn flatten_t<C, Idx>(chip: C) -> IC<CombinationalT>
+where
+    C: Reflect,
+    Project02ComponentT: CoprodInjector<C, Idx>,
+{
+    flatten_g::<C, Project02ComponentT, Idx, CombinationalT, _>(
+        hlist![
+            |c: Nand| Flat::Flat(CombinationalT::inject(c)),
+            |c: Buffer| Flat::Flat(CombinationalT::inject(c)),
+            |c: Not| Flat::Continue(c.expand_t()),
+            |c: And| Flat::Continue(c.expand_t()),
+            |c: Mux| Flat::Continue(c.expand_t()),
+            |c: Mux16| Flat::Continue(c.expand_t()),
+            |c: Not16| Flat::Continue(c.expand_t()),
+            |c: And16| Flat::Continue(c.expand_t()),
+            |c: HalfAdder| Flat::Continue(c.expand_t()),
+            |c: FullAdder| Flat::Continue(c.expand_t()),
+            |c: Inc16| Flat::Continue(c.expand_t()),
+            |c: Add16| Flat::Continue(c.expand_t()),
+            |c: Nand16Way| Flat::Continue(c.expand_t()),
+            |c: Zero16| Flat::Continue(c.expand_t()),
+            |c: Neg16| Flat::Continue(c.expand_t()),
+            |c: ALU| Flat::Continue(c.expand_t()),
+        ],
+        chip,
+    )
 }
 
 /// Recursively expand until only primitives are left.
@@ -60,7 +94,8 @@ pub fn flatten<C: Reflect + Into<Project02Component>>(chip: C) -> IC<Combination
     fn go(comp: Project02Component) -> Vec<Combinational> {
         match comp.expand() {
             None => match comp {
-                Project02Component::Project01(p) => crate::project_01::flatten(p).components,
+                Project02Component::Project01(Project01Component::Nand(c)) => vec![c.into()],
+                Project02Component::Project01(Project01Component::Buffer(c)) => vec![c.into()],
                 _ => panic!("Did not reduce to primitive: {:?}", comp.name()),
             },
             Some(ic) => ic.components.into_iter().flat_map(go).collect(),

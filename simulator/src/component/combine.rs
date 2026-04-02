@@ -70,6 +70,12 @@ impl From<Combinational> for CombinationalT {
     }
 }
 
+impl From<CombinationalT> for Combinational {
+    fn from(c: CombinationalT) -> Self {
+        c.fold(frunk::hlist![Combinational::Nand, Combinational::Buffer])
+    }
+}
+
 pub struct CombinationalCounts {
     pub nands: usize,
     pub buffers: usize,
