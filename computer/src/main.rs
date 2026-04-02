@@ -51,7 +51,7 @@ fn main() {
     } = program;
 
     let wiring = if args.precise {
-        let chip = project_05::flatten_t(computer);
+        let chip = project_05::flatten(computer);
         synthesize(&chip, memory_system())
     } else {
         let chip = project_05::flatten_for_simulation(computer);
@@ -87,7 +87,7 @@ macro_rules! preserve {
 
 macro_rules! eliminate {
     ($c:expr) => {
-        Flat::Continue($c.expand_t())
+        Flat::Continue($c.expand())
     };
 }
 

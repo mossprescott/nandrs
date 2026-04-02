@@ -6,7 +6,7 @@ use simulator::component::{Combinational, Computational};
 use simulator::declare::{BusRef, Interface};
 use simulator::nat::N16;
 use simulator::{
-    self, Chip, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand_t, fixed, flatten_g,
+    self, Chip, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand, fixed, flatten_g,
 };
 
 pub type Project02ComponentT = Coprod!(
@@ -14,8 +14,8 @@ pub type Project02ComponentT = Coprod!(
     Nand16Way, Zero16, Neg16, ALU
 );
 
-/// Recursively expand_t() until only primitives are left.
-pub fn flatten_t<C, Idx>(chip: C) -> IC<Combinational>
+/// Recursively expand() until only primitives are left.
+pub fn flatten<C, Idx>(chip: C) -> IC<Combinational>
 where
     C: Reflect,
     Project02ComponentT: CoprodInjector<C, Idx>,
@@ -26,21 +26,21 @@ where
         hlist![
             |c: Nand| Flat::Done(vec![Combinational::Nand(c)]),
             |c: Buffer| Flat::Done(vec![Combinational::Buffer(c)]),
-            |c: Not| Flat::Continue(c.expand_t()),
-            |c: And| Flat::Continue(c.expand_t()),
-            |c: Or| Flat::Continue(c.expand_t()),
-            |c: Mux| Flat::Continue(c.expand_t()),
-            |c: Mux16| Flat::Continue(c.expand_t()),
-            |c: Not16| Flat::Continue(c.expand_t()),
-            |c: And16| Flat::Continue(c.expand_t()),
-            |c: HalfAdder| Flat::Continue(c.expand_t()),
-            |c: FullAdder| Flat::Continue(c.expand_t()),
-            |c: Inc16| Flat::Continue(c.expand_t()),
-            |c: Add16| Flat::Continue(c.expand_t()),
-            |c: Nand16Way| Flat::Continue(c.expand_t()),
-            |c: Zero16| Flat::Continue(c.expand_t()),
-            |c: Neg16| Flat::Continue(c.expand_t()),
-            |c: ALU| Flat::Continue(c.expand_t()),
+            |c: Not| Flat::Continue(c.expand()),
+            |c: And| Flat::Continue(c.expand()),
+            |c: Or| Flat::Continue(c.expand()),
+            |c: Mux| Flat::Continue(c.expand()),
+            |c: Mux16| Flat::Continue(c.expand()),
+            |c: Not16| Flat::Continue(c.expand()),
+            |c: And16| Flat::Continue(c.expand()),
+            |c: HalfAdder| Flat::Continue(c.expand()),
+            |c: FullAdder| Flat::Continue(c.expand()),
+            |c: Inc16| Flat::Continue(c.expand()),
+            |c: Add16| Flat::Continue(c.expand()),
+            |c: Nand16Way| Flat::Continue(c.expand()),
+            |c: Zero16| Flat::Continue(c.expand()),
+            |c: Neg16| Flat::Continue(c.expand()),
+            |c: ALU| Flat::Continue(c.expand()),
         ],
     )
 }
@@ -59,9 +59,9 @@ where
         hlist![
             |c: Nand| Flat::Done(vec![Computational::Nand(c).into()]),
             |c: Buffer| Flat::Done(vec![Computational::Buffer(c).into()]),
-            |c: Not| Flat::Continue(c.expand_t()),
-            |c: And| Flat::Continue(c.expand_t()),
-            |c: Or| Flat::Continue(c.expand_t()),
+            |c: Not| Flat::Continue(c.expand()),
+            |c: And| Flat::Continue(c.expand()),
+            |c: Or| Flat::Continue(c.expand()),
             |c: Mux| Flat::Done(vec![
                 native::Mux {
                     a0: c.a0,
@@ -80,8 +80,8 @@ where
                 }
                 .into()
             ]),
-            |c: Not16| Flat::Continue(c.expand_t()),
-            |c: And16| Flat::Continue(c.expand_t()),
+            |c: Not16| Flat::Continue(c.expand()),
+            |c: And16| Flat::Continue(c.expand()),
             |c: HalfAdder| {
                 // Tricky: the simulator looks for the carry chain to always pass the carry bit in
                 // c, so it's important for the zero bit to go to b here, even though in principle
@@ -107,12 +107,12 @@ where
                 }
                 .into()
             ]),
-            |c: Inc16| Flat::Continue(c.expand_t()),
-            |c: Add16| Flat::Continue(c.expand_t()),
-            |c: Nand16Way| Flat::Continue(c.expand_t()),
-            |c: Zero16| Flat::Continue(c.expand_t()),
-            |c: Neg16| Flat::Continue(c.expand_t()),
-            |c: ALU| Flat::Continue(c.expand_t()),
+            |c: Inc16| Flat::Continue(c.expand()),
+            |c: Add16| Flat::Continue(c.expand()),
+            |c: Nand16Way| Flat::Continue(c.expand()),
+            |c: Zero16| Flat::Continue(c.expand()),
+            |c: Neg16| Flat::Continue(c.expand()),
+            |c: ALU| Flat::Continue(c.expand()),
         ],
     )
 }
@@ -136,7 +136,7 @@ impl HalfAdder {
       carry = And {a = inputs.a, b: inputs.b}
     but flattened to use only 5 Nands.
      */
-    expand_t!([Nand], |this| {
+    expand!([Nand], |this| {
         // n1 = NAND(a,b) is shared: XOR reuses it, carry = NOT(n1) = NAND(n1,n1)
         n1:    Nand { a: this.a,        b: this.b,        out: Output::new() },
         n2:    Nand { a: this.a,        b: n1.out.into(), out: Output::new() },
@@ -163,7 +163,7 @@ impl FullAdder {
     /*
     Some sharing of common gates to get down to the minimal 9 gates.
     */
-    expand_t!([Nand], |this| {
+    expand!([Nand], |this| {
         // n4 = XOR(a,b); n5 = NAND(c, n4) shared by sum and carry paths
         n1:    Nand { a: this.a,        b: this.b,        out: Output::new() },
         n2:    Nand { a: this.a,        b: n1.out.into(), out: Output::new() },
@@ -185,7 +185,7 @@ pub struct Inc16 {
 }
 
 impl Inc16 {
-    expand_t!([Not, HalfAdder], |this| {
+    expand!([Not, HalfAdder], |this| {
         // bit 0: out[0] = NOT(a[0]); carry = a[0] (the carry-in is implicitly 1)
         not0: Not { a: this.a.bit(0), out: this.out.bit(0) },
         // Carry-ripple: fold threads the carry across iterations
@@ -210,7 +210,7 @@ pub struct Add16 {
 }
 
 impl Add16 {
-    expand_t!([FullAdder], |this| {
+    expand!([FullAdder], |this| {
         // bit 0: half-add (carry-in is 0)
         add0: FullAdder {
             a: this.a.bit(0),
@@ -245,7 +245,7 @@ pub struct Nand16Way {
 }
 
 impl Nand16Way {
-    expand_t!([And, Not], |this| {
+    expand!([And, Not], |this| {
         // Level 1
         and_01:   And { a: this.a.bit(0).into(),  b: this.a.bit(1).into(),  out: Output::new() },
         and_23:   And { a: this.a.bit(2).into(),  b: this.a.bit(3).into(),  out: Output::new() },
@@ -278,7 +278,7 @@ pub struct Zero16 {
 }
 
 impl Zero16 {
-    expand_t!([Not16, Nand16Way, Not], |this| {
+    expand!([Not16, Nand16Way, Not], |this| {
         // Negate into a single bus; the simulator makes this parallel.
         not: Not16 { a: this.a, out: Output16::new() },
 
@@ -301,7 +301,7 @@ impl Neg16 {
     /*
      out = a[15]
     */
-    expand_t!([Buffer], |this| {
+    expand!([Buffer], |this| {
         sign: Buffer { a: this.a.bit(15), out: this.out },
     });
 }
@@ -339,7 +339,7 @@ pub struct ALU {
 }
 
 impl ALU {
-    expand_t!([Mux16, Not16, And16, Add16, Mux, Zero16, Neg16, Not, And], |this| {
+    expand!([Mux16, Not16, And16, Add16, Mux, Zero16, Neg16, Not, And], |this| {
          // zx/nx: conditionally zero then negate x
          x1: Mux16 { sel: this.zx, a0: this.x, a1: fixed(0), out: Output16::new() },
          x2_not: Not16 { a: x1.out.into(), out: Output16::new() },

@@ -44,7 +44,7 @@ use simulator::declare::{BusRef, Interface};
 use simulator::nat::N16;
 use simulator::simulate::{BusResident, ChipState, ROMHandle};
 use simulator::{
-    self, Chip, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand_t, fixed, flatten_g,
+    self, Chip, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand, fixed, flatten_g,
 };
 
 /// CPU which (potentially) decodes and executes a pair of instructions in each cycle.
@@ -72,7 +72,7 @@ pub struct CPU {
 }
 
 impl CPU {
-    expand_t!([Decode, Not, Or, Mux16, ALU, Buffer, And, Register16, DoublePC], |this| {
+    expand!([Decode, Not, Or, Mux16, ALU, Buffer, And, Register16, DoublePC], |this| {
         // TODO: when the chip is powered on, DoublePC is in an invalid state (both out0 and out1 are 0).
         // A clever implementation here would detect that and assert "pc.reset" for one cycle automatically.
 
@@ -199,7 +199,7 @@ pub struct Computer {
 }
 
 impl Computer {
-    expand_t!([ROM16, CPU, MemorySystem16], |this| {
+    expand!([ROM16, CPU, MemorySystem16], |this| {
         mem_out: forward Output16::new(),
         pc1_out: forward Output16::new(),
 
@@ -254,7 +254,7 @@ pub struct DoublePC {
 }
 
 impl DoublePC {
-    expand_t!([Inc16, Inc2, Mux16, Register16], |this| {
+    expand!([Inc16, Inc2, Mux16, Register16], |this| {
         inc1: Inc16 { a: this.out0.into(), out: Output16::new() },
         inc2: Inc2 { a: this.out0.into(), out: Output16::new() },
 
@@ -290,7 +290,7 @@ pub struct Inc2 {
 }
 
 impl Inc2 {
-    expand_t!([Buffer, Not, FullAdder], |this| {
+    expand!([Buffer, Not, FullAdder], |this| {
         // the low bit is unaffected:
         low: Buffer { a: this.a.bit(0).into(), out: this.out.bit(0) },
 
@@ -360,7 +360,7 @@ pub fn find_roms(state: &ChipState<N16, N16>) -> (ROMHandle<N16, N16>, ROMHandle
 ///
 /// TODO: figure out how to make this only worry about the components that are added on top of
 /// Project05ComponentT, or maybe some subset.
-pub fn flatten_t<C, Idx>(chip: C) -> IC<Computational16>
+pub fn flatten<C, Idx>(chip: C) -> IC<Computational16>
 where
     C: Reflect,
     DoubleComponentT: CoprodInjector<C, Idx>,
@@ -371,35 +371,35 @@ where
         hlist![
             |c: Nand| Flat::Done(vec![Computational::Nand(c)]),
             |c: Buffer| Flat::Done(vec![Computational::Buffer(c)]),
-            |c: Not| Flat::Continue(c.expand_t()),
-            |c: And| Flat::Continue(c.expand_t()),
-            |c: Or| Flat::Continue(c.expand_t()),
-            |c: Mux| Flat::Continue(c.expand_t()),
-            |c: Mux16| Flat::Continue(c.expand_t()),
-            |c: Not16| Flat::Continue(c.expand_t()),
-            |c: And16| Flat::Continue(c.expand_t()),
-            |c: HalfAdder| Flat::Continue(c.expand_t()),
-            |c: FullAdder| Flat::Continue(c.expand_t()),
-            |c: Inc16| Flat::Continue(c.expand_t()),
-            |c: Add16| Flat::Continue(c.expand_t()),
-            |c: Nand16Way| Flat::Continue(c.expand_t()),
-            |c: Zero16| Flat::Continue(c.expand_t()),
-            |c: Neg16| Flat::Continue(c.expand_t()),
-            |c: ALU| Flat::Continue(c.expand_t()),
+            |c: Not| Flat::Continue(c.expand()),
+            |c: And| Flat::Continue(c.expand()),
+            |c: Or| Flat::Continue(c.expand()),
+            |c: Mux| Flat::Continue(c.expand()),
+            |c: Mux16| Flat::Continue(c.expand()),
+            |c: Not16| Flat::Continue(c.expand()),
+            |c: And16| Flat::Continue(c.expand()),
+            |c: HalfAdder| Flat::Continue(c.expand()),
+            |c: FullAdder| Flat::Continue(c.expand()),
+            |c: Inc16| Flat::Continue(c.expand()),
+            |c: Add16| Flat::Continue(c.expand()),
+            |c: Nand16Way| Flat::Continue(c.expand()),
+            |c: Zero16| Flat::Continue(c.expand()),
+            |c: Neg16| Flat::Continue(c.expand()),
+            |c: ALU| Flat::Continue(c.expand()),
             |c: Register16| Flat::Done(vec![Computational::Register(WiredRegister::from(c))]),
-            |c: PC| Flat::Continue(c.expand_t()),
+            |c: PC| Flat::Continue(c.expand()),
             |c: ROM16| Flat::Done(vec![Computational::ROM(c)]),
             |c: MemorySystem16| Flat::Done(vec![Computational::MemorySystem(c)]),
-            |c: Decode| Flat::Continue(c.expand_t()),
-            |c: CPU| Flat::Continue(c.expand_t()),
-            |c: Computer| Flat::Continue(c.expand_t()),
-            |c: DoublePC| Flat::Continue(c.expand_t()),
-            |c: Inc2| Flat::Continue(c.expand_t()),
+            |c: Decode| Flat::Continue(c.expand()),
+            |c: CPU| Flat::Continue(c.expand()),
+            |c: Computer| Flat::Continue(c.expand()),
+            |c: DoublePC| Flat::Continue(c.expand()),
+            |c: Inc2| Flat::Continue(c.expand()),
         ],
     )
 }
 
-/// Like `flatten_t`, but uses native Mux/Adder components for efficient simulation.
+/// Like `flatten`, but uses native Mux/Adder components for efficient simulation.
 pub fn flatten_for_simulation<C, Idx>(
     chip: C,
 ) -> IC<simulator::component::native::Simulational<N16, N16>>
@@ -440,14 +440,14 @@ where
             |c: Register16| Flat::Done(vec![
                 Computational::Register(WiredRegister::from(c)).into()
             ]),
-            |c: PC| Flat::Continue(c.expand_t()),
+            |c: PC| Flat::Continue(c.expand()),
             |c: ROM16| Flat::Done(vec![Computational::ROM(c).into()]),
             |c: MemorySystem16| Flat::Done(vec![Computational::MemorySystem(c).into()]),
-            |c: Decode| Flat::Continue(c.expand_t()),
-            |c: CPU| Flat::Continue(c.expand_t()),
-            |c: Computer| Flat::Continue(c.expand_t()),
-            |c: DoublePC| Flat::Continue(c.expand_t()),
-            |c: Inc2| Flat::Continue(c.expand_t()),
+            |c: Decode| Flat::Continue(c.expand()),
+            |c: CPU| Flat::Continue(c.expand()),
+            |c: Computer| Flat::Continue(c.expand()),
+            |c: DoublePC| Flat::Continue(c.expand()),
+            |c: Inc2| Flat::Continue(c.expand()),
         ],
     )
 }
@@ -461,7 +461,7 @@ mod test {
     use simulator::print_ic_graph;
     use simulator::simulate::simulate;
 
-    use crate::computer::{Computer, DoubleComponentT, find_roms, flatten_t};
+    use crate::computer::{Computer, DoubleComponentT, find_roms, flatten};
 
     #[test]
     fn computer_max_behavior() {
@@ -470,10 +470,10 @@ mod test {
         // When it breaks, it's nice to see what it tried to do
         println!(
             "{}",
-            print_ic_graph(&chip.expand_t::<DoubleComponentT, _, _, _>())
+            print_ic_graph(&chip.expand::<DoubleComponentT, _, _, _>())
         );
 
-        let flat = flatten_t(chip);
+        let flat = flatten(chip);
         let state = simulate(&flat, memory_system());
 
         let (rom0, rom1) = find_roms(&state);
@@ -487,7 +487,7 @@ mod test {
 
     #[test]
     fn computer_optimal() {
-        let components = flatten_t(Computer::chip()).components;
+        let components = flatten(Computer::chip()).components;
         let memsys = components
             .iter()
             .filter(|c| matches!(c, Computational::MemorySystem(_)))

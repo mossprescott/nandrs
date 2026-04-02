@@ -1,7 +1,7 @@
 use simulator::component::{Register, WiredRegister};
 use simulator::declare::{BusRef, Interface};
 use simulator::nat::{N1, N8};
-use simulator::{Chip, Input, Input1, Output, OutputBus, Reflect, expand_t, fixed};
+use simulator::{Chip, Input, Input1, Output, OutputBus, Reflect, expand, fixed};
 
 pub type Input8 = Input<N8>;
 pub type Output8 = OutputBus<N8>;
@@ -33,7 +33,7 @@ pub struct Latch8 {
     pub data_out: Output8,
 }
 impl Latch8 {
-    expand_t!([Register8], |this| {
+    expand!([Register8], |this| {
         reg: Register8 { data_in: this.data_in, write: fixed(1), data_out: this.data_out },
     });
 }

@@ -1,6 +1,6 @@
 use crate::project_01::Project01ComponentT;
 use crate::project_02::{
-    ALU, Add16, FullAdder, HalfAdder, Inc16, Neg16, Project02ComponentT, Zero16, flatten_t,
+    ALU, Add16, FullAdder, HalfAdder, Inc16, Neg16, Project02ComponentT, Zero16, flatten,
 };
 use simulator::component::{Combinational, count_combinational};
 use simulator::eval::eval;
@@ -25,7 +25,7 @@ fn eval16<'a>(
 
 #[test]
 fn half_adder_truth_table() {
-    let chip = flatten_t(HalfAdder::chip());
+    let chip = flatten(HalfAdder::chip());
 
     println!("{}", print_ic_graph(&chip));
 
@@ -45,13 +45,13 @@ fn half_adder_truth_table() {
 
 #[test]
 fn half_adder_optimal() {
-    let chip = flatten_t(HalfAdder::chip());
+    let chip = flatten(HalfAdder::chip());
     assert_eq!(count_combinational(&chip.components).nands, 5);
 }
 
 #[test]
 fn full_adder_truth_table() {
-    let chip = flatten_t(FullAdder::chip());
+    let chip = flatten(FullAdder::chip());
 
     println!("{}", print_ic_graph(&chip));
 
@@ -111,7 +111,7 @@ fn full_adder_truth_table() {
 
 #[test]
 fn full_adder_optimal() {
-    let chip = flatten_t(FullAdder::chip());
+    let chip = flatten(FullAdder::chip());
     assert_eq!(count_combinational(&chip.components).nands, 9);
 }
 
@@ -122,10 +122,10 @@ fn inc16_truth_table() {
     // When it breaks, it's nice to see what it tried to do
     print!(
         "{}",
-        print_ic_graph(&chip.expand_t::<Project02ComponentT, _, _>())
+        print_ic_graph(&chip.expand::<Project02ComponentT, _, _>())
     );
 
-    let chip = flatten_t(chip);
+    let chip = flatten(chip);
 
     assert_eq!(eval16(&chip, [("a", 0u16.into())])["out"].unsigned(), 1);
     assert_eq!(eval16(&chip, [("a", 1u16.into())])["out"].unsigned(), 2);
@@ -138,7 +138,7 @@ fn inc16_truth_table() {
 
 #[test]
 fn inc16_optimal() {
-    let chip = flatten_t(Inc16::chip());
+    let chip = flatten(Inc16::chip());
     // Not(1) for bit 0, plus 15 HalfAdders × 5 nands each for the carry chain
     assert_eq!(count_combinational(&chip.components).nands, 1 + 15 * 5);
 }
@@ -150,10 +150,10 @@ fn add16_truth_table() {
     // When it breaks, it's nice to see what it tried to do
     print!(
         "{}",
-        print_ic_graph(&chip.expand_t::<Project02ComponentT, _>())
+        print_ic_graph(&chip.expand::<Project02ComponentT, _>())
     );
 
-    let chip = flatten_t(chip);
+    let chip = flatten(chip);
 
     assert_eq!(
         eval16(&chip, [("a", 0u16.into()), ("b", 0u16.into())])["out"].signed(),
@@ -184,7 +184,7 @@ fn add16_truth_table() {
 
 #[test]
 fn add16_optimal() {
-    let chip = flatten_t(Add16::chip());
+    let chip = flatten(Add16::chip());
     // 16 FullAdders × 9 nands each
     assert_eq!(count_combinational(&chip.components).nands, 16 * 9);
 }
@@ -196,10 +196,10 @@ fn zero16_truth_table() {
     // When it breaks, it's nice to see what it tried to do
     print!(
         "{}",
-        print_ic_graph(&chip.expand_t::<Project02ComponentT, _, _, _>())
+        print_ic_graph(&chip.expand::<Project02ComponentT, _, _, _>())
     );
 
-    let chip = flatten_t(chip);
+    let chip = flatten(chip);
 
     assert_eq!(eval16(&chip, [("a", 0u16.into())])["out"].unsigned(), 1); // all zeros
     assert_eq!(eval16(&chip, [("a", 1u16.into())])["out"].unsigned(), 0); // bit 0 set
@@ -215,7 +215,7 @@ fn zero16_truth_table() {
 
 #[test]
 fn zero16_optimal() {
-    let chip = flatten_t(Zero16::chip());
+    let chip = flatten(Zero16::chip());
     // negate each bit: 16
     // and-tree: 2*(8+4+2+1) = 30
     // two nots because we use 16-way nand for "realism"
@@ -229,10 +229,10 @@ fn neg16_truth_table() {
     // When it breaks, it's nice to see what it tried to do
     print!(
         "{}",
-        print_ic_graph(&chip.expand_t::<Project02ComponentT, _>())
+        print_ic_graph(&chip.expand::<Project02ComponentT, _>())
     );
 
-    let chip = flatten_t(chip);
+    let chip = flatten(chip);
 
     assert_eq!(eval16(&chip, [("a", 0u16.into())])["out"].unsigned(), 0); // zero is not negative
     assert_eq!(eval16(&chip, [("a", 1u16.into())])["out"].unsigned(), 0); // positive
@@ -252,7 +252,7 @@ fn neg16_truth_table() {
 
 #[test]
 fn neg16_optimal() {
-    let chip = flatten_t(Neg16::chip());
+    let chip = flatten(Neg16::chip());
     assert_eq!(count_combinational(&chip.components).nands, 0);
 }
 
@@ -263,10 +263,10 @@ fn alu_truth_table() {
     // When it breaks, it's nice to see what it tried to do
     print!(
         "{}",
-        print_ic_graph(&chip.expand_t::<Project02ComponentT, _, _, _, _, _, _, _, _, _>())
+        print_ic_graph(&chip.expand::<Project02ComponentT, _, _, _, _, _, _, _, _, _>())
     );
 
-    let chip = flatten_t(chip);
+    let chip = flatten(chip);
 
     // 0 = 0 + 0
     let r = eval16(
@@ -433,7 +433,7 @@ fn alu_truth_table() {
 
 #[test]
 fn alu_optimal() {
-    let chip = flatten_t(ALU::chip());
+    let chip = flatten(ALU::chip());
     assert_eq!(count_combinational(&chip.components).nands, 720);
 }
 
@@ -442,7 +442,7 @@ fn alu_optimal() {
 fn alu_graph() {
     let chip = ALU::chip();
     assert_eq!(
-        print_ic_graph(&chip.expand_t::<Project02ComponentT, _, _, _, _, _, _, _, _, _>()),
+        print_ic_graph(&chip.expand::<Project02ComponentT, _, _, _, _, _, _, _, _, _>()),
         "ALU:
   mux16_0.a0[0..15] <- x[0..15]
   mux16_0.a1[0..15] <- 0

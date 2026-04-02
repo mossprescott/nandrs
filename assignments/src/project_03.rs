@@ -5,7 +5,7 @@ use frunk::{Coprod, hlist};
 use simulator::component::{Register16, Sequential, WiredRegister};
 use simulator::declare::{BusRef, Interface};
 use simulator::{
-    self, Chip, Flat, IC, Input1, Input16, Output16, Reflect, expand_t, fixed, flatten_g,
+    self, Chip, Flat, IC, Input1, Input16, Output16, Reflect, expand, fixed, flatten_g,
 };
 
 pub type Project03ComponentT = Coprod!(
@@ -14,7 +14,7 @@ pub type Project03ComponentT = Coprod!(
 );
 
 /// Recursively expand until only Nands and Registers are left.
-pub fn flatten_t<C, Idx>(chip: C) -> IC<Sequential>
+pub fn flatten<C, Idx>(chip: C) -> IC<Sequential>
 where
     C: Reflect,
     Project03ComponentT: CoprodInjector<C, Idx>,
@@ -25,22 +25,22 @@ where
         hlist![
             |c: Nand| Flat::Done(vec![Sequential::Nand(c)]),
             |c: Buffer| Flat::Done(vec![Sequential::Buffer(c)]),
-            |c: Not| Flat::Continue(c.expand_t()),
-            |c: And| Flat::Continue(c.expand_t()),
-            |c: Mux| Flat::Continue(c.expand_t()),
-            |c: Mux16| Flat::Continue(c.expand_t()),
-            |c: Not16| Flat::Continue(c.expand_t()),
-            |c: And16| Flat::Continue(c.expand_t()),
-            |c: HalfAdder| Flat::Continue(c.expand_t()),
-            |c: FullAdder| Flat::Continue(c.expand_t()),
-            |c: Inc16| Flat::Continue(c.expand_t()),
-            |c: Add16| Flat::Continue(c.expand_t()),
-            |c: Nand16Way| Flat::Continue(c.expand_t()),
-            |c: Zero16| Flat::Continue(c.expand_t()),
-            |c: Neg16| Flat::Continue(c.expand_t()),
-            |c: ALU| Flat::Continue(c.expand_t()),
+            |c: Not| Flat::Continue(c.expand()),
+            |c: And| Flat::Continue(c.expand()),
+            |c: Mux| Flat::Continue(c.expand()),
+            |c: Mux16| Flat::Continue(c.expand()),
+            |c: Not16| Flat::Continue(c.expand()),
+            |c: And16| Flat::Continue(c.expand()),
+            |c: HalfAdder| Flat::Continue(c.expand()),
+            |c: FullAdder| Flat::Continue(c.expand()),
+            |c: Inc16| Flat::Continue(c.expand()),
+            |c: Add16| Flat::Continue(c.expand()),
+            |c: Nand16Way| Flat::Continue(c.expand()),
+            |c: Zero16| Flat::Continue(c.expand()),
+            |c: Neg16| Flat::Continue(c.expand()),
+            |c: ALU| Flat::Continue(c.expand()),
             |c: Register16| Flat::Done(vec![Sequential::Register(WiredRegister::from(c))]),
-            |c: PC| Flat::Continue(c.expand_t()),
+            |c: PC| Flat::Continue(c.expand()),
         ],
     )
 }
@@ -64,7 +64,7 @@ pub struct PC {
 }
 
 impl PC {
-    expand_t!([Inc16, Mux16, Register16], |this| {
+    expand!([Inc16, Mux16, Register16], |this| {
         // Note: no special ceremony needed for back-references to the register's output, because
         // that wire is already declared as the output "out".
         inc:   Inc16  { a: this.out.into(), out: Output16::new() },

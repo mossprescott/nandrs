@@ -87,7 +87,7 @@ macro_rules! preserve {
 /// Channeling dfithian. This stuff is just hard to look at.
 macro_rules! eliminate {
     ($c:expr) => {
-        Flat::Continue($c.expand_t())
+        Flat::Continue($c.expand())
     };
 }
 

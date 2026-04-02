@@ -10,8 +10,8 @@ use assignments::project_06::{Program, assemble};
 use computer::cli::Args;
 use computer::disasm::disassemble;
 use double::computer::{
-    CPU, Computer, DoubleComponentT, DoublePC, Inc2, find_roms,
-    flatten_for_simulation as flatten_double_sim, flatten_t as flatten_double,
+    CPU, Computer, DoubleComponentT, DoublePC, Inc2, find_roms, flatten as flatten_double,
+    flatten_for_simulation as flatten_double_sim,
 };
 use frunk::coproduct::CoprodInjector;
 use frunk::hlist;
@@ -97,7 +97,7 @@ macro_rules! preserve {
 /// Channeling dfithian. This stuff is just hard to look at.
 macro_rules! eliminate {
     ($c:expr) => {
-        Flat::Continue($c.expand_t())
+        Flat::Continue($c.expand())
     };
 }
 

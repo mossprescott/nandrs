@@ -14,7 +14,7 @@ use simulator::simulate::{
     SerialMap,
 };
 use simulator::{
-    self, Chip, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand_t, fixed, flatten_g,
+    self, Chip, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand, fixed, flatten_g,
 };
 
 pub type Project05ComponentT = Coprod!(
@@ -45,7 +45,7 @@ pub type Project05ComponentT = Coprod!(
 );
 
 /// Recursively expand until only Nands, Registers, RAMs, and ROMs are left.
-pub fn flatten_t<C, Idx>(chip: C) -> IC<Computational16>
+pub fn flatten<C, Idx>(chip: C) -> IC<Computational16>
 where
     C: Reflect,
     Project05ComponentT: CoprodInjector<C, Idx>,
@@ -56,28 +56,28 @@ where
         hlist![
             |c: Nand| Flat::Done(vec![Computational::Nand(c)]),
             |c: Buffer| Flat::Done(vec![Computational::Buffer(c)]),
-            |c: Not| Flat::Continue(c.expand_t()),
-            |c: And| Flat::Continue(c.expand_t()),
-            |c: Or| Flat::Continue(c.expand_t()),
-            |c: Mux| Flat::Continue(c.expand_t()),
-            |c: Mux16| Flat::Continue(c.expand_t()),
-            |c: Not16| Flat::Continue(c.expand_t()),
-            |c: And16| Flat::Continue(c.expand_t()),
-            |c: HalfAdder| Flat::Continue(c.expand_t()),
-            |c: FullAdder| Flat::Continue(c.expand_t()),
-            |c: Inc16| Flat::Continue(c.expand_t()),
-            |c: Add16| Flat::Continue(c.expand_t()),
-            |c: Nand16Way| Flat::Continue(c.expand_t()),
-            |c: Zero16| Flat::Continue(c.expand_t()),
-            |c: Neg16| Flat::Continue(c.expand_t()),
-            |c: ALU| Flat::Continue(c.expand_t()),
+            |c: Not| Flat::Continue(c.expand()),
+            |c: And| Flat::Continue(c.expand()),
+            |c: Or| Flat::Continue(c.expand()),
+            |c: Mux| Flat::Continue(c.expand()),
+            |c: Mux16| Flat::Continue(c.expand()),
+            |c: Not16| Flat::Continue(c.expand()),
+            |c: And16| Flat::Continue(c.expand()),
+            |c: HalfAdder| Flat::Continue(c.expand()),
+            |c: FullAdder| Flat::Continue(c.expand()),
+            |c: Inc16| Flat::Continue(c.expand()),
+            |c: Add16| Flat::Continue(c.expand()),
+            |c: Nand16Way| Flat::Continue(c.expand()),
+            |c: Zero16| Flat::Continue(c.expand()),
+            |c: Neg16| Flat::Continue(c.expand()),
+            |c: ALU| Flat::Continue(c.expand()),
             |c: Register16| Flat::Done(vec![Computational::Register(WiredRegister::from(c))]),
-            |c: PC| Flat::Continue(c.expand_t()),
+            |c: PC| Flat::Continue(c.expand()),
             |c: ROM16| Flat::Done(vec![Computational::ROM(c)]),
             |c: MemorySystem16| Flat::Done(vec![Computational::MemorySystem(c)]),
-            |c: Decode| Flat::Continue(c.expand_t()),
-            |c: CPU| Flat::Continue(c.expand_t()),
-            |c: Computer| Flat::Continue(c.expand_t()),
+            |c: Decode| Flat::Continue(c.expand()),
+            |c: CPU| Flat::Continue(c.expand()),
+            |c: Computer| Flat::Continue(c.expand()),
         ],
     )
 }
@@ -114,12 +114,12 @@ where
             |c: Register16| Flat::Done(vec![
                 Computational::Register(WiredRegister::from(c)).into()
             ]),
-            |c: PC| Flat::Continue(c.expand_t()),
+            |c: PC| Flat::Continue(c.expand()),
             |c: ROM16| Flat::Done(vec![Computational::ROM(c).into()]),
             |c: MemorySystem16| Flat::Done(vec![Computational::MemorySystem(c).into()]),
-            |c: Decode| Flat::Continue(c.expand_t()),
-            |c: CPU| Flat::Continue(c.expand_t()),
-            |c: Computer| Flat::Continue(c.expand_t()),
+            |c: Decode| Flat::Continue(c.expand()),
+            |c: CPU| Flat::Continue(c.expand()),
+            |c: Computer| Flat::Continue(c.expand()),
         ],
     )
 }
@@ -263,7 +263,7 @@ pub struct Decode {
 }
 
 impl Decode {
-    expand_t!([Buffer, Not, And], |this| {
+    expand!([Buffer, Not, And], |this| {
         _is_c: Buffer { a: this.instr.bit(15), out: this.is_c },
 
         _is_a: Not { a: this.instr.bit(15), out: this.is_a },
@@ -311,7 +311,7 @@ pub struct CPU {
 }
 
 impl CPU {
-    expand_t!([Decode, Or, Mux16, ALU, Register16, Buffer, Not, And, PC], |this| {
+    expand!([Decode, Or, Mux16, ALU, Register16, Buffer, Not, And, PC], |this| {
         // Forward-declare register outputs:
         reg_a_out: forward Output16::new(),
         reg_d_out: forward Output16::new(),
@@ -418,7 +418,7 @@ pub struct Computer {
 }
 
 impl Computer {
-    expand_t!([ROM16, CPU, MemorySystem16], |this| {
+    expand!([ROM16, CPU, MemorySystem16], |this| {
         mem_out: forward Output16::new(),
 
         rom: ROM16 {

@@ -25,7 +25,7 @@ pub use simulator_derive::{Chip, Component, Reflect};
 /// Note: there's a middle case where a result `IC` already has components in the target type, but
 /// there seems to be no harm in using `Continue` for that case, at least for current purposes.
 ///
-/// TODO: is `IC<S>` sensible here? Probably never used at this point, but it's what `expand_t`
+/// TODO: is `IC<S>` sensible here? Probably never used at this point, but it's what `expand`
 /// gives you, and in theory we would want to capture some info from it. On the other hand, `Done`
 /// *usually* contains a single component that isn't an `IC` in any sense.
 pub enum Flat<S, T> {
@@ -41,7 +41,7 @@ pub enum Flat<S, T> {
 /// Note: the types here are stronger; if it terminates, everything is reduced. To make that work,
 /// every term in `S` has a well-defined expansion in that type. However, there's no structural
 /// guarantee that expansion actually makes progress. We know that it does, because in practice each
-/// `expand_t`'s type is smaller than `S` — it's at least missing the component being expanded.
+/// `expand`'s type is smaller than `S` — it's at least missing the component being expanded.
 /// Strictly speaking, nothing stops you from expanding A → B, then B → A, etc. Probably not worth
 /// trying to bake that kind of guarantee into these types.
 pub fn flatten_g<C, S, Idx, T, F>(chip: C, label: &str, folder: F) -> IC<T>

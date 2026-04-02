@@ -3,7 +3,7 @@ use frunk::{Coprod, hlist};
 use simulator::component::Combinational;
 use simulator::declare::{BusRef, Interface};
 
-use simulator::{Chip, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand_t, flatten_g};
+use simulator::{Chip, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand, flatten_g};
 
 // Re-export since the other components here parallel Nand:
 pub use simulator::component::{Buffer, Nand};
@@ -13,8 +13,8 @@ pub type Project01ComponentT = Coprod!(
     Nand, Buffer, Not, And, Or, Xor, Mux, Dmux, Not16, And16, Mux16
 );
 
-/// Recursively expand_t() until only primitives are left.
-pub fn flatten_t<C, Idx>(chip: C) -> IC<Combinational>
+/// Recursively expand() until only primitives are left.
+pub fn flatten<C, Idx>(chip: C) -> IC<Combinational>
 where
     C: Reflect,
     Project01ComponentT: CoprodInjector<C, Idx>,
@@ -25,15 +25,15 @@ where
         hlist![
             |c: Nand| Flat::Done(vec![Combinational::Nand(c)]),
             |c: Buffer| Flat::Done(vec![Combinational::Buffer(c)]),
-            |c: Not| Flat::Continue(c.expand_t()),
-            |c: And| Flat::Continue(c.expand_t()),
-            |c: Or| Flat::Continue(c.expand_t()),
-            |c: Xor| Flat::Continue(c.expand_t()),
-            |c: Mux| Flat::Continue(c.expand_t()),
-            |c: Dmux| Flat::Continue(c.expand_t()),
-            |c: Not16| Flat::Continue(c.expand_t()),
-            |c: And16| Flat::Continue(c.expand_t()),
-            |c: Mux16| Flat::Continue(c.expand_t()),
+            |c: Not| Flat::Continue(c.expand()),
+            |c: And| Flat::Continue(c.expand()),
+            |c: Or| Flat::Continue(c.expand()),
+            |c: Xor| Flat::Continue(c.expand()),
+            |c: Mux| Flat::Continue(c.expand()),
+            |c: Dmux| Flat::Continue(c.expand()),
+            |c: Not16| Flat::Continue(c.expand()),
+            |c: And16| Flat::Continue(c.expand()),
+            |c: Mux16| Flat::Continue(c.expand()),
         ],
     )
 }
@@ -45,7 +45,7 @@ pub struct Not {
     pub out: Output,
 }
 impl Not {
-    expand_t!([Nand], |this| {
+    expand!([Nand], |this| {
         nand: Nand { a: this.a, b: this.a, out: this.out },
     });
 }
@@ -58,7 +58,7 @@ pub struct And {
     pub out: Output,
 }
 impl And {
-    expand_t!([Nand, Not], |this| {
+    expand!([Nand, Not], |this| {
         nand: Nand {
             a: this.a,
             b: this.b,
@@ -79,7 +79,7 @@ pub struct Or {
     pub out: Output,
 }
 impl Or {
-    expand_t!([Not, Nand], |this| {
+    expand!([Not, Nand], |this| {
         not_a: Not  { a: this.a,           out: Output::new() },
         not_b: Not  { a: this.b,           out: Output::new() },
         nand:  Nand { a: not_a.out.into(), b: not_b.out.into(), out: this.out },
@@ -94,7 +94,7 @@ pub struct Xor {
     pub out: Output,
 }
 impl Xor {
-    expand_t!([Nand], |this| {
+    expand!([Nand], |this| {
         n1:  Nand { a: this.a,        b: this.b,        out: Output::new() },
         n2:  Nand { a: this.a,        b: n1.out.into(), out: Output::new() },
         n3:  Nand { a: this.b,        b: n1.out.into(), out: Output::new() },
@@ -111,7 +111,7 @@ pub struct Mux {
     pub out: Output,
 }
 impl Mux {
-    expand_t!([Not, Nand], |this| {
+    expand!([Not, Nand], |this| {
         not_sel: Not  { a: this.sel,            out: Output::new() },
         nand0:   Nand { a: not_sel.out.into(),  b: this.a0,          out: Output::new() },
         nand1:   Nand { a: this.sel,            b: this.a1,          out: Output::new() },
@@ -128,7 +128,7 @@ pub struct Dmux {
     pub b: Output,
 }
 impl Dmux {
-    expand_t!([Not, And], |this| {
+    expand!([Not, And], |this| {
         not_sel: Not { a: this.sel,   out: Output::new() },
         and_a:   And { a: this.input, b: not_sel.out.into(), out: this.a },
         and_b:   And { a: this.input, b: this.sel,           out: this.b },
@@ -142,7 +142,7 @@ pub struct Not16 {
     pub out: Output16,
 }
 impl Not16 {
-    expand_t!([Not], |this| {
+    expand!([Not], |this| {
         for i in 0..16 {
             _not: Not { a: this.a.bit(i), out: this.out.bit(i) }
         }
@@ -157,7 +157,7 @@ pub struct And16 {
     pub out: Output16,
 }
 impl And16 {
-    expand_t!([And], |this| {
+    expand!([And], |this| {
         for i in 0..16 {
             _and: And { a: this.a.bit(i), b: this.b.bit(i), out: this.out.bit(i) }
         }
@@ -174,7 +174,7 @@ pub struct Mux16 {
 }
 
 impl Mux16 {
-    expand_t!([Not, Nand], |this| {
+    expand!([Not, Nand], |this| {
         // Note: saving 15 gates here by sharing not_sel
         not_sel: Not { a: this.sel, out: Output::new() },
         for i in 0..16 {

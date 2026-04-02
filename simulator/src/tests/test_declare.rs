@@ -1,17 +1,17 @@
 use crate::component::{Buffer, Nand, Register};
 use crate::declare::{BusRef, Interface};
 use crate::nat::N1;
-use crate::{Chip, Input, Input1, Output, OutputBus, Reflect, expand_t, fixed, print_ic_graph};
+use crate::{Chip, Input, Input1, Output, OutputBus, Reflect, expand, fixed, print_ic_graph};
 use frunk::Coprod;
 
-/// Really just about trivial component for testing the expand_t! macro.
+/// Really just about trivial component for testing the expand! macro.
 #[derive(Clone, Reflect, Chip)]
 pub struct TestNot {
     pub a: Input1,
     pub out: Output,
 }
 impl TestNot {
-    expand_t!([Nand], |this| {
+    expand!([Nand], |this| {
         nand: Nand {
             a: this.a,
             b: this.a,  // also a
@@ -25,7 +25,7 @@ type TestNotT = Coprod!(Nand);
 #[test]
 fn test_expand_not() {
     let chip = TestNot::chip();
-    let ic = chip.expand_t::<TestNotT, _>();
+    let ic = chip.expand::<TestNotT, _>();
 
     assert_eq!(ic.components.len(), 1);
     assert_eq!(
@@ -42,7 +42,7 @@ pub struct TestAnd {
     pub out: Output,
 }
 impl TestAnd {
-    expand_t!([Nand], |this| {
+    expand!([Nand], |this| {
         nand: Nand {
             a: this.a,
             b: this.b,
@@ -61,7 +61,7 @@ type TestAndT = Coprod!(Nand);
 #[test]
 fn test_expand_and() {
     let chip = TestAnd::chip();
-    let ic = chip.expand_t::<TestAndT, _>();
+    let ic = chip.expand::<TestAndT, _>();
 
     assert_eq!(ic.components.len(), 2);
     assert_eq!(
@@ -84,7 +84,7 @@ pub struct TestNand8 {
     pub out: OutputBus<N8>,
 }
 impl TestNand8 {
-    expand_t!([Nand], |this| {
+    expand!([Nand], |this| {
         for i in 0..8 {
             _nand: Nand { a: this.a.bit(i).into(), b: this.b.bit(i).into(), out: this.out.bit(i) },
         }
@@ -97,7 +97,7 @@ type TestNand8T = Coprod!(Nand);
 #[test]
 fn test_expand_nand8() {
     let chip = TestNand8::chip();
-    let ic = chip.expand_t::<TestNand8T, _>();
+    let ic = chip.expand::<TestNand8T, _>();
 
     assert_eq!(ic.name(), "TestNand8");
     assert_eq!(ic.intf.inputs.len(), 2);
@@ -113,7 +113,7 @@ pub struct TestFlipFlop {
     pub out: Output,
 }
 impl TestFlipFlop {
-    expand_t!([Nand, Buffer, Register1], |this| {
+    expand!([Nand, Buffer, Register1], |this| {
         // Declare the register's output so we can refer to it circularly
         reg_out: forward Output::new(),
 
@@ -130,7 +130,7 @@ type TestFlipFlopT = Coprod!(Nand, Buffer, Register1);
 #[test]
 fn test_expand_flip_flop() {
     let chip = TestFlipFlop::chip();
-    let ic = chip.expand_t::<TestFlipFlopT, _, _, _>();
+    let ic = chip.expand::<TestFlipFlopT, _, _, _>();
 
     assert_eq!(ic.name(), "TestFlipFlop");
     assert_eq!(ic.intf.inputs.len(), 0);

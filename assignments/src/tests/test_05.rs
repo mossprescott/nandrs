@@ -1,6 +1,6 @@
 use crate::project_05::{
     CPU, Computer, Decode, KEYBOARD, Project05ComponentT, SCREEN_BASE, find_keyboard, find_ram,
-    find_rom, find_screen, flatten_for_simulation, flatten_t, memory_system,
+    find_rom, find_screen, flatten, flatten_for_simulation, memory_system,
 };
 use crate::project_06::parse_statement;
 use simulator::component::{Computational, Computational16, MemorySystem16, count_computational};
@@ -13,7 +13,7 @@ use simulator::word::Word16;
 /// Mostly this is testing the simulator's handling of the memory mapping we specified.
 #[test]
 fn memory_system_behavior() {
-    let chip = flatten_t(MemorySystem16::chip());
+    let chip = flatten(MemorySystem16::chip());
 
     let mut state = simulate(&chip, memory_system());
 
@@ -55,7 +55,7 @@ fn memory_system_behavior() {
 
 // #[test]
 // fn memory_system_optimal() {
-//     let components = flatten_t(MemorySystem::chip()).components;
+//     let components = flatten(MemorySystem::chip()).components;
 //     let nands = components.iter().filter(|c| matches!(c, Computational::Nand(_))).count();
 //     let rams  = components.iter().filter(|c| matches!(c, Computational::RAM(_))).count();
 //     assert_eq!(nands, 106);
@@ -84,10 +84,10 @@ fn decode_truth_table() {
     // When it breaks, it's nice to see what it tried to do
     println!(
         "{}",
-        print_ic_graph(&chip.expand_t::<Project05ComponentT, _, _, _>())
+        print_ic_graph(&chip.expand::<Project05ComponentT, _, _, _>())
     );
 
-    let chip = flatten_t(chip);
+    let chip = flatten(chip);
 
     let no_ram = MemoryMap::empty();
     let mut state = simulate_loud(&chip, no_ram);
@@ -108,10 +108,10 @@ fn decode_strict_truth_table() {
     // When it breaks, it's nice to see what it tried to do
     println!(
         "{}",
-        print_ic_graph(&chip.expand_t::<Project05ComponentT, _, _, _>())
+        print_ic_graph(&chip.expand::<Project05ComponentT, _, _, _>())
     );
 
-    let chip = flatten_t(chip);
+    let chip = flatten(chip);
 
     let no_ram = MemoryMap::empty();
     let mut state = simulate_loud(&chip, no_ram);
@@ -134,7 +134,7 @@ fn decode_strict_truth_table() {
 
 #[test]
 fn decode_optimal() {
-    let chip = flatten_t(Decode::chip());
+    let chip = flatten(Decode::chip());
     assert_eq!(count_computational(&chip.components).nands, 17);
 }
 
@@ -145,10 +145,10 @@ fn cpu_behavior() {
     // When it breaks, it's nice to see what it tried to do
     println!(
         "{}",
-        print_ic_graph(&chip.expand_t::<Project05ComponentT, _, _, _, _, _, _, _, _, _>())
+        print_ic_graph(&chip.expand::<Project05ComponentT, _, _, _, _, _, _, _, _, _>())
     );
 
-    let chip = flatten_t(chip);
+    let chip = flatten(chip);
 
     let no_ram = MemoryMap::empty();
     let mut state = simulate_loud(&chip, no_ram);
@@ -178,7 +178,7 @@ fn cpu_behavior() {
 fn cpu_optimal() {
     // PyNand has 1099 nands and 48 dffs
     // TODO: actually what?
-    let chip = flatten_t(CPU::chip());
+    let chip = flatten(CPU::chip());
     let counts = count_computational(&chip.components);
     assert_eq!(counts.nands, 1126);
     assert_eq!(counts.registers, 3);
@@ -197,10 +197,10 @@ fn computer_add_behavior() {
     // When it breaks, it's nice to see what it tried to do
     print!(
         "{}",
-        print_ic_graph(&chip.expand_t::<Project05ComponentT, _, _, _>())
+        print_ic_graph(&chip.expand::<Project05ComponentT, _, _, _>())
     );
 
-    let chip = flatten_t(chip);
+    let chip = flatten(chip);
 
     let mut state = simulate_loud(&chip, memory_system());
 
@@ -240,10 +240,10 @@ pub fn computer_max_behavior() {
     // When it breaks, it's nice to see what it tried to do
     println!(
         "{}",
-        print_ic_graph(&chip.expand_t::<Project05ComponentT, _, _, _>())
+        print_ic_graph(&chip.expand::<Project05ComponentT, _, _, _>())
     );
 
-    let flat = flatten_t(chip);
+    let flat = flatten(chip);
 
     println!("{}", print_ic_graph(&flat));
 
@@ -266,7 +266,7 @@ pub fn computer_max_behavior_fast() {
     // When it breaks, it's nice to see what it tried to do
     println!(
         "{}",
-        print_ic_graph(&chip.expand_t::<Project05ComponentT, _, _, _>())
+        print_ic_graph(&chip.expand::<Project05ComponentT, _, _, _>())
     );
 
     let flat = flatten_for_simulation(Computer::chip());
@@ -323,7 +323,7 @@ pub fn test_computer_max_behavior(mut state: ChipState<N16, N16>, max_iter: u64)
 
 #[test]
 fn computer_indirect_write() {
-    let chip = flatten_t(Computer::chip());
+    let chip = flatten(Computer::chip());
     let mut state = simulate(&chip, memory_system());
 
     let rom = find_rom(&state);
@@ -346,7 +346,7 @@ fn computer_indirect_write() {
 
 #[test]
 fn computer_indirect_jump() {
-    let chip = flatten_t(Computer::chip());
+    let chip = flatten(Computer::chip());
     let mut state = simulate(&chip, memory_system());
 
     let rom = find_rom(&state);
@@ -368,7 +368,7 @@ fn computer_indirect_jump() {
 
 #[test]
 fn computer_stack_adjust() {
-    let chip = flatten_t(Computer::chip());
+    let chip = flatten(Computer::chip());
     let mut state = simulate(&chip, memory_system());
 
     let rom = find_rom(&state);
@@ -398,7 +398,7 @@ fn computer_stack_adjust() {
 
 #[test]
 fn computer_read_keyboard() {
-    let chip = flatten_t(Computer::chip());
+    let chip = flatten(Computer::chip());
     let mut state = simulate(&chip, memory_system());
 
     let rom = find_rom(&state);
@@ -425,7 +425,7 @@ fn computer_read_keyboard() {
 
 #[test]
 fn computer_optimal() {
-    let chip = flatten_t(Computer::chip());
+    let chip = flatten(Computer::chip());
     let counts = count_computational(&chip.components);
     assert_eq!(counts.nands, 1126);
     assert_eq!(counts.registers, 3);

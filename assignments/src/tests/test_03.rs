@@ -1,4 +1,4 @@
-use crate::project_03::{PC, Project03ComponentT, flatten_t};
+use crate::project_03::{PC, Project03ComponentT, flatten};
 use simulator::component::{Sequential, count_sequential};
 use simulator::declare::Chip as _;
 use simulator::nat::N16;
@@ -12,10 +12,10 @@ fn pc_behavior() {
     // When it breaks, it's nice to see what it tried to do
     print!(
         "{}",
-        print_ic_graph(&chip.expand_t::<Project03ComponentT, _, _, _>())
+        print_ic_graph(&chip.expand::<Project03ComponentT, _, _, _>())
     );
 
-    let chip = flatten_t(chip);
+    let chip = flatten(chip);
 
     let no_ram = MemoryMap::empty();
     let mut state = simulate::<_, N16, N16>(&chip, no_ram);
@@ -73,7 +73,7 @@ fn pc_behavior() {
 
 #[test]
 fn pc_optimal() {
-    let chip = flatten_t(PC::chip());
+    let chip = flatten(PC::chip());
     let counts = count_sequential(&chip.components);
     assert_eq!(counts.nands, 223);
     assert_eq!(counts.registers, 1);
