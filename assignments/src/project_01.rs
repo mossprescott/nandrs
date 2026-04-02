@@ -5,78 +5,17 @@ use frunk::{Coprod, Coproduct, hlist};
 use simulator::Chip as _;
 use simulator::Reflect as _;
 use simulator::component::Combinational;
-use simulator::declare::Input;
 use simulator::declare::{BusRef, Interface};
 use simulator::nat::{N1, N16};
-use simulator::{
-    self, Chip, Component, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand, expand_t,
-    flatten_g,
-};
-use std::collections::HashMap;
+use simulator::{Chip, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand_t, flatten_g};
 
 // Re-export since the other components here parallel Nand:
 pub use simulator::component::{Buffer, Nand};
 
-/// Components implemented in this project: simple, logical components for 1 and 16 bits.
-#[derive(Clone, Reflect, Component)]
-pub enum Project01Component {
-    #[primitive]
-    Nand(Nand),
-    #[primitive]
-    Buffer(Buffer),
-    Not(Not),
-    And(And),
-    Or(Or),
-    Xor(Xor),
-    Mux(Mux),
-    Dmux(Dmux),
-    Not16(Not16),
-    And16(And16),
-    Mux16(Mux16),
-}
-
+/// Components used and implemented in this project: simple, logical components for 1 and 16 bits.
 pub type Project01ComponentT = Coprod!(
     Nand, Buffer, Not, And, Or, Xor, Mux, Dmux, Not16, And16, Mux16
 );
-
-impl From<Project01ComponentT> for Project01Component {
-    fn from(comp: Project01ComponentT) -> Self {
-        comp.fold(hlist![
-            Project01Component::Nand,
-            Project01Component::Buffer,
-            Project01Component::Not,
-            Project01Component::And,
-            Project01Component::Or,
-            Project01Component::Xor,
-            Project01Component::Mux,
-            Project01Component::Dmux,
-            Project01Component::Not16,
-            Project01Component::And16,
-            Project01Component::Mux16,
-        ])
-    }
-}
-
-/// Recursively expand() until only primitives are left.
-///
-/// Deprecated.
-pub fn flatten<C: Reflect + Into<Project01Component>>(chip: C) -> IC<Combinational> {
-    fn go(comp: Project01Component) -> Vec<Combinational> {
-        match comp.expand() {
-            None => match comp {
-                Project01Component::Nand(c) => vec![c.into()],
-                Project01Component::Buffer(c) => vec![c.into()],
-                _ => panic!("Did not reduce to primitive: {:?}", comp.name()),
-            },
-            Some(ic) => ic.components.into_iter().flat_map(go).collect(),
-        }
-    }
-    IC {
-        name: format!("{} (flat)", chip.name()),
-        intf: chip.reflect(),
-        components: go(chip.into()),
-    }
-}
 
 /// Recursively expand_t() until only primitives are left.
 pub fn flatten_t<C, Idx>(chip: C) -> IC<Combinational>
@@ -109,13 +48,6 @@ pub struct Not {
     pub a: Input1,
     pub out: Output,
 }
-impl Component for Not {
-    type Target = Project01Component;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(self.expand_t::<Project01ComponentT, _>().map(Into::into))
-    }
-}
 impl Not {
     expand_t!([Nand], |this| {
         nand: Nand { a: this.a, b: this.a, out: this.out },
@@ -128,13 +60,6 @@ pub struct And {
     pub a: Input1,
     pub b: Input1,
     pub out: Output,
-}
-impl Component for And {
-    type Target = Project01Component;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(self.expand_t::<Project01ComponentT, _, _>().map(Into::into))
-    }
 }
 impl And {
     expand_t!([Nand, Not], |this| {
@@ -157,13 +82,6 @@ pub struct Or {
     pub b: Input1,
     pub out: Output,
 }
-impl Component for Or {
-    type Target = Project01Component;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(self.expand_t::<Project01ComponentT, _, _>().map(Into::into))
-    }
-}
 impl Or {
     expand_t!([Not, Nand], |this| {
         not_a: Not  { a: this.a,           out: Output::new() },
@@ -178,13 +96,6 @@ pub struct Xor {
     pub a: Input1,
     pub b: Input1,
     pub out: Output,
-}
-impl Component for Xor {
-    type Target = Project01Component;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(self.expand_t::<Project01ComponentT, _>().map(Into::into))
-    }
 }
 impl Xor {
     expand_t!([Nand], |this| {
@@ -203,13 +114,6 @@ pub struct Mux {
     pub sel: Input1,
     pub out: Output,
 }
-impl Component for Mux {
-    type Target = Project01Component;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(self.expand_t::<Project01ComponentT, _, _>().map(Into::into))
-    }
-}
 impl Mux {
     expand_t!([Not, Nand], |this| {
         not_sel: Not  { a: this.sel,            out: Output::new() },
@@ -227,13 +131,6 @@ pub struct Dmux {
     pub a: Output,
     pub b: Output,
 }
-impl Component for Dmux {
-    type Target = Project01Component;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(self.expand_t::<Project01ComponentT, _, _>().map(Into::into))
-    }
-}
 impl Dmux {
     expand_t!([Not, And], |this| {
         not_sel: Not { a: this.sel,   out: Output::new() },
@@ -247,13 +144,6 @@ impl Dmux {
 pub struct Not16 {
     pub a: Input16,
     pub out: Output16,
-}
-impl Component for Not16 {
-    type Target = Project01Component;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(self.expand_t::<Project01ComponentT, _>().map(Into::into))
-    }
 }
 impl Not16 {
     expand_t!([Not], |this| {
@@ -269,13 +159,6 @@ pub struct And16 {
     pub a: Input16,
     pub b: Input16,
     pub out: Output16,
-}
-impl Component for And16 {
-    type Target = Project01Component;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(self.expand_t::<Project01ComponentT, _>().map(Into::into))
-    }
 }
 impl And16 {
     expand_t!([And], |this| {
@@ -294,13 +177,6 @@ pub struct Mux16 {
     pub out: Output16,
 }
 
-impl Component for Mux16 {
-    type Target = Project01Component;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(self.expand_t::<Project01ComponentT, _, _>().map(Into::into))
-    }
-}
 impl Mux16 {
     expand_t!([Not, Nand], |this| {
         // Note: saving 15 gates here by sharing not_sel

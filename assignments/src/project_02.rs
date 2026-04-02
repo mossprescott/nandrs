@@ -1,8 +1,7 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
 use crate::project_01::{
-    And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, Or, Project01Component, Project01ComponentT,
-    Xor,
+    And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, Or, Project01ComponentT, Xor,
 };
 use frunk::coproduct::CoprodInjector;
 use frunk::{Coprod, hlist};

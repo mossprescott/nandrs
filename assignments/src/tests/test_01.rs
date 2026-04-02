@@ -1,10 +1,12 @@
-use crate::project_01::{And, And16, Dmux, Mux, Mux16, Nand, Not, Not16, Or, Xor, flatten_t};
+use crate::project_01::{
+    And, And16, Dmux, Mux, Mux16, Nand, Not, Not16, Or, Project01ComponentT, Xor, flatten_t,
+};
 use simulator::Chip as _;
 use simulator::component::{Combinational, count_combinational};
 use simulator::eval::eval;
 use simulator::nat::{N1, N16};
 use simulator::word::Word;
-use simulator::{Component, IC, Input1, Output, Reflect, print_graph};
+use simulator::{IC, Input1, Output, Reflect, print_ic_graph};
 use std::collections::HashMap;
 
 fn eval1<'a>(
@@ -409,7 +411,7 @@ fn mux16_optimal() {
 fn and_graph() {
     let chip = And::chip();
     assert_eq!(
-        print_graph(&chip),
+        print_ic_graph(&chip.expand_t::<Project01ComponentT, _, _>()),
         "And:
   nand_0.a <- a
   nand_0.b <- b

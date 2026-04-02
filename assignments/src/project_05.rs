@@ -1,7 +1,7 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
 use crate::project_01::{
-    And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, Or, Project01Component, Project01ComponentT,
+    And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, Or, Project01ComponentT,
 };
 use crate::project_02::{
     ALU, Add16, FullAdder, HalfAdder, Inc16, Nand16Way, Neg16, Project02ComponentT, Zero16,
