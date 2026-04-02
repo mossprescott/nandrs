@@ -34,7 +34,7 @@
 use assignments::project_01::{And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, Or};
 use assignments::project_02::{ALU, Add16, FullAdder, HalfAdder, Inc16, Nand16Way, Neg16, Zero16};
 use assignments::project_03::PC;
-use assignments::project_05::{Decode, Project05Component};
+use assignments::project_05::Decode;
 use frunk::coproduct::CoprodInjector;
 use frunk::{Coprod, hlist};
 use simulator::component::{
@@ -44,8 +44,7 @@ use simulator::declare::{BusRef, Interface};
 use simulator::nat::N16;
 use simulator::simulate::{BusResident, ChipState, ROMHandle};
 use simulator::{
-    self, Chip, Component, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand_t, fixed,
-    flatten_g,
+    self, Chip, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand_t, fixed, flatten_g,
 };
 
 /// CPU which (potentially) decodes and executes a pair of instructions in each cycle.
@@ -70,17 +69,6 @@ pub struct CPU {
     pub mem_addr: Output16,
 
     pub mem_data_in: Input16,
-}
-
-impl Component for CPU {
-    type Target = DoubleComponent;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(
-            self.expand_t::<DoubleComponentT, _, _, _, _, _, _, _, _, _>()
-                .map(Into::into),
-        )
-    }
 }
 
 impl CPU {
@@ -210,14 +198,6 @@ pub struct Computer {
     pub pc: Output16,
 }
 
-impl Component for Computer {
-    type Target = DoubleComponent;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(self.expand_t::<DoubleComponentT, _, _, _>().map(Into::into))
-    }
-}
-
 impl Computer {
     expand_t!([ROM16, CPU, MemorySystem16], |this| {
         mem_out: forward Output16::new(),
@@ -273,17 +253,6 @@ pub struct DoublePC {
     pub out1: Output16,
 }
 
-impl Component for DoublePC {
-    type Target = DoubleComponent;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(
-            self.expand_t::<DoubleComponentT, _, _, _, _>()
-                .map(Into::into),
-        )
-    }
-}
-
 impl DoublePC {
     expand_t!([Inc16, Inc2, Mux16, Register16], |this| {
         inc1: Inc16 { a: this.out0.into(), out: Output16::new() },
@@ -318,14 +287,6 @@ impl DoublePC {
 pub struct Inc2 {
     a: Input16,
     out: Output16,
-}
-
-impl Component for Inc2 {
-    type Target = DoubleComponent;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(self.expand_t::<DoubleComponentT, _, _, _>().map(Into::into))
-    }
 }
 
 impl Inc2 {
@@ -377,156 +338,6 @@ pub type DoubleComponentT = Coprod!(
     DoublePC,
     Inc2
 );
-
-/// Deprecated.
-#[derive(Clone, Reflect)]
-pub enum DoubleComponent {
-    Project05(Project05Component),
-    CPU(CPU),
-    Computer(Computer),
-    DoublePC(DoublePC),
-    Inc2(Inc2),
-}
-
-impl From<Project05Component> for DoubleComponent {
-    fn from(c: Project05Component) -> Self {
-        DoubleComponent::Project05(c)
-    }
-}
-
-impl From<CPU> for DoubleComponent {
-    fn from(c: CPU) -> Self {
-        DoubleComponent::CPU(c)
-    }
-}
-
-impl From<Computer> for DoubleComponent {
-    fn from(c: Computer) -> Self {
-        DoubleComponent::Computer(c)
-    }
-}
-
-impl From<DoublePC> for DoubleComponent {
-    fn from(c: DoublePC) -> Self {
-        DoubleComponent::DoublePC(c)
-    }
-}
-
-impl From<Inc2> for DoubleComponent {
-    fn from(c: Inc2) -> Self {
-        DoubleComponent::Inc2(c)
-    }
-}
-
-impl Component for DoubleComponent {
-    type Target = DoubleComponent;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        match self {
-            DoubleComponent::Project05(c) => c
-                .expand()
-                .map(|ic| ic.map(|p| DoubleComponent::Project05(p))),
-            DoubleComponent::CPU(c) => c.expand(),
-            DoubleComponent::Computer(c) => c.expand(),
-            DoubleComponent::DoublePC(c) => c.expand(),
-            DoubleComponent::Inc2(c) => c.expand(),
-        }
-    }
-}
-
-// TEMP
-impl From<DoubleComponentT> for DoubleComponent {
-    fn from(comp: DoubleComponentT) -> Self {
-        use assignments::project_01::Project01Component;
-        use assignments::project_02::Project02Component;
-        use assignments::project_03::Project03Component;
-        use assignments::project_05::Project05Component;
-        comp.fold(hlist![
-            |c: Nand| DoubleComponent::Project05(Project05Component::Project03(
-                Project03Component::Project02(Project02Component::Project01(
-                    Project01Component::Nand(c),
-                ))
-            )),
-            |c: Buffer| DoubleComponent::Project05(Project05Component::Project03(
-                Project03Component::Project02(Project02Component::Project01(
-                    Project01Component::Buffer(c),
-                ))
-            )),
-            |c: Not| DoubleComponent::Project05(Project05Component::Project03(
-                Project03Component::Project02(Project02Component::Project01(
-                    Project01Component::Not(c),
-                ))
-            )),
-            |c: And| DoubleComponent::Project05(Project05Component::Project03(
-                Project03Component::Project02(Project02Component::Project01(
-                    Project01Component::And(c),
-                ))
-            )),
-            |c: Or| DoubleComponent::Project05(Project05Component::Project03(
-                Project03Component::Project02(Project02Component::Project01(
-                    Project01Component::Or(c),
-                ))
-            )),
-            |c: Mux| DoubleComponent::Project05(Project05Component::Project03(
-                Project03Component::Project02(Project02Component::Project01(
-                    Project01Component::Mux(c),
-                ))
-            )),
-            |c: Mux16| DoubleComponent::Project05(Project05Component::Project03(
-                Project03Component::Project02(Project02Component::Project01(
-                    Project01Component::Mux16(c),
-                ))
-            )),
-            |c: Not16| DoubleComponent::Project05(Project05Component::Project03(
-                Project03Component::Project02(Project02Component::Project01(
-                    Project01Component::Not16(c),
-                ))
-            )),
-            |c: And16| DoubleComponent::Project05(Project05Component::Project03(
-                Project03Component::Project02(Project02Component::Project01(
-                    Project01Component::And16(c),
-                ))
-            )),
-            |c: HalfAdder| DoubleComponent::Project05(Project05Component::Project03(
-                Project03Component::Project02(Project02Component::HalfAdder(c))
-            )),
-            |c: FullAdder| DoubleComponent::Project05(Project05Component::Project03(
-                Project03Component::Project02(Project02Component::FullAdder(c))
-            )),
-            |c: Inc16| DoubleComponent::Project05(Project05Component::Project03(
-                Project03Component::Project02(Project02Component::Inc16(c))
-            )),
-            |c: Add16| DoubleComponent::Project05(Project05Component::Project03(
-                Project03Component::Project02(Project02Component::Add16(c))
-            )),
-            |c: Nand16Way| DoubleComponent::Project05(Project05Component::Project03(
-                Project03Component::Project02(Project02Component::Nand16Way(c))
-            )),
-            |c: Zero16| DoubleComponent::Project05(Project05Component::Project03(
-                Project03Component::Project02(Project02Component::Zero16(c))
-            )),
-            |c: Neg16| DoubleComponent::Project05(Project05Component::Project03(
-                Project03Component::Project02(Project02Component::Neg16(c))
-            )),
-            |c: ALU| DoubleComponent::Project05(Project05Component::Project03(
-                Project03Component::Project02(Project02Component::ALU(c))
-            )),
-            |c: Register16| DoubleComponent::Project05(Project05Component::Project03(
-                Project03Component::Register(c)
-            )),
-            |c: PC| DoubleComponent::Project05(Project05Component::Project03(
-                Project03Component::PC(c)
-            )),
-            |c: ROM16| DoubleComponent::Project05(Project05Component::ROM(c)),
-            |c: MemorySystem16| DoubleComponent::Project05(Project05Component::MemorySystem(c)),
-            |c: Decode| DoubleComponent::Project05(Project05Component::Decode(c)),
-            DoubleComponent::CPU,
-            DoubleComponent::Computer,
-            DoubleComponent::DoublePC,
-            DoubleComponent::Inc2,
-        ])
-    }
-}
 
 /// Find the two ROMs (rom0 at pc, rom1 at pc+1) in the chip state.
 pub fn find_roms(state: &ChipState<N16, N16>) -> (ROMHandle<N16, N16>, ROMHandle<N16, N16>) {
@@ -644,17 +455,20 @@ mod test {
     use assignments::tests::test_05;
     use simulator::Chip;
     use simulator::component::Computational;
-    use simulator::print_graph;
+    use simulator::print_ic_graph;
     use simulator::simulate::simulate;
 
-    use crate::computer::{Computer, find_roms, flatten_t};
+    use crate::computer::{Computer, DoubleComponentT, find_roms, flatten_t};
 
     #[test]
     fn computer_max_behavior() {
         let chip = Computer::chip();
 
         // When it breaks, it's nice to see what it tried to do
-        println!("{}", print_graph(&chip));
+        println!(
+            "{}",
+            print_ic_graph(&chip.expand_t::<DoubleComponentT, _, _, _>())
+        );
 
         let flat = flatten_t(chip);
         let state = simulate(&flat, memory_system());
