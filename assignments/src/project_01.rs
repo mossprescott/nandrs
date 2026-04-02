@@ -1,7 +1,7 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use frunk::Coprod;
 use frunk::coproduct::CoprodInjector;
+use frunk::{Coprod, Coproduct, hlist};
 use simulator::Chip as _;
 use simulator::Reflect as _;
 use simulator::component::Combinational;
@@ -37,6 +37,17 @@ pub enum Project01Component {
 
 type Project01ComponentT = Coprod!(Nand, Buffer, Not, And); // TODO: remaining components
 
+impl From<Project01ComponentT> for Project01Component {
+    fn from(comp: Project01ComponentT) -> Self {
+        comp.fold(hlist![
+            Project01Component::Nand,
+            Project01Component::Buffer,
+            Project01Component::Not,
+            Project01Component::And,
+        ])
+    }
+}
+
 /// Recursively expand() until only primitives are left.
 pub fn flatten<C: Reflect + Into<Project01Component>>(chip: C) -> IC<Combinational> {
     fn go(comp: Project01Component) -> Vec<Combinational> {
@@ -69,8 +80,6 @@ where
     C: Reflect,
     Project01ComponentT: CoprodInjector<C, Idx>,
 {
-    use frunk::{Coproduct, hlist};
-
     fn go(comp: Project01ComponentT) -> Vec<CombinationalT> {
         comp.fold(hlist![
             |nand: Nand| vec![Coproduct::inject(nand)],
@@ -100,13 +109,9 @@ pub struct Not {
 impl Component for Not {
     type Target = Project01Component;
 
-    expand! { |this| {
-        nand: Nand {
-            a: this.a,
-            b: this.a,  // also the "a" input
-            out: this.out,
-        }
-    }}
+    fn expand(&self) -> Option<IC<Self::Target>> {
+        Some(self.expand_t::<Project01ComponentT, _>().map(Into::into))
+    }
 }
 impl Not {
     expand_t!([Nand], |this| {
@@ -124,17 +129,9 @@ pub struct And {
 impl Component for And {
     type Target = Project01Component;
 
-    expand! { |this| {
-        nand: Nand {
-            a: this.a,
-            b: this.b,
-            out: Output::new(),
-        },
-        not: Not {
-            a: nand.out.into(),
-            out: this.out,
-        },
-    }}
+    fn expand(&self) -> Option<IC<Self::Target>> {
+        Some(self.expand_t::<Project01ComponentT, _, _>().map(Into::into))
+    }
 }
 impl And {
     expand_t!([Nand, Not], |this| {
