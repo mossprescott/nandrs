@@ -10,6 +10,8 @@ use crate::{Chip, Input, Input1, Interface, OutputBus, Reflect};
 use super::{Buffer, Nand};
 
 /// Primitive memory cell, storing one or more bits often treated as a binary number.
+///
+/// The word size is tracked in the type so the wiring is required to match.
 #[derive(Clone, Reflect, Chip)]
 pub struct Register<Width: Nat> {
     pub data_in: Input<Width>,
@@ -20,6 +22,9 @@ pub struct Register<Width: Nat> {
 pub type Register16 = Register<N16>;
 
 /// Records the wiring of a Register, including the width in bits as a runtime value.
+///
+/// This allows registers of different widths to be included in the same circuit as components get
+/// expanded. Or something like that.
 #[derive(Clone)]
 pub struct WiredRegister {
     pub width: usize,
