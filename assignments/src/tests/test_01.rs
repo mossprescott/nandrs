@@ -1,4 +1,6 @@
-use crate::project_01::{And, And16, Dmux, Mux, Mux16, Nand, Not, Not16, Or, Xor, flatten, flatten_t};
+use crate::project_01::{
+    And, And16, Dmux, Mux, Mux16, Nand, Not, Not16, Or, Xor, flatten, flatten_t,
+};
 use simulator::Chip as _;
 use simulator::component::{Combinational, CombinationalT, count_combinational};
 use simulator::eval::{eval, eval_t};

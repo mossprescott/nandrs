@@ -573,3 +573,60 @@ macro_rules! expand {
     };
     (@fold_push $components:ident; $next:expr) => {};
 }
+
+/// Generate a typed `expand_t` method for a chip.
+///
+/// Takes a bracketed list of target component types and an `expand!`-style body. Generates a
+/// generic method `expand_t<C, T1Idx, T2Idx, ...>(&self) -> IC<C>` with one `CoprodInjector`
+/// bound per listed type, and uses `C::inject(component)` to build the result.
+///
+/// ```ignore
+/// expand_t!([Nand, Not], |this| {
+///     nand: Nand { a: this.a, b: this.b, out: Output::new() },
+///     not:  Not  { a: nand.out.into(),   out: this.out },
+/// });
+/// ```
+#[macro_export]
+macro_rules! expand_t {
+    // Entry point: generate the fn signature via paste, then the body.
+    ([$($T:ident),+], |$this:ident| { $($body:tt)* }) => {
+        $crate::paste::paste! {
+            pub fn expand_t<C, $([<$T Idx>]),+>(&self) -> $crate::IC<C>
+            where
+                $(C: ::frunk::coproduct::CoprodInjector<$T, [<$T Idx>]>,)+
+            {
+                let $this = self;
+                let mut __components = vec![];
+                $crate::expand_t!(@lets __components; $($body)*);
+                $crate::expand_t!(@pushes __components; $($body)*);
+                $crate::IC {
+                    name: $crate::Reflect::name(self),
+                    intf: $crate::Reflect::reflect(self),
+                    components: __components,
+                }
+            }
+        }
+    };
+
+    // --- Phase 1: emit `let` bindings ---
+
+    (@lets $c:ident;) => {};
+    (@lets $c:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+        let $var = $T { $($fields)* };
+        $crate::expand_t!(@lets $c; $($rest)*);
+    };
+    (@lets $c:ident; $var:ident : $T:ident { $($fields:tt)* }) => {
+        let $var = $T { $($fields)* };
+    };
+
+    // --- Phase 2: push via C::inject ---
+
+    (@pushes $c:ident;) => {};
+    (@pushes $c:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+        $c.push(C::inject($var));
+        $crate::expand_t!(@pushes $c; $($rest)*);
+    };
+    (@pushes $c:ident; $var:ident : $T:ident { $($fields:tt)* }) => {
+        $c.push(C::inject($var));
+    };
+}

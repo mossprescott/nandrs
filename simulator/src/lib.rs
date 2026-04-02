@@ -17,6 +17,7 @@ pub use declare::{
     Reflect, fixed,
 };
 
+pub use paste;
 pub use simulator_derive::{Chip, Component, Reflect};
 
 /// Expand a sub-set of components, recursively.

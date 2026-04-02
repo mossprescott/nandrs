@@ -9,7 +9,9 @@ use simulator::component::CombinationalT;
 use simulator::declare::Input;
 use simulator::declare::{BusRef, Interface};
 use simulator::nat::{N1, N16};
-use simulator::{self, Chip, Component, IC, Input1, Input16, Output, Output16, Reflect, expand};
+use simulator::{
+    self, Chip, Component, IC, Input1, Input16, Output, Output16, Reflect, expand, expand_t,
+};
 use std::collections::HashMap;
 
 // Re-export since the other components here parallel Nand:
@@ -33,7 +35,7 @@ pub enum Project01Component {
     Mux16(Mux16),
 }
 
-type Project01ComponentT = Coprod!(Nand, Buffer, Not, And);  // TODO: remaining components
+type Project01ComponentT = Coprod!(Nand, Buffer, Not, And); // TODO: remaining components
 
 /// Recursively expand() until only primitives are left.
 pub fn flatten<C: Reflect + Into<Project01Component>>(chip: C) -> IC<Combinational> {
@@ -54,6 +56,14 @@ pub fn flatten<C: Reflect + Into<Project01Component>>(chip: C) -> IC<Combination
     }
 }
 
+/// Recursively expand_t() until only primitives are left.
+///
+/// Note: the types here are stronger; if it terminates, everything is reduced. To make that work,
+/// every term in Project01ComponentT has a well-defined expansion in that type. However, there's no
+/// structural guarantee that expansion actually makes progress. But we (sort of) know that it does,
+/// because each expand_t's type is smaller than Project01ComponentT – it's at least missing the
+/// component being expanded. On the third hand, nothing stops you from expanding A -> B, then B ->
+/// A, etc. Probably not worth trying to bake that kind of guarantee into these types.
 pub fn flatten_t<C, Idx>(chip: C) -> IC<CombinationalT>
 where
     C: Reflect,
@@ -63,10 +73,15 @@ where
 
     fn go(comp: Project01ComponentT) -> Vec<CombinationalT> {
         comp.fold(hlist![
-            |nand: Nand|     vec![Coproduct::inject(nand)],
+            |nand: Nand| vec![Coproduct::inject(nand)],
             |buffer: Buffer| vec![Coproduct::inject(buffer)],
-            |not: Not|       not.expand_t::<CombinationalT, _>().components,
-            |and: And|       and.expand_t::<Project01ComponentT, _, _>().components.into_iter().flat_map(go).collect(),
+            |not: Not| not.expand_t::<CombinationalT, _>().components,
+            |and: And| and
+                .expand_t::<Project01ComponentT, _, _>()
+                .components
+                .into_iter()
+                .flat_map(go)
+                .collect(),
         ])
     }
     IC {
@@ -94,20 +109,9 @@ impl Component for Not {
     }}
 }
 impl Not {
-    pub fn expand_t<C, NandIdx>(&self) -> IC<C>
-    where
-        C: CoprodInjector<Nand, NandIdx>,
-    {
-        IC {
-            name: self.name(),
-            intf: self.reflect(),
-            components: vec![C::inject(Nand {
-                a: self.a,
-                b: self.a, // also the "a" input
-                out: self.out,
-            })],
-        }
-    }
+    expand_t!([Nand], |this| {
+        nand: Nand { a: this.a, b: this.a, out: this.out },
+    });
 }
 
 /// True only when both inputs are true.
@@ -133,22 +137,17 @@ impl Component for And {
     }}
 }
 impl And {
-    pub fn expand_t<C, NandIdx, NotIdx>(&self) -> IC<C>
-    where
-        C: CoprodInjector<Nand, NandIdx>,
-        C: CoprodInjector<Not, NotIdx>,
-    {
-        let nand = Nand { a: self.a, b: self.b, out: Output::new() };
-        let not = Not { a: nand.out.into(), out: self.out };
-        IC {
-            name: self.name(),
-            intf: self.reflect(),
-            components: vec![
-                C::inject(nand),
-                C::inject(not),
-            ],
-        }
-    }
+    expand_t!([Nand, Not], |this| {
+        nand: Nand {
+            a: this.a,
+            b: this.b,
+            out: Output::new(),
+        },
+        not: Not {
+            a: nand.out.into(),
+            out: this.out,
+        },
+    });
 }
 
 /// True when at least one input is true.
