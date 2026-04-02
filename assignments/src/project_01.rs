@@ -36,7 +36,9 @@ pub enum Project01Component {
     Mux16(Mux16),
 }
 
-type Project01ComponentT = Coprod!(Nand, Buffer, Not, And, Or, Xor, Mux, Dmux);
+type Project01ComponentT = Coprod!(
+    Nand, Buffer, Not, And, Or, Xor, Mux, Dmux, Not16, And16, Mux16
+);
 
 impl From<Project01ComponentT> for Project01Component {
     fn from(comp: Project01ComponentT) -> Self {
@@ -49,6 +51,9 @@ impl From<Project01ComponentT> for Project01Component {
             Project01Component::Xor,
             Project01Component::Mux,
             Project01Component::Dmux,
+            Project01Component::Not16,
+            Project01Component::And16,
+            Project01Component::Mux16,
         ])
     }
 }
@@ -88,6 +93,9 @@ where
             |c: Xor| Flat::Continue(c.expand_t()),
             |c: Mux| Flat::Continue(c.expand_t()),
             |c: Dmux| Flat::Continue(c.expand_t()),
+            |c: Not16| Flat::Continue(c.expand_t()),
+            |c: And16| Flat::Continue(c.expand_t()),
+            |c: Mux16| Flat::Continue(c.expand_t()),
         ],
         chip,
     )
@@ -241,11 +249,16 @@ pub struct Not16 {
 impl Component for Not16 {
     type Target = Project01Component;
 
-    expand! { |this| {
+    fn expand(&self) -> Option<IC<Self::Target>> {
+        Some(self.expand_t::<Project01ComponentT, _>().map(Into::into))
+    }
+}
+impl Not16 {
+    expand_t!([Not], |this| {
         for i in 0..16 {
             _not: Not { a: this.a.bit(i), out: this.out.bit(i) }
         }
-    }}
+    });
 }
 
 /// Bitwise `And` across two 16-bit inputs.
@@ -258,11 +271,16 @@ pub struct And16 {
 impl Component for And16 {
     type Target = Project01Component;
 
-    expand! { |this| {
+    fn expand(&self) -> Option<IC<Self::Target>> {
+        Some(self.expand_t::<Project01ComponentT, _>().map(Into::into))
+    }
+}
+impl And16 {
+    expand_t!([And], |this| {
         for i in 0..16 {
             _and: And { a: this.a.bit(i), b: this.b.bit(i), out: this.out.bit(i) }
         }
-    }}
+    });
 }
 
 /// Selects between two 16-bit inputs bit-by-bit, using a single sel bit.
@@ -277,12 +295,18 @@ pub struct Mux16 {
 impl Component for Mux16 {
     type Target = Project01Component;
 
-    expand! { |this| {
+    fn expand(&self) -> Option<IC<Self::Target>> {
+        Some(self.expand_t::<Project01ComponentT, _, _>().map(Into::into))
+    }
+}
+impl Mux16 {
+    expand_t!([Not, Nand], |this| {
+        // Note: saving 15 gates here by sharing not_sel
         not_sel: Not { a: this.sel, out: Output::new() },
         for i in 0..16 {
             nand0: Nand { a: not_sel.out.clone().into(), b: this.a0.bit(i),           out: Output::new() },
             nand1: Nand { a: this.sel,                   b: this.a1.bit(i),           out: Output::new() },
             _out:  Nand { a: nand0.out.clone().into(),   b: nand1.out.clone().into(), out: this.out.bit(i) }
         }
-    }}
+    });
 }

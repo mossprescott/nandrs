@@ -611,6 +611,13 @@ macro_rules! expand_t {
     // --- Phase 1: emit `let` bindings ---
 
     (@lets $c:ident;) => {};
+    // For loops: construct and push during @lets (while bindings are alive)
+    (@lets $c:ident; for $i:ident in $start:literal .. $end:literal { $($inner:tt)* } $($rest:tt)*) => {
+        for $i in $start..$end {
+            $crate::expand_t!(@for_body $c; $($inner)*);
+        }
+        $crate::expand_t!(@lets $c; $($rest)*);
+    };
     (@lets $c:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
         let $var = $T { $($fields)* };
         $crate::expand_t!(@lets $c; $($rest)*);
@@ -619,14 +626,30 @@ macro_rules! expand_t {
         let $var = $T { $($fields)* };
     };
 
-    // --- Phase 2: push via C::inject ---
+    // --- Phase 2: push via C::inject (skip for loops, already pushed during @lets) ---
 
     (@pushes $c:ident;) => {};
+    (@pushes $c:ident; for $i:ident in $start:literal .. $end:literal { $($inner:tt)* } $($rest:tt)*) => {
+        $crate::expand_t!(@pushes $c; $($rest)*);
+    };
     (@pushes $c:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
         $c.push(C::inject($var));
         $crate::expand_t!(@pushes $c; $($rest)*);
     };
     (@pushes $c:ident; $var:ident : $T:ident { $($fields:tt)* }) => {
+        $c.push(C::inject($var));
+    };
+
+    // --- For loop body: construct, clone+inject, repeat ---
+
+    (@for_body $c:ident;) => {};
+    (@for_body $c:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+        let $var = $T { $($fields)* };
+        $c.push(C::inject($var.clone()));
+        $crate::expand_t!(@for_body $c; $($rest)*);
+    };
+    (@for_body $c:ident; $var:ident : $T:ident { $($fields:tt)* }) => {
+        let $var = $T { $($fields)* };
         $c.push(C::inject($var));
     };
 }

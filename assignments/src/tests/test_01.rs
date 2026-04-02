@@ -9,26 +9,17 @@ use simulator::word::Word;
 use simulator::{Component, IC, Input1, Output, Reflect, print_graph};
 use std::collections::HashMap;
 
-fn eval1<'a>(
-    chip: &IC<Combinational>,
-    inputs: impl IntoIterator<Item = (&'a str, Word<N1>)>,
-) -> HashMap<String, Word<N1>> {
-    let chip: IC<CombinationalT> = chip.map(Into::into);
-    eval_t(&chip, inputs)
-}
-
-fn eval16<'a>(
-    chip: &IC<Combinational>,
-    inputs: impl IntoIterator<Item = (&'a str, Word<N16>)>,
-) -> HashMap<String, Word<N16>> {
-    let chip: IC<CombinationalT> = chip.map(Into::into);
-    eval_t(&chip, inputs)
-}
-
 fn eval1_t<'a>(
     chip: &IC<CombinationalT>,
     inputs: impl IntoIterator<Item = (&'a str, Word<N1>)>,
 ) -> HashMap<String, Word<N1>> {
+    eval_t(&chip, inputs)
+}
+
+fn eval16_t<'a>(
+    chip: &IC<CombinationalT>,
+    inputs: impl IntoIterator<Item = (&'a str, Word<N16>)>,
+) -> HashMap<String, Word<N16>> {
     eval_t(&chip, inputs)
 }
 
@@ -290,21 +281,21 @@ fn dmux_optimal() {
 
 #[test]
 fn not16_truth_table() {
-    let chip = flatten(Not16::chip());
+    let chip = flatten_t(Not16::chip());
     assert_eq!(
-        eval16(&chip, [("a", 0x0000u16.into())])["out"].unsigned(),
+        eval16_t(&chip, [("a", 0x0000u16.into())])["out"].unsigned(),
         0xFFFF
     );
     assert_eq!(
-        eval16(&chip, [("a", 0xFFFFu16.into())])["out"].unsigned(),
+        eval16_t(&chip, [("a", 0xFFFFu16.into())])["out"].unsigned(),
         0x0000
     );
     assert_eq!(
-        eval16(&chip, [("a", 0xAAAAu16.into())])["out"].unsigned(),
+        eval16_t(&chip, [("a", 0xAAAAu16.into())])["out"].unsigned(),
         0x5555
     );
     assert_eq!(
-        eval16(&chip, [("a", 0x1234u16.into())])["out"].unsigned(),
+        eval16_t(&chip, [("a", 0x1234u16.into())])["out"].unsigned(),
         0xEDCB
     );
 }
@@ -317,21 +308,21 @@ fn not16_optimal() {
 
 #[test]
 fn and16_truth_table() {
-    let chip = flatten(And16::chip());
+    let chip = flatten_t(And16::chip());
     assert_eq!(
-        eval16(&chip, [("a", 0xFFFFu16.into()), ("b", 0xAAAAu16.into())])["out"].unsigned(),
+        eval16_t(&chip, [("a", 0xFFFFu16.into()), ("b", 0xAAAAu16.into())])["out"].unsigned(),
         0xAAAA
     );
     assert_eq!(
-        eval16(&chip, [("a", 0x0000u16.into()), ("b", 0xFFFFu16.into())])["out"].unsigned(),
+        eval16_t(&chip, [("a", 0x0000u16.into()), ("b", 0xFFFFu16.into())])["out"].unsigned(),
         0x0000
     );
     assert_eq!(
-        eval16(&chip, [("a", 0xFF00u16.into()), ("b", 0x0FF0u16.into())])["out"].unsigned(),
+        eval16_t(&chip, [("a", 0xFF00u16.into()), ("b", 0x0FF0u16.into())])["out"].unsigned(),
         0x0F00
     );
     assert_eq!(
-        eval16(&chip, [("a", 0xFFFFu16.into()), ("b", 0xFFFFu16.into())])["out"].unsigned(),
+        eval16_t(&chip, [("a", 0xFFFFu16.into()), ("b", 0xFFFFu16.into())])["out"].unsigned(),
         0xFFFF
     );
 }
@@ -359,9 +350,9 @@ fn and16_optimal() {
 /// Sanity check
 #[test]
 fn mux16_truth_table() {
-    let chip = flatten(Mux16::chip());
+    let chip = flatten_t(Mux16::chip());
     assert_eq!(
-        eval16(
+        eval16_t(
             &chip,
             [
                 ("a0", 0xAAAAu16.into()),
@@ -373,7 +364,7 @@ fn mux16_truth_table() {
         0xAAAA
     );
     assert_eq!(
-        eval16(
+        eval16_t(
             &chip,
             [
                 ("a0", 0xAAAAu16.into()),
@@ -385,7 +376,7 @@ fn mux16_truth_table() {
         0x5555
     );
     assert_eq!(
-        eval16(
+        eval16_t(
             &chip,
             [
                 ("a0", 0x1234u16.into()),
@@ -397,7 +388,7 @@ fn mux16_truth_table() {
         0x1234
     );
     assert_eq!(
-        eval16(
+        eval16_t(
             &chip,
             [
                 ("a0", 0x1234u16.into()),
