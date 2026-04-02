@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 simulator = { path = "../simulator" }
 assignments = { path = "../assignments" }
+frunk = "0.4"
 minifb = "0.27"
 png = "0.17"
 clap = { version = "4.6.0", features = ["derive"] }

@@ -2,14 +2,20 @@ use std::fs;
 
 use clap::Parser;
 
-use assignments::project_02::Project02Component;
-use assignments::project_03::Project03Component;
-use assignments::project_05::{self, Computer, Project05Component, find_rom, memory_system};
+use assignments::project_01::{And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, Or};
+use assignments::project_02::{ALU, Add16, FullAdder, HalfAdder, Inc16, Nand16Way, Neg16, Zero16};
+use assignments::project_03::PC;
+use assignments::project_05::{
+    self, CPU, Computer, Decode, Project05ComponentT, find_rom, memory_system,
+};
 use assignments::project_06::{Program, assemble};
+use frunk::coproduct::CoprodInjector;
+use frunk::hlist;
+use simulator::component::{MemorySystem16, ROM16, Register16};
 use simulator::declare::Chip as _;
 use simulator::simulate::{initialize, synthesize};
 use simulator::word::Word16;
-use simulator::{Component, IC, flatten, print_ic_graph};
+use simulator::{Flat, IC, Reflect, flatten_g, print_ic_graph};
 
 use computer::cli::Args;
 use computer::disasm::disassemble;
@@ -45,7 +51,7 @@ fn main() {
     } = program;
 
     let wiring = if args.precise {
-        let chip = project_05::flatten(computer);
+        let chip = project_05::flatten_t(computer);
         synthesize(&chip, memory_system())
     } else {
         let chip = project_05::flatten_for_simulation(computer);
@@ -73,23 +79,57 @@ fn main() {
     run(&args, state, &symbols, &fmt_instr);
 }
 
+macro_rules! preserve {
+    ($c:expr) => {
+        Flat::Done(vec![CoprodInjector::inject($c)])
+    };
+}
+
+macro_rules! expand {
+    ($c:expr) => {
+        Flat::Continue($c.expand_t())
+    };
+}
+
 /// Recursively expand high-level components (projects 3 and 5, essentially), until only primitives
-/// and simple logic are left (projects 1 and 2, except the ALU). Note that the result remains in
-/// the "project_05" type, because it conveniently embeds the project 1 and 2 components, as well as
-/// the Computational primitives.
-fn simplify<C: Into<Project05Component>>(chip: C) -> IC<Project05Component> {
-    flatten(chip.into(), "simple", &|c| match c {
-        Project05Component::Project03(Project03Component::Project02(
-            Project02Component::Project01(_),
-        )) => None,
-        Project05Component::Project03(Project03Component::Project02(ref p2)) => match p2 {
-            Project02Component::ALU(_) => c.expand(),
-            _ => None,
-        },
-        Project05Component::Project03(ref p3) => match p3 {
-            Project03Component::PC(_) => c.expand(),
-            _ => None,
-        },
-        _ => c.expand(),
-    })
+/// and simple logic are left (projects 1 and 2, except the ALU).
+fn simplify<C, Idx>(chip: C) -> IC<Project05ComponentT>
+where
+    C: Reflect,
+    Project05ComponentT: CoprodInjector<C, Idx>,
+{
+    flatten_g::<C, Project05ComponentT, Idx, Project05ComponentT, _>(
+        chip,
+        "simple",
+        hlist![
+            // Project 01: stop
+            |c: Nand| preserve!(c),
+            |c: Buffer| preserve!(c),
+            |c: Not| preserve!(c),
+            |c: And| preserve!(c),
+            |c: Or| preserve!(c),
+            |c: Mux| preserve!(c),
+            |c: Mux16| preserve!(c),
+            |c: Not16| preserve!(c),
+            |c: And16| preserve!(c),
+            // Project 02: stop, except ALU which expands
+            |c: HalfAdder| preserve!(c),
+            |c: FullAdder| preserve!(c),
+            |c: Inc16| preserve!(c),
+            |c: Add16| preserve!(c),
+            |c: Nand16Way| preserve!(c),
+            |c: Zero16| preserve!(c),
+            |c: Neg16| preserve!(c),
+            |c: ALU| expand!(c),
+            // Project 03+: stop registers, expand PC
+            |c: Register16| preserve!(c),
+            |c: PC| expand!(c),
+            |c: ROM16| preserve!(c),
+            |c: MemorySystem16| preserve!(c),
+            // Project 05+: expand
+            |c: Decode| expand!(c),
+            |c: CPU| expand!(c),
+            |c: Computer| expand!(c),
+        ],
+    )
 }

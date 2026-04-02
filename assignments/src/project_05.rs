@@ -29,20 +29,6 @@ use simulator::{
     fixed, flatten_g,
 };
 
-/// Deprecated.
-#[derive(Clone, Reflect, Component)]
-pub enum Project05Component {
-    #[delegate]
-    Project03(Project03Component),
-    #[primitive]
-    ROM(ROM16),
-    #[primitive]
-    MemorySystem(MemorySystem16),
-    Decode(Decode),
-    CPU(CPU),
-    Computer(Computer),
-}
-
 pub type Project05ComponentT = Coprod!(
     Nand,
     Buffer,
@@ -69,224 +55,6 @@ pub type Project05ComponentT = Coprod!(
     CPU,
     Computer
 );
-
-// TEMP
-impl From<Project05ComponentT> for Project05Component {
-    fn from(comp: Project05ComponentT) -> Self {
-        comp.fold(hlist![
-            |c: Nand| Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Project01(Project01Component::Nand(c))
-            )),
-            |c: Buffer| Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Project01(Project01Component::Buffer(c))
-            )),
-            |c: Not| Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Project01(Project01Component::Not(c))
-            )),
-            |c: And| Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Project01(Project01Component::And(c))
-            )),
-            |c: Or| Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Project01(Project01Component::Or(c))
-            )),
-            |c: Mux| Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Project01(Project01Component::Mux(c))
-            )),
-            |c: Mux16| Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Project01(Project01Component::Mux16(c))
-            )),
-            |c: Not16| Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Project01(Project01Component::Not16(c))
-            )),
-            |c: And16| Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Project01(Project01Component::And16(c))
-            )),
-            |c: HalfAdder| Project05Component::Project03(Project03Component::Project02(
-                Project02Component::HalfAdder(c)
-            )),
-            |c: FullAdder| Project05Component::Project03(Project03Component::Project02(
-                Project02Component::FullAdder(c)
-            )),
-            |c: Inc16| Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Inc16(c)
-            )),
-            |c: Add16| Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Add16(c)
-            )),
-            |c: Nand16Way| Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Nand16Way(c)
-            )),
-            |c: Zero16| Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Zero16(c)
-            )),
-            |c: Neg16| Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Neg16(c)
-            )),
-            |c: ALU| Project05Component::Project03(Project03Component::Project02(
-                Project02Component::ALU(c)
-            )),
-            |c: Register16| Project05Component::Project03(Project03Component::Register(c)),
-            |c: PC| Project05Component::Project03(Project03Component::PC(c)),
-            Project05Component::ROM,
-            Project05Component::MemorySystem,
-            Project05Component::Decode,
-            Project05Component::CPU,
-            Project05Component::Computer,
-        ])
-    }
-}
-
-/// TEMP.
-impl From<Project05Component> for Project05ComponentT {
-    fn from(comp: Project05Component) -> Self {
-        use frunk::coproduct::CoprodInjector;
-        match comp {
-            Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Project01(Project01Component::Nand(c)),
-            )) => <Self as CoprodInjector<Nand, _>>::inject(c),
-            Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Project01(Project01Component::Buffer(c)),
-            )) => <Self as CoprodInjector<Buffer, _>>::inject(c),
-            Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Project01(Project01Component::Not(c)),
-            )) => <Self as CoprodInjector<Not, _>>::inject(c),
-            Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Project01(Project01Component::And(c)),
-            )) => <Self as CoprodInjector<And, _>>::inject(c),
-            Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Project01(Project01Component::Or(c)),
-            )) => <Self as CoprodInjector<Or, _>>::inject(c),
-            Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Project01(Project01Component::Mux(c)),
-            )) => <Self as CoprodInjector<Mux, _>>::inject(c),
-            Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Project01(Project01Component::Mux16(c)),
-            )) => <Self as CoprodInjector<Mux16, _>>::inject(c),
-            Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Project01(Project01Component::Not16(c)),
-            )) => <Self as CoprodInjector<Not16, _>>::inject(c),
-            Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Project01(Project01Component::And16(c)),
-            )) => <Self as CoprodInjector<And16, _>>::inject(c),
-            Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Project01(p),
-            )) => panic!(
-                "Project01Component variant {:?} not in Project05ComponentT",
-                p.name()
-            ),
-            Project05Component::Project03(Project03Component::Project02(
-                Project02Component::HalfAdder(c),
-            )) => <Self as CoprodInjector<HalfAdder, _>>::inject(c),
-            Project05Component::Project03(Project03Component::Project02(
-                Project02Component::FullAdder(c),
-            )) => <Self as CoprodInjector<FullAdder, _>>::inject(c),
-            Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Inc16(c),
-            )) => <Self as CoprodInjector<Inc16, _>>::inject(c),
-            Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Add16(c),
-            )) => <Self as CoprodInjector<Add16, _>>::inject(c),
-            Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Nand16Way(c),
-            )) => <Self as CoprodInjector<Nand16Way, _>>::inject(c),
-            Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Zero16(c),
-            )) => <Self as CoprodInjector<Zero16, _>>::inject(c),
-            Project05Component::Project03(Project03Component::Project02(
-                Project02Component::Neg16(c),
-            )) => <Self as CoprodInjector<Neg16, _>>::inject(c),
-            Project05Component::Project03(Project03Component::Project02(
-                Project02Component::ALU(c),
-            )) => <Self as CoprodInjector<ALU, _>>::inject(c),
-            Project05Component::Project03(Project03Component::Register(c)) => {
-                <Self as CoprodInjector<Register16, _>>::inject(c)
-            }
-            Project05Component::Project03(Project03Component::PC(c)) => {
-                <Self as CoprodInjector<PC, _>>::inject(c)
-            }
-            Project05Component::ROM(c) => <Self as CoprodInjector<ROM16, _>>::inject(c),
-            Project05Component::MemorySystem(c) => {
-                <Self as CoprodInjector<MemorySystem16, _>>::inject(c)
-            }
-            Project05Component::Decode(c) => <Self as CoprodInjector<Decode, _>>::inject(c),
-            Project05Component::CPU(c) => <Self as CoprodInjector<CPU, _>>::inject(c),
-            Project05Component::Computer(c) => <Self as CoprodInjector<Computer, _>>::inject(c),
-        }
-    }
-}
-
-/// Like `flatten_for_simulation`, but takes a `Project05Component` enum value.
-///
-/// FIXME: this needs to go away
-pub fn flatten_for_simulation_enum(comp: Project05Component) -> IC<native::Simulational<N16, N16>> {
-    let t: Project05ComponentT = comp.into();
-    let intf = simulator::Reflect::reflect(&t);
-    IC {
-        name: "Project05 (flat/sim)".to_string(),
-        intf,
-        components: simulator::flatten_go(
-            hlist![
-                |c: Nand| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
-                |c: Buffer| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
-                |c: Not| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
-                |c: And| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
-                |c: Or| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
-                |c: Mux| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
-                |c: Mux16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
-                |c: Not16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
-                |c: And16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
-                |c: HalfAdder| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
-                |c: FullAdder| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
-                |c: Inc16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
-                |c: Add16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
-                |c: Nand16Way| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
-                |c: Zero16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
-                |c: Neg16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
-                |c: ALU| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
-                |c: Register16| Flat::Done(vec![
-                    Computational::Register(WiredRegister::from(c)).into()
-                ]),
-                |c: PC| Flat::Continue(c.expand_t()),
-                |c: ROM16| Flat::Done(vec![Computational::ROM(c).into()]),
-                |c: MemorySystem16| Flat::Done(vec![Computational::MemorySystem(c).into()]),
-                |c: Decode| Flat::Continue(c.expand_t()),
-                |c: CPU| Flat::Continue(c.expand_t()),
-                |c: Computer| Flat::Continue(c.expand_t()),
-            ],
-            t,
-        ),
-    }
-}
-
-/// Recursively expand until only Nands, Registers, RAMs, and ROMs are left.
-///
-/// Deprecated.
-pub fn flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Computational16> {
-    fn go(comp: Project05Component) -> Vec<Computational16> {
-        match comp.expand() {
-            None => match comp {
-                Project05Component::Project03(p) => crate::project_03::flatten(p)
-                    .components
-                    .into_iter()
-                    .map(|s| match s {
-                        Sequential::Nand(n) => Computational::Nand(n),
-                        Sequential::Buffer(c) => Computational::Buffer(c),
-                        Sequential::Register(r) => Computational::Register(r),
-                    })
-                    .collect(),
-                Project05Component::ROM(r) => vec![Computational::ROM(r)],
-                Project05Component::MemorySystem(m) => vec![Computational::MemorySystem(m)],
-                _ => panic!("Did not reduce to primitive: {:?}", comp.name()),
-            },
-            Some(ic) => ic.components.into_iter().flat_map(go).collect(),
-        }
-    }
-    IC {
-        name: format!("{} (flat)", chip.name()),
-        intf: chip.reflect(),
-        components: go(chip.into()),
-    }
-}
 
 /// Recursively expand until only Nands, Registers, RAMs, and ROMs are left.
 pub fn flatten_t<C, Idx>(chip: C) -> IC<Computational16>
@@ -506,18 +274,6 @@ pub struct Decode {
     pub jmp_gt: Output,
 }
 
-impl Component for Decode {
-    // Note: this only using Buffer, Not, and And, which are all only Combinational
-    type Target = Project01Component;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(
-            self.expand_t::<Project01ComponentT, _, _, _>()
-                .map(Into::into),
-        )
-    }
-}
-
 impl Decode {
     expand_t!([Buffer, Not, And], |this| {
         _is_c: Buffer { a: this.instr.bit(15), out: this.is_c },
@@ -564,19 +320,6 @@ pub struct CPU {
     pub mem_addr: Output16,
 
     pub mem_data_in: Input16,
-}
-
-impl Component for CPU {
-    // Note: in fact, this doesn't need the MemorySystem, but it keeps
-    // life simple if everything in this file flattens to the same type.
-    type Target = Project05Component;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(
-            self.expand_t::<Project05ComponentT, _, _, _, _, _, _, _, _, _>()
-                .map(Into::into),
-        )
-    }
 }
 
 impl CPU {
@@ -684,17 +427,6 @@ pub struct Computer {
 
     /// Useful for debugging, but also acts as a root for traversing the graph
     pub pc: Output16,
-}
-
-impl Component for Computer {
-    type Target = Project05Component;
-
-    fn expand(&self) -> Option<IC<Self::Target>> {
-        Some(
-            self.expand_t::<Project05ComponentT, _, _, _>()
-                .map(Into::into),
-        )
-    }
 }
 
 impl Computer {

@@ -1,14 +1,14 @@
 use crate::project_05::{
-    CPU, Computer, Decode, KEYBOARD, SCREEN_BASE, find_keyboard, find_ram, find_rom, find_screen,
-    flatten_for_simulation, flatten_t, memory_system,
+    CPU, Computer, Decode, KEYBOARD, Project05ComponentT, SCREEN_BASE, find_keyboard, find_ram,
+    find_rom, find_screen, flatten_for_simulation, flatten_t, memory_system,
 };
 use crate::project_06::parse_statement;
 use simulator::component::{Computational, Computational16, MemorySystem16, count_computational};
 use simulator::declare::{Chip as _, IC};
 use simulator::nat::N16;
+use simulator::print_ic_graph;
 use simulator::simulate::{ChipState, MemoryMap, simulate};
 use simulator::word::Word16;
-use simulator::{print_graph, print_ic_graph};
 
 /// Mostly this is testing the simulator's handling of the memory mapping we specified.
 #[test]
@@ -82,7 +82,10 @@ fn decode_truth_table() {
     let chip = Decode::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    println!("{}", print_graph(&chip));
+    println!(
+        "{}",
+        print_ic_graph(&chip.expand_t::<Project05ComponentT, _, _, _>())
+    );
 
     let chip = flatten_t(chip);
 
@@ -103,7 +106,10 @@ fn decode_strict_truth_table() {
     let chip = Decode::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    println!("{}", print_graph(&chip));
+    println!(
+        "{}",
+        print_ic_graph(&chip.expand_t::<Project05ComponentT, _, _, _>())
+    );
 
     let chip = flatten_t(chip);
 
@@ -137,7 +143,10 @@ fn cpu_behavior() {
     let chip = CPU::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    println!("{}", print_graph(&chip));
+    println!(
+        "{}",
+        print_ic_graph(&chip.expand_t::<Project05ComponentT, _, _, _, _, _, _, _, _, _>())
+    );
 
     let chip = flatten_t(chip);
 
@@ -186,7 +195,10 @@ fn computer_add_behavior() {
     let chip = Computer::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    print!("{}", print_graph(&chip));
+    print!(
+        "{}",
+        print_ic_graph(&chip.expand_t::<Project05ComponentT, _, _, _>())
+    );
 
     let chip = flatten_t(chip);
 
@@ -226,7 +238,10 @@ pub fn computer_max_behavior() {
     let chip = Computer::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    println!("{}", print_graph(&chip));
+    println!(
+        "{}",
+        print_ic_graph(&chip.expand_t::<Project05ComponentT, _, _, _>())
+    );
 
     let flat = flatten_t(chip);
 
@@ -249,7 +264,10 @@ pub fn computer_max_behavior_fast() {
     let chip = Computer::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    println!("{}", print_graph(&chip));
+    println!(
+        "{}",
+        print_ic_graph(&chip.expand_t::<Project05ComponentT, _, _, _>())
+    );
 
     let flat = flatten_for_simulation(Computer::chip());
 
