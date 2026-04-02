@@ -1,6 +1,6 @@
 //! Combinational primitives: `Nand` and `Buffer`, plus the `Combinational` enum that wraps them.
 
-use frunk::Coproduct;
+use frunk::{Coproduct, hlist};
 
 use crate::declare::BusRef;
 use crate::{Chip, Component, IC, Input1, Interface, Output, Reflect};
@@ -81,6 +81,17 @@ pub struct CombinationalCounts {
     pub buffers: usize,
 }
 
+impl std::ops::Add for CombinationalCounts {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self {
+        CombinationalCounts {
+            nands: self.nands + rhs.nands,
+            buffers: self.buffers + rhs.buffers,
+        }
+    }
+}
+
 pub fn count_combinational(components: &[Combinational]) -> CombinationalCounts {
     let mut counts = CombinationalCounts {
         nands: 0,
@@ -96,16 +107,23 @@ pub fn count_combinational(components: &[Combinational]) -> CombinationalCounts 
 }
 
 pub fn count_combinational_t(components: &[CombinationalT]) -> CombinationalCounts {
-    let mut counts = CombinationalCounts {
-        nands: 0,
-        buffers: 0,
-    };
-    for comp in components {
-        match comp {
-            frunk::Coproduct::Inl(_) => counts.nands += 1,
-            frunk::Coproduct::Inr(frunk::Coproduct::Inl(_)) => counts.buffers += 1,
-            frunk::Coproduct::Inr(frunk::Coproduct::Inr(c)) => match *c {},
-        }
-    }
-    counts
+    components.iter().cloned().fold(
+        CombinationalCounts {
+            nands: 0,
+            buffers: 0,
+        },
+        |counts, comp| {
+            counts
+                + comp.fold(hlist![
+                    |_: Nand| CombinationalCounts {
+                        nands: 1,
+                        buffers: 0
+                    },
+                    |_: Buffer| CombinationalCounts {
+                        nands: 0,
+                        buffers: 1
+                    },
+                ])
+        },
+    )
 }
