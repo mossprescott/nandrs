@@ -282,37 +282,6 @@ impl Join {
     });
 }
 
-pub type EightComponentT = Coprod!(
-    Nand,
-    Buffer,
-    Not,
-    And,
-    Or,
-    Mux,
-    HalfAdder,
-    FullAdder,
-    Mux8,
-    Not8,
-    And8,
-    Inc8,
-    Add8,
-    Nand8Way,
-    Zero8,
-    Neg8,
-    ALU,
-    Split,
-    Join,
-    Decode,
-    Register8,
-    Latch8,
-    Latch1,
-    ROM16,
-    MemorySystem16,
-    PC,
-    CPU,
-    Computer
-);
-
 pub type Combinational8T = Coprod!(
     Nand, Buffer, Not, And, Or, Mux, HalfAdder, FullAdder, Mux8, Not8, And8, Inc8, Add8, Nand8Way,
     Zero8, Neg8, ALU, Split, Join, Decode
@@ -610,6 +579,37 @@ impl Computer {
         },
     });
 }
+
+pub type EightComponentT = Coprod!(
+    Nand,
+    Buffer,
+    Not,
+    And,
+    Or,
+    Mux,
+    HalfAdder,
+    FullAdder,
+    Mux8,
+    Not8,
+    And8,
+    Inc8,
+    Add8,
+    Nand8Way,
+    Zero8,
+    Neg8,
+    ALU,
+    Split,
+    Join,
+    Decode,
+    Register8,
+    Latch8,
+    Latch1,
+    ROM16,
+    MemorySystem16,
+    PC,
+    CPU,
+    Computer
+);
 
 /// Recursively expand until only Nands, Registers, RAMs, ROMs, and MemorySystems are left.
 pub fn flatten_t<C, Idx>(chip: C) -> IC<Computational16>
