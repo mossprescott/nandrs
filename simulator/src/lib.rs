@@ -42,6 +42,53 @@ pub fn flatten<C: Reflect + Clone>(chip: C, label: &str, f: &dyn Fn(C) -> Option
     }
 }
 
+/// Either a terminal result already in T, or an IC<S> whose components need further flattening.
+pub enum Flat<S, T> {
+    /// A result that is already in the target type.
+    Flat(T),
+    /// Intermediate result, still in the source type; components need further flattening.
+    Continue(IC<S>),
+}
+
+/// Flatten to an arbitrary result type using a folder hlist. For each coproduct variant, the folder
+/// produces either a value already in T, or an IC<S> whose components recurse through go.
+///
+/// Note: the types here are stronger; if it terminates, everything is reduced. To make that work,
+/// every term in S has a well-defined expansion in that type. However, there's no structural
+/// guarantee that expansion actually makes progress. But we (usually, sort of) know that it does,
+/// because  in practice each expand_t's type is smaller than S – it's at least missing the
+/// component being expanded. On the third hand, nothing stops you from expanding A -> B, then B ->
+/// A, etc. Probably not worth trying to bake that kind of guarantee into these types.
+pub fn flatten_g<C, S, Idx, T, F>(folder: F, chip: C) -> IC<T>
+where
+    C: Reflect,
+    S: frunk::coproduct::CoprodInjector<C, Idx>,
+    S: frunk::coproduct::CoproductFoldable<F, Flat<S, T>>,
+    F: Clone,
+{
+    fn go<S, T, F>(folder: F, comp: S) -> Vec<T>
+    where
+        S: frunk::coproduct::CoproductFoldable<F, Flat<S, T>>,
+        F: Clone,
+    {
+        match comp.fold(folder.clone()) {
+            Flat::Flat(c) => vec![c],
+            // Future: retain info about the source component for each expanded component in the IC.
+            // That could make debugging the resulting circuits a much more pleasant experience.
+            Flat::Continue(ic) => ic
+                .components
+                .into_iter()
+                .flat_map(|c| go(folder.clone(), c))
+                .collect(),
+        }
+    }
+    IC {
+        name: format!("{} (flat)", chip.name()),
+        intf: chip.reflect(),
+        components: go(folder, S::inject(chip)),
+    }
+}
+
 fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
     let mut ai = a.chars().peekable();
     let mut bi = b.chars().peekable();

@@ -10,7 +10,8 @@ use simulator::declare::Input;
 use simulator::declare::{BusRef, Interface};
 use simulator::nat::{N1, N16};
 use simulator::{
-    self, Chip, Component, IC, Input1, Input16, Output, Output16, Reflect, expand, expand_t,
+    self, Chip, Component, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand, expand_t,
+    flatten_g,
 };
 use std::collections::HashMap;
 
@@ -72,55 +73,24 @@ pub fn flatten<C: Reflect + Into<Project01Component>>(chip: C) -> IC<Combination
 }
 
 /// Recursively expand_t() until only primitives are left.
-///
-/// Note: the types here are stronger; if it terminates, everything is reduced. To make that work,
-/// every term in Project01ComponentT has a well-defined expansion in that type. However, there's no
-/// structural guarantee that expansion actually makes progress. But we (sort of) know that it does,
-/// because each expand_t's type is smaller than Project01ComponentT – it's at least missing the
-/// component being expanded. On the third hand, nothing stops you from expanding A -> B, then B ->
-/// A, etc. Probably not worth trying to bake that kind of guarantee into these types.
 pub fn flatten_t<C, Idx>(chip: C) -> IC<CombinationalT>
 where
     C: Reflect,
     Project01ComponentT: CoprodInjector<C, Idx>,
 {
-    fn go(comp: Project01ComponentT) -> Vec<CombinationalT> {
-        comp.fold(hlist![
-            |nand: Nand| vec![Coproduct::inject(nand)],
-            |buffer: Buffer| vec![Coproduct::inject(buffer)],
-            |not: Not| not.expand_t::<CombinationalT, _>().components,
-            |and: And| and
-                .expand_t::<Project01ComponentT, _, _>()
-                .components
-                .into_iter()
-                .flat_map(go)
-                .collect(),
-            |or: Or| or
-                .expand_t::<Project01ComponentT, _, _>()
-                .components
-                .into_iter()
-                .flat_map(go)
-                .collect(),
-            |xor: Xor| xor.expand_t::<CombinationalT, _>().components,
-            |mux: Mux| mux
-                .expand_t::<Project01ComponentT, _, _>()
-                .components
-                .into_iter()
-                .flat_map(go)
-                .collect(),
-            |dmux: Dmux| dmux
-                .expand_t::<Project01ComponentT, _, _>()
-                .components
-                .into_iter()
-                .flat_map(go)
-                .collect(),
-        ])
-    }
-    IC {
-        name: format!("{} (flat)", chip.name()),
-        intf: chip.reflect(),
-        components: go(Project01ComponentT::inject(chip)),
-    }
+    flatten_g::<C, Project01ComponentT, Idx, CombinationalT, _>(
+        hlist![
+            |c: Nand| Flat::Flat(CombinationalT::inject(c)),
+            |c: Buffer| Flat::Flat(CombinationalT::inject(c)),
+            |c: Not| Flat::Continue(c.expand_t::<Project01ComponentT, _>()),
+            |c: And| Flat::Continue(c.expand_t::<Project01ComponentT, _, _>()),
+            |c: Or| Flat::Continue(c.expand_t::<Project01ComponentT, _, _>()),
+            |c: Xor| Flat::Continue(c.expand_t::<Project01ComponentT, _>()),
+            |c: Mux| Flat::Continue(c.expand_t::<Project01ComponentT, _, _>()),
+            |c: Dmux| Flat::Continue(c.expand_t::<Project01ComponentT, _, _>()),
+        ],
+        chip,
+    )
 }
 
 /// Inverts its input.
