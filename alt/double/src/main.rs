@@ -87,7 +87,24 @@ fn main() {
     computer::run(&args, state, &symbols, &fmt_instrs);
 }
 
+/// Channeling dfithian. This stuff is just hard to look at.
+macro_rules! preserve {
+    ($c:expr) => {
+        Flat::Done(vec![CoprodInjector::inject($c)])
+    };
+}
+
+/// Channeling dfithian. This stuff is just hard to look at.
+macro_rules! expand {
+    ($c:expr) => {
+        Flat::Continue($c.expand_t())
+    };
+}
+
 /// Recursively expand until only primitives and simple logic are left (projects 1 and 2).
+///
+/// TODO: figure out how to share the portion of this fold which is common with the project05
+/// components, which is to say everything except fe defined here, which should all be expanded.
 fn simplify<C, Idx>(chip: C) -> IC<DoubleComponentT>
 where
     C: Reflect,
@@ -98,35 +115,35 @@ where
         "simple",
         hlist![
             // Project 01: stop
-            |c: Nand| Flat::Done(vec![CoprodInjector::inject(c)]),
-            |c: Buffer| Flat::Done(vec![CoprodInjector::inject(c)]),
-            |c: Not| Flat::Done(vec![CoprodInjector::inject(c)]),
-            |c: And| Flat::Done(vec![CoprodInjector::inject(c)]),
-            |c: Or| Flat::Done(vec![CoprodInjector::inject(c)]),
-            |c: Mux| Flat::Done(vec![CoprodInjector::inject(c)]),
-            |c: Mux16| Flat::Done(vec![CoprodInjector::inject(c)]),
-            |c: Not16| Flat::Done(vec![CoprodInjector::inject(c)]),
-            |c: And16| Flat::Done(vec![CoprodInjector::inject(c)]),
+            |c: Nand| preserve!(c),
+            |c: Buffer| preserve!(c),
+            |c: Not| preserve!(c),
+            |c: And| preserve!(c),
+            |c: Or| preserve!(c),
+            |c: Mux| preserve!(c),
+            |c: Mux16| preserve!(c),
+            |c: Not16| preserve!(c),
+            |c: And16| preserve!(c),
             // Project 02: stop, except ALU which expands
-            |c: HalfAdder| Flat::Done(vec![CoprodInjector::inject(c)]),
-            |c: FullAdder| Flat::Done(vec![CoprodInjector::inject(c)]),
-            |c: Inc16| Flat::Done(vec![CoprodInjector::inject(c)]),
-            |c: Add16| Flat::Done(vec![CoprodInjector::inject(c)]),
-            |c: Nand16Way| Flat::Done(vec![CoprodInjector::inject(c)]),
-            |c: Zero16| Flat::Done(vec![CoprodInjector::inject(c)]),
-            |c: Neg16| Flat::Done(vec![CoprodInjector::inject(c)]),
-            |c: ALU| Flat::Continue(c.expand_t()),
+            |c: HalfAdder| preserve!(c),
+            |c: FullAdder| preserve!(c),
+            |c: Inc16| preserve!(c),
+            |c: Add16| preserve!(c),
+            |c: Nand16Way| preserve!(c),
+            |c: Zero16| preserve!(c),
+            |c: Neg16| preserve!(c),
+            |c: ALU| expand!(c),
             // Project 03+: stop registers, expand PC
-            |c: Register16| Flat::Done(vec![CoprodInjector::inject(c)]),
-            |c: PC| Flat::Continue(c.expand_t()),
-            |c: ROM16| Flat::Done(vec![CoprodInjector::inject(c)]),
-            |c: MemorySystem16| Flat::Done(vec![CoprodInjector::inject(c)]),
+            |c: Register16| preserve!(c),
+            |c: PC| expand!(c),
+            |c: ROM16| preserve!(c),
+            |c: MemorySystem16| preserve!(c),
             // Project 05+: expand
-            |c: Decode| Flat::Continue(c.expand_t()),
-            |c: CPU| Flat::Continue(c.expand_t()),
-            |c: Computer| Flat::Continue(c.expand_t()),
-            |c: DoublePC| Flat::Continue(c.expand_t()),
-            |c: Inc2| Flat::Continue(c.expand_t()),
+            |c: Decode| expand!(c),
+            |c: CPU| expand!(c),
+            |c: Computer| expand!(c),
+            |c: DoublePC| expand!(c),
+            |c: Inc2| expand!(c),
         ],
     )
 }

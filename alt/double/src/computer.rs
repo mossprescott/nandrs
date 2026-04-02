@@ -357,6 +357,9 @@ pub fn find_roms(state: &ChipState<N16, N16>) -> (ROMHandle<N16, N16>, ROMHandle
 }
 
 /// Recursively expand until only Nands, Registers, RAMs, ROMs, and MemorySystems are left.
+///
+/// TODO: figure out how to make this only worry about the components that are added on top of
+/// Project05ComponentT, or maybe some subset.
 pub fn flatten_t<C, Idx>(chip: C) -> IC<Computational16>
 where
     C: Reflect,
