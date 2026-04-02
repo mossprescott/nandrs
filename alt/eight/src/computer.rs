@@ -703,7 +703,7 @@ pub fn flatten_for_simulation<C: Reflect + Into<EightComponent>>(
     fn go(comp: EightComponent) -> Vec<Simulational<N16, N16>> {
         match comp {
             EightComponent::Combinational8(Combinational8::Project02(p)) => {
-                project_02::flatten_for_simulation(p).components
+                todo!()
             }
             EightComponent::Combinational8(Combinational8::Mux8(c)) => {
                 vec![

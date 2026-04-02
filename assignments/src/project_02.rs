@@ -8,8 +8,8 @@ use frunk::coproduct::CoprodInjector;
 use frunk::{Coprod, hlist};
 use simulator::Chip as _;
 use simulator::Reflect as _;
-use simulator::component::Combinational;
 use simulator::component::native;
+use simulator::component::{Combinational, Computational};
 use simulator::declare::{BusRef, Interface};
 use simulator::nat::{N16, Nat};
 use simulator::{
@@ -32,7 +32,7 @@ pub enum Project02Component {
 }
 
 pub type Project02ComponentT = Coprod!(
-    Nand, Buffer, Not, And, Mux, Mux16, Not16, And16, HalfAdder, FullAdder, Inc16, Add16,
+    Nand, Buffer, Not, And, Or, Mux, Mux16, Not16, And16, HalfAdder, FullAdder, Inc16, Add16,
     Nand16Way, Zero16, Neg16, ALU
 );
 
@@ -43,6 +43,7 @@ impl From<Project02ComponentT> for Project02Component {
             |c: Buffer| Project02Component::Project01(Project01Component::Buffer(c)),
             |c: Not| Project02Component::Project01(Project01Component::Not(c)),
             |c: And| Project02Component::Project01(Project01Component::And(c)),
+            |c: Or| Project02Component::Project01(Project01Component::Or(c)),
             |c: Mux| Project02Component::Project01(Project01Component::Mux(c)),
             |c: Mux16| Project02Component::Project01(Project01Component::Mux16(c)),
             |c: Not16| Project02Component::Project01(Project01Component::Not16(c)),
@@ -56,6 +57,56 @@ impl From<Project02ComponentT> for Project02Component {
             Project02Component::Neg16,
             Project02Component::ALU,
         ])
+    }
+}
+
+/// TEMP.
+impl From<Project02Component> for Project02ComponentT {
+    fn from(comp: Project02Component) -> Self {
+        use frunk::coproduct::CoprodInjector;
+        match comp {
+            Project02Component::Project01(Project01Component::Nand(c)) => {
+                <Self as CoprodInjector<Nand, _>>::inject(c)
+            }
+            Project02Component::Project01(Project01Component::Buffer(c)) => {
+                <Self as CoprodInjector<Buffer, _>>::inject(c)
+            }
+            Project02Component::Project01(Project01Component::Not(c)) => {
+                <Self as CoprodInjector<Not, _>>::inject(c)
+            }
+            Project02Component::Project01(Project01Component::And(c)) => {
+                <Self as CoprodInjector<And, _>>::inject(c)
+            }
+            Project02Component::Project01(Project01Component::Or(c)) => {
+                <Self as CoprodInjector<Or, _>>::inject(c)
+            }
+            Project02Component::Project01(Project01Component::Mux(c)) => {
+                <Self as CoprodInjector<Mux, _>>::inject(c)
+            }
+            Project02Component::Project01(Project01Component::Mux16(c)) => {
+                <Self as CoprodInjector<Mux16, _>>::inject(c)
+            }
+            Project02Component::Project01(Project01Component::Not16(c)) => {
+                <Self as CoprodInjector<Not16, _>>::inject(c)
+            }
+            Project02Component::Project01(Project01Component::And16(c)) => {
+                <Self as CoprodInjector<And16, _>>::inject(c)
+            }
+            Project02Component::Project01(p) => {
+                panic!(
+                    "Project01Component variant {:?} not in Project02ComponentT",
+                    p.name()
+                )
+            }
+            Project02Component::HalfAdder(c) => <Self as CoprodInjector<HalfAdder, _>>::inject(c),
+            Project02Component::FullAdder(c) => <Self as CoprodInjector<FullAdder, _>>::inject(c),
+            Project02Component::Inc16(c) => <Self as CoprodInjector<Inc16, _>>::inject(c),
+            Project02Component::Add16(c) => <Self as CoprodInjector<Add16, _>>::inject(c),
+            Project02Component::Nand16Way(c) => <Self as CoprodInjector<Nand16Way, _>>::inject(c),
+            Project02Component::Zero16(c) => <Self as CoprodInjector<Zero16, _>>::inject(c),
+            Project02Component::Neg16(c) => <Self as CoprodInjector<Neg16, _>>::inject(c),
+            Project02Component::ALU(c) => <Self as CoprodInjector<ALU, _>>::inject(c),
+        }
     }
 }
 
@@ -90,10 +141,11 @@ where
         chip,
         "flat",
         hlist![
-            |c: Nand| Flat::Flat(Combinational::Nand(c)),
-            |c: Buffer| Flat::Flat(Combinational::Buffer(c)),
+            |c: Nand| Flat::Done(vec![Combinational::Nand(c)]),
+            |c: Buffer| Flat::Done(vec![Combinational::Buffer(c)]),
             |c: Not| Flat::Continue(c.expand_t()),
             |c: And| Flat::Continue(c.expand_t()),
+            |c: Or| Flat::Continue(c.expand_t()),
             |c: Mux| Flat::Continue(c.expand_t()),
             |c: Mux16| Flat::Continue(c.expand_t()),
             |c: Not16| Flat::Continue(c.expand_t()),
@@ -113,26 +165,56 @@ where
 /// native Mux for efficient simulation.
 ///
 /// Note: this is pinned to N16, just so it can rewrite the Mux16 component as a native Mux.
-pub fn flatten_for_simulation<C>(chip: C) -> IC<native::Simulational<N16, N16>>
+pub fn flatten_for_simulation<C, Idx>(chip: C) -> IC<native::Simulational<N16, N16>>
 where
-    C: Reflect + Into<Project02Component>,
+    C: Reflect,
+    Project02ComponentT: CoprodInjector<C, Idx>,
 {
-    fn go(comp: Project02Component) -> Vec<native::Simulational<N16, N16>> {
-        match comp {
-            Project02Component::HalfAdder(c) => vec![
+    flatten_g::<C, Project02ComponentT, Idx, native::Simulational<N16, N16>, _>(
+        chip,
+        "flat/sim",
+        hlist![
+            |c: Nand| Flat::Done(vec![Computational::Nand(c).into()]),
+            |c: Buffer| Flat::Done(vec![Computational::Buffer(c).into()]),
+            |c: Not| Flat::Continue(c.expand_t()),
+            |c: And| Flat::Continue(c.expand_t()),
+            |c: Or| Flat::Continue(c.expand_t()),
+            |c: Mux| Flat::Done(vec![
+                native::Mux {
+                    a0: c.a0,
+                    a1: c.a1,
+                    sel: c.sel,
+                    out: c.out,
+                }
+                .into()
+            ]),
+            |c: Mux16| Flat::Done(vec![
+                native::Mux {
+                    a0: c.a0,
+                    a1: c.a1,
+                    sel: c.sel,
+                    out: c.out,
+                }
+                .into()
+            ]),
+            |c: Not16| Flat::Continue(c.expand_t()),
+            |c: And16| Flat::Continue(c.expand_t()),
+            |c: HalfAdder| {
                 // Tricky: the simulator looks for the carry chain to always pass the carry bit in
                 // c, so it's important for the zero bit to go to b here, even though in principle
                 // it doesn't matter.
-                native::Adder {
-                    a: c.a,
-                    b: fixed(0),
-                    c: c.b,
-                    sum: c.sum,
-                    carry: c.carry,
-                }
-                .into(),
-            ],
-            Project02Component::FullAdder(c) => vec![
+                Flat::Done(vec![
+                    native::Adder {
+                        a: c.a,
+                        b: fixed(0),
+                        c: c.b,
+                        sum: c.sum,
+                        carry: c.carry,
+                    }
+                    .into(),
+                ])
+            },
+            |c: FullAdder| Flat::Done(vec![
                 native::Adder {
                     a: c.a,
                     b: c.b,
@@ -140,50 +222,16 @@ where
                     sum: c.sum,
                     carry: c.carry,
                 }
-                .into(),
-            ],
-            Project02Component::Project01(Project01Component::Mux(c)) => {
-                vec![
-                    native::Mux {
-                        a0: c.a0,
-                        a1: c.a1,
-                        sel: c.sel,
-                        out: c.out,
-                    }
-                    .into(),
-                ]
-            }
-            Project02Component::Project01(Project01Component::Mux16(c)) => {
-                vec![
-                    native::Mux {
-                        a0: c.a0,
-                        a1: c.a1,
-                        sel: c.sel,
-                        out: c.out,
-                    }
-                    .into(),
-                ]
-            }
-            _ => match comp.expand() {
-                None => match comp {
-                    Project02Component::Project01(p) => crate::project_01::flatten(p)
-                        .components
-                        .into_iter()
-                        .map(|c| {
-                            native::Simulational::from(simulator::component::Computational::from(c))
-                        })
-                        .collect(),
-                    _ => panic!("Did not reduce to primitive: {:?}", comp.name()),
-                },
-                Some(ic) => ic.components.into_iter().flat_map(go).collect(),
-            },
-        }
-    }
-    IC {
-        name: format!("{} (flat/sim)", chip.name()),
-        intf: chip.reflect(),
-        components: go(chip.into()),
-    }
+                .into()
+            ]),
+            |c: Inc16| Flat::Continue(c.expand_t()),
+            |c: Add16| Flat::Continue(c.expand_t()),
+            |c: Nand16Way| Flat::Continue(c.expand_t()),
+            |c: Zero16| Flat::Continue(c.expand_t()),
+            |c: Neg16| Flat::Continue(c.expand_t()),
+            |c: ALU| Flat::Continue(c.expand_t()),
+        ],
+    )
 }
 
 /// sum = 1s-digit of two-bit sum, carry = 2s-digit

@@ -368,7 +368,7 @@ pub fn flatten_for_simulation<C: Reflect + Into<DoubleComponent>>(
     fn go(comp: DoubleComponent) -> Vec<Simulational<N16, N16>> {
         // Delegate Project05 subtrees immediately, so their interception logic handles Mux/Adder:
         if let DoubleComponent::Project05(p) = comp {
-            return project_05::flatten_for_simulation(p).components;
+            return project_05::flatten_for_simulation_enum(p).components;
         }
         match comp.expand() {
             Some(ic) => ic.components.into_iter().flat_map(go).collect(),

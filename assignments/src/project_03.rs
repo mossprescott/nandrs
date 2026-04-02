@@ -112,8 +112,8 @@ where
         chip,
         "flat",
         hlist![
-            |c: Nand| Flat::Flat(Sequential::Nand(c)),
-            |c: Buffer| Flat::Flat(Sequential::Buffer(c)),
+            |c: Nand| Flat::Done(vec![Sequential::Nand(c)]),
+            |c: Buffer| Flat::Done(vec![Sequential::Buffer(c)]),
             |c: Not| Flat::Continue(c.expand_t()),
             |c: And| Flat::Continue(c.expand_t()),
             |c: Mux| Flat::Continue(c.expand_t()),
@@ -128,7 +128,7 @@ where
             |c: Zero16| Flat::Continue(c.expand_t()),
             |c: Neg16| Flat::Continue(c.expand_t()),
             |c: ALU| Flat::Continue(c.expand_t()),
-            |c: Register16| Flat::Flat(Sequential::Register(WiredRegister::from(c))),
+            |c: Register16| Flat::Done(vec![Sequential::Register(WiredRegister::from(c))]),
             |c: PC| Flat::Continue(c.expand_t()),
         ],
     )

@@ -136,6 +136,128 @@ impl From<Project05ComponentT> for Project05Component {
     }
 }
 
+/// TEMP.
+impl From<Project05Component> for Project05ComponentT {
+    fn from(comp: Project05Component) -> Self {
+        use frunk::coproduct::CoprodInjector;
+        match comp {
+            Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Project01(Project01Component::Nand(c)),
+            )) => <Self as CoprodInjector<Nand, _>>::inject(c),
+            Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Project01(Project01Component::Buffer(c)),
+            )) => <Self as CoprodInjector<Buffer, _>>::inject(c),
+            Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Project01(Project01Component::Not(c)),
+            )) => <Self as CoprodInjector<Not, _>>::inject(c),
+            Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Project01(Project01Component::And(c)),
+            )) => <Self as CoprodInjector<And, _>>::inject(c),
+            Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Project01(Project01Component::Or(c)),
+            )) => <Self as CoprodInjector<Or, _>>::inject(c),
+            Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Project01(Project01Component::Mux(c)),
+            )) => <Self as CoprodInjector<Mux, _>>::inject(c),
+            Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Project01(Project01Component::Mux16(c)),
+            )) => <Self as CoprodInjector<Mux16, _>>::inject(c),
+            Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Project01(Project01Component::Not16(c)),
+            )) => <Self as CoprodInjector<Not16, _>>::inject(c),
+            Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Project01(Project01Component::And16(c)),
+            )) => <Self as CoprodInjector<And16, _>>::inject(c),
+            Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Project01(p),
+            )) => panic!(
+                "Project01Component variant {:?} not in Project05ComponentT",
+                p.name()
+            ),
+            Project05Component::Project03(Project03Component::Project02(
+                Project02Component::HalfAdder(c),
+            )) => <Self as CoprodInjector<HalfAdder, _>>::inject(c),
+            Project05Component::Project03(Project03Component::Project02(
+                Project02Component::FullAdder(c),
+            )) => <Self as CoprodInjector<FullAdder, _>>::inject(c),
+            Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Inc16(c),
+            )) => <Self as CoprodInjector<Inc16, _>>::inject(c),
+            Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Add16(c),
+            )) => <Self as CoprodInjector<Add16, _>>::inject(c),
+            Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Nand16Way(c),
+            )) => <Self as CoprodInjector<Nand16Way, _>>::inject(c),
+            Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Zero16(c),
+            )) => <Self as CoprodInjector<Zero16, _>>::inject(c),
+            Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Neg16(c),
+            )) => <Self as CoprodInjector<Neg16, _>>::inject(c),
+            Project05Component::Project03(Project03Component::Project02(
+                Project02Component::ALU(c),
+            )) => <Self as CoprodInjector<ALU, _>>::inject(c),
+            Project05Component::Project03(Project03Component::Register(c)) => {
+                <Self as CoprodInjector<Register16, _>>::inject(c)
+            }
+            Project05Component::Project03(Project03Component::PC(c)) => {
+                <Self as CoprodInjector<PC, _>>::inject(c)
+            }
+            Project05Component::ROM(c) => <Self as CoprodInjector<ROM16, _>>::inject(c),
+            Project05Component::MemorySystem(c) => {
+                <Self as CoprodInjector<MemorySystem16, _>>::inject(c)
+            }
+            Project05Component::Decode(c) => <Self as CoprodInjector<Decode, _>>::inject(c),
+            Project05Component::CPU(c) => <Self as CoprodInjector<CPU, _>>::inject(c),
+            Project05Component::Computer(c) => <Self as CoprodInjector<Computer, _>>::inject(c),
+        }
+    }
+}
+
+/// Like `flatten_for_simulation`, but takes a `Project05Component` enum value.
+///
+/// FIXME: this needs to go away
+pub fn flatten_for_simulation_enum(comp: Project05Component) -> IC<native::Simulational<N16, N16>> {
+    let t: Project05ComponentT = comp.into();
+    let intf = simulator::Reflect::reflect(&t);
+    IC {
+        name: "Project05 (flat/sim)".to_string(),
+        intf,
+        components: simulator::flatten_go(
+            hlist![
+                |c: Nand| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+                |c: Buffer| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+                |c: Not| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+                |c: And| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+                |c: Or| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+                |c: Mux| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+                |c: Mux16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+                |c: Not16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+                |c: And16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+                |c: HalfAdder| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+                |c: FullAdder| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+                |c: Inc16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+                |c: Add16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+                |c: Nand16Way| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+                |c: Zero16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+                |c: Neg16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+                |c: ALU| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+                |c: Register16| Flat::Done(vec![
+                    Computational::Register(WiredRegister::from(c)).into()
+                ]),
+                |c: PC| Flat::Continue(c.expand_t()),
+                |c: ROM16| Flat::Done(vec![Computational::ROM(c).into()]),
+                |c: MemorySystem16| Flat::Done(vec![Computational::MemorySystem(c).into()]),
+                |c: Decode| Flat::Continue(c.expand_t()),
+                |c: CPU| Flat::Continue(c.expand_t()),
+                |c: Computer| Flat::Continue(c.expand_t()),
+            ],
+            t,
+        ),
+    }
+}
+
 /// Recursively expand until only Nands, Registers, RAMs, and ROMs are left.
 ///
 /// Deprecated.
@@ -176,8 +298,8 @@ where
         chip,
         "flat",
         hlist![
-            |c: Nand| Flat::Flat(Computational::Nand(c)),
-            |c: Buffer| Flat::Flat(Computational::Buffer(c)),
+            |c: Nand| Flat::Done(vec![Computational::Nand(c)]),
+            |c: Buffer| Flat::Done(vec![Computational::Buffer(c)]),
             |c: Not| Flat::Continue(c.expand_t()),
             |c: And| Flat::Continue(c.expand_t()),
             |c: Or| Flat::Continue(c.expand_t()),
@@ -193,10 +315,10 @@ where
             |c: Zero16| Flat::Continue(c.expand_t()),
             |c: Neg16| Flat::Continue(c.expand_t()),
             |c: ALU| Flat::Continue(c.expand_t()),
-            |c: Register16| Flat::Flat(Computational::Register(WiredRegister::from(c))),
+            |c: Register16| Flat::Done(vec![Computational::Register(WiredRegister::from(c))]),
             |c: PC| Flat::Continue(c.expand_t()),
-            |c: ROM16| Flat::Flat(Computational::ROM(c)),
-            |c: MemorySystem16| Flat::Flat(Computational::MemorySystem(c)),
+            |c: ROM16| Flat::Done(vec![Computational::ROM(c)]),
+            |c: MemorySystem16| Flat::Done(vec![Computational::MemorySystem(c)]),
             |c: Decode| Flat::Continue(c.expand_t()),
             |c: CPU| Flat::Continue(c.expand_t()),
             |c: Computer| Flat::Continue(c.expand_t()),
@@ -204,35 +326,46 @@ where
     )
 }
 
-/// Like `flatten`, but replaces FullAdder with native Adder for efficient simulation.
-pub fn flatten_for_simulation<C: Reflect + Into<Project05Component>>(
-    chip: C,
-) -> IC<native::Simulational<N16, N16>> {
-    fn go(comp: Project05Component) -> Vec<native::Simulational<N16, N16>> {
-        // Delegate to lower-level flatten_for_simulation as soon as possible:
-        match comp {
-            Project05Component::Project03(Project03Component::Project02(p)) => {
-                return crate::project_02::flatten_for_simulation(p).components;
-            }
-            Project05Component::Project03(Project03Component::Register(r)) => {
-                return vec![Computational::Register(r.into()).into()];
-            }
-            Project05Component::ROM(r) => return vec![Computational::ROM(r).into()],
-            Project05Component::MemorySystem(m) => {
-                return vec![Computational::MemorySystem(m).into()];
-            }
-            _ => {}
-        }
-        match comp.expand() {
-            Some(ic) => ic.components.into_iter().flat_map(go).collect(),
-            None => panic!("Did not reduce to primitive: {:?}", comp.name()),
-        }
-    }
-    IC {
-        name: format!("{} (flat/sim)", chip.name()),
-        intf: chip.reflect(),
-        components: go(chip.into()),
-    }
+/// Like `flatten`, but replaces adders and muxes with native versions for efficient simulation.
+pub fn flatten_for_simulation<C, Idx>(chip: C) -> IC<native::Simulational<N16, N16>>
+where
+    C: Reflect,
+    Project05ComponentT: CoprodInjector<C, Idx>,
+{
+    flatten_g::<C, Project05ComponentT, Idx, native::Simulational<N16, N16>, _>(
+        chip,
+        "flat/sim",
+        hlist![
+            // Delegate all Project02 types to project_02::flatten_for_simulation:
+            |c: Nand| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: Buffer| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: Not| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: And| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: Or| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: Mux| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: Mux16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: Not16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: And16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: HalfAdder| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: FullAdder| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: Inc16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: Add16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: Nand16Way| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: Zero16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: Neg16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: ALU| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            // Project05-specific types:
+            |c: Register16| Flat::Done(vec![
+                Computational::Register(WiredRegister::from(c)).into()
+            ]),
+            |c: PC| Flat::Continue(c.expand_t()),
+            |c: ROM16| Flat::Done(vec![Computational::ROM(c).into()]),
+            |c: MemorySystem16| Flat::Done(vec![Computational::MemorySystem(c).into()]),
+            |c: Decode| Flat::Continue(c.expand_t()),
+            |c: CPU| Flat::Continue(c.expand_t()),
+            |c: Computer| Flat::Continue(c.expand_t()),
+        ],
+    )
 }
 
 pub const RAM_BASE: u16 = 0 * 1024;

@@ -42,15 +42,19 @@ pub fn flatten<C: Reflect + Clone>(chip: C, label: &str, f: &dyn Fn(C) -> Option
     }
 }
 
-/// Either a terminal result already in `T`, or an `IC<S>` whose components need further flattening.
+/// Either terminal results already in `T`, or an `IC<S>` whose components need further flattening.
 ///
 /// Note: there's a middle case where a result `IC` already has components in the target type, but
 /// there seems to be no harm in using `Continue` for that case, at least for current purposes.
+///
+/// TODO: is `IC<S>` sensible here? Probably never used at this point, but it's what `expand_t`
+/// gives you, and in theory we would want to capture some info from it. On the other hand, `Done`
+/// *usually* contains a single component that isn't an `IC` in any sense.
 pub enum Flat<S, T> {
-    /// A result that is already in the target type.
-    Flat(T),
     /// Intermediate result, still in the source type; components need further flattening.
     Continue(IC<S>),
+    /// Fully resolved target values; no further flattening needed.
+    Done(Vec<T>),
 }
 
 /// Flatten to an arbitrary result type using a folder hlist. For each coproduct variant, the folder
@@ -62,6 +66,24 @@ pub enum Flat<S, T> {
 /// `expand_t`'s type is smaller than `S` — it's at least missing the component being expanded.
 /// Strictly speaking, nothing stops you from expanding A → B, then B → A, etc. Probably not worth
 /// trying to bake that kind of guarantee into these types.
+/// Recursive flatten core: fold each coproduct value via the folder, recursing on `Continue`.
+pub fn flatten_go<S, T, F>(folder: F, comp: S) -> Vec<T>
+where
+    S: frunk::coproduct::CoproductFoldable<F, Flat<S, T>>,
+    F: Clone,
+{
+    match comp.fold(folder.clone()) {
+        // Future: retain info about the source component for each expanded component in the IC.
+        // That could make debugging the resulting circuits a much more pleasant experience.
+        Flat::Continue(ic) => ic
+            .components
+            .into_iter()
+            .flat_map(|c| flatten_go(folder.clone(), c))
+            .collect(),
+        Flat::Done(vs) => vs,
+    }
+}
+
 pub fn flatten_g<C, S, Idx, T, F>(chip: C, label: &str, folder: F) -> IC<T>
 where
     C: Reflect,
@@ -69,26 +91,23 @@ where
     S: frunk::coproduct::CoproductFoldable<F, Flat<S, T>>,
     F: Clone,
 {
-    fn go<S, T, F>(folder: F, comp: S) -> Vec<T>
-    where
-        S: frunk::coproduct::CoproductFoldable<F, Flat<S, T>>,
-        F: Clone,
-    {
-        match comp.fold(folder.clone()) {
-            Flat::Flat(c) => vec![c],
-            // Future: retain info about the source component for each expanded component in the IC.
-            // That could make debugging the resulting circuits a much more pleasant experience.
-            Flat::Continue(ic) => ic
-                .components
-                .into_iter()
-                .flat_map(|c| go(folder.clone(), c))
-                .collect(),
-        }
-    }
     IC {
         name: format!("{} ({})", chip.name(), label),
         intf: chip.reflect(),
-        components: go(folder, S::inject(chip)),
+        components: flatten_go(folder, S::inject(chip)),
+    }
+}
+
+/// Like `flatten_g`, but takes a pre-injected coproduct value instead of a concrete component.
+pub fn flatten_g_pre<S, T, F>(name: String, intf: Interface, comp: S, folder: F) -> IC<T>
+where
+    S: frunk::coproduct::CoproductFoldable<F, Flat<S, T>>,
+    F: Clone,
+{
+    IC {
+        name,
+        intf,
+        components: flatten_go(folder, comp),
     }
 }
 

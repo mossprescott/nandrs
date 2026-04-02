@@ -88,8 +88,8 @@ where
         chip,
         "flat",
         hlist![
-            |c: Nand| Flat::Flat(Combinational::Nand(c)),
-            |c: Buffer| Flat::Flat(Combinational::Buffer(c)),
+            |c: Nand| Flat::Done(vec![Combinational::Nand(c)]),
+            |c: Buffer| Flat::Done(vec![Combinational::Buffer(c)]),
             |c: Not| Flat::Continue(c.expand_t()),
             |c: And| Flat::Continue(c.expand_t()),
             |c: Or| Flat::Continue(c.expand_t()),
