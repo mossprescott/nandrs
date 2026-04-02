@@ -321,12 +321,6 @@ where
     )
 }
 
-impl Latch8 {
-    expand_t!([Register8], |this| {
-        reg: Register8 { data_in: this.data_in, write: fixed(1), data_out: this.data_out },
-    });
-}
-
 /// PC maintaining a 16-bit instruction address which is actually stored in a pair of 8-bit
 /// registers, using an 8-bit increment unit to compute the new address across 2 cycles when `inc`
 /// is asserted.
