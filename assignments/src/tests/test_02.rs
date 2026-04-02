@@ -1,5 +1,5 @@
 use crate::project_02::{ALU, Add16, FullAdder, HalfAdder, Inc16, Neg16, Zero16, flatten_t};
-use simulator::component::{Combinational, CombinationalT, count_combinational_t};
+use simulator::component::{CombinationalT, count_combinational_t};
 use simulator::eval::{eval, eval_t};
 use simulator::nat::{N1, N16};
 use simulator::word::Word;
@@ -24,7 +24,7 @@ fn eval16_t<'a>(
 fn half_adder_truth_table() {
     let chip = flatten_t(HalfAdder::chip());
 
-    println!("{}", print_ic_graph(&chip.map(Combinational::from)));
+    println!("{}", print_ic_graph(&chip));
 
     let r = eval1_t(&chip, [("a", false.into()), ("b", false.into())]);
     assert_eq!(r["sum"].unsigned(), 0);
@@ -50,7 +50,7 @@ fn half_adder_optimal() {
 fn full_adder_truth_table() {
     let chip = flatten_t(FullAdder::chip());
 
-    println!("{}", print_ic_graph(&chip.map(Combinational::from)));
+    println!("{}", print_ic_graph(&chip));
 
     let r = eval1_t(
         &chip,
