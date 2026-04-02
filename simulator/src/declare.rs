@@ -644,6 +644,13 @@ macro_rules! expand_t {
             __fold_tmp
         };
     };
+    (@lets $c:ident; $var:ident : forward $expr:expr, $($rest:tt)*) => {
+        let $var = $expr;
+        $crate::expand_t!(@lets $c; $($rest)*);
+    };
+    (@lets $c:ident; $var:ident : forward $expr:expr) => {
+        let $var = $expr;
+    };
     (@lets $c:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
         let $var = $T { $($fields)* };
         $crate::expand_t!(@lets $c; $($rest)*);
@@ -655,6 +662,10 @@ macro_rules! expand_t {
     // --- Phase 2: push via C::inject (skip for loops and folds, already handled during @lets) ---
 
     (@pushes $c:ident;) => {};
+    (@pushes $c:ident; $var:ident : forward $expr:expr, $($rest:tt)*) => {
+        $crate::expand_t!(@pushes $c; $($rest)*);
+    };
+    (@pushes $c:ident; $var:ident : forward $expr:expr) => {};
     (@pushes $c:ident; for $i:ident in $start:literal .. $end:literal { $($inner:tt)* } $($rest:tt)*) => {
         $crate::expand_t!(@pushes $c; $($rest)*);
     };

@@ -1,14 +1,21 @@
 #![allow(unused_variables, dead_code, unused_imports)]
 
-use crate::project_01::{And, Mux16, Not, Or, Project01Component};
-use crate::project_02::{ALU, Project02Component};
-use crate::project_03::{PC, Project03Component};
+use crate::project_01::{
+    And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, Or, Project01Component, Project01ComponentT,
+};
+use crate::project_02::{
+    ALU, Add16, FullAdder, HalfAdder, Inc16, Nand16Way, Neg16, Project02Component,
+    Project02ComponentT, Zero16,
+};
+use crate::project_03::{PC, Project03Component, Project03ComponentT};
+use frunk::coproduct::CoprodInjector;
+use frunk::{Coprod, hlist};
 use simulator::Chip as _;
 use simulator::Reflect as _;
 use simulator::component::native;
 use simulator::component::{
-    Buffer, Computational, Computational16, MemorySystem16, Nand, RAM16, ROM16, Register16,
-    Sequential,
+    Computational, Computational16, MemorySystem16, RAM16, ROM16, Register16, Sequential,
+    WiredRegister,
 };
 use simulator::declare::{BusRef, Interface};
 use simulator::nat::N16;
@@ -18,9 +25,11 @@ use simulator::simulate::{
 };
 use simulator::word::Word16;
 use simulator::{
-    self, Chip, Component, IC, Input1, Input16, Output, Output16, Reflect, expand, fixed,
+    self, Chip, Component, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand, expand_t,
+    fixed, flatten_g,
 };
 
+/// Deprecated.
 #[derive(Clone, Reflect, Component)]
 pub enum Project05Component {
     #[delegate]
@@ -34,7 +43,102 @@ pub enum Project05Component {
     Computer(Computer),
 }
 
+pub type Project05ComponentT = Coprod!(
+    Nand,
+    Buffer,
+    Not,
+    And,
+    Or,
+    Mux,
+    Mux16,
+    Not16,
+    And16,
+    HalfAdder,
+    FullAdder,
+    Inc16,
+    Add16,
+    Nand16Way,
+    Zero16,
+    Neg16,
+    ALU,
+    Register16,
+    PC,
+    ROM16,
+    MemorySystem16,
+    Decode,
+    CPU,
+    Computer
+);
+
+// TEMP
+impl From<Project05ComponentT> for Project05Component {
+    fn from(comp: Project05ComponentT) -> Self {
+        comp.fold(hlist![
+            |c: Nand| Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Project01(Project01Component::Nand(c))
+            )),
+            |c: Buffer| Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Project01(Project01Component::Buffer(c))
+            )),
+            |c: Not| Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Project01(Project01Component::Not(c))
+            )),
+            |c: And| Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Project01(Project01Component::And(c))
+            )),
+            |c: Or| Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Project01(Project01Component::Or(c))
+            )),
+            |c: Mux| Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Project01(Project01Component::Mux(c))
+            )),
+            |c: Mux16| Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Project01(Project01Component::Mux16(c))
+            )),
+            |c: Not16| Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Project01(Project01Component::Not16(c))
+            )),
+            |c: And16| Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Project01(Project01Component::And16(c))
+            )),
+            |c: HalfAdder| Project05Component::Project03(Project03Component::Project02(
+                Project02Component::HalfAdder(c)
+            )),
+            |c: FullAdder| Project05Component::Project03(Project03Component::Project02(
+                Project02Component::FullAdder(c)
+            )),
+            |c: Inc16| Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Inc16(c)
+            )),
+            |c: Add16| Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Add16(c)
+            )),
+            |c: Nand16Way| Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Nand16Way(c)
+            )),
+            |c: Zero16| Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Zero16(c)
+            )),
+            |c: Neg16| Project05Component::Project03(Project03Component::Project02(
+                Project02Component::Neg16(c)
+            )),
+            |c: ALU| Project05Component::Project03(Project03Component::Project02(
+                Project02Component::ALU(c)
+            )),
+            |c: Register16| Project05Component::Project03(Project03Component::Register(c)),
+            |c: PC| Project05Component::Project03(Project03Component::PC(c)),
+            Project05Component::ROM,
+            Project05Component::MemorySystem,
+            Project05Component::Decode,
+            Project05Component::CPU,
+            Project05Component::Computer,
+        ])
+    }
+}
+
 /// Recursively expand until only Nands, Registers, RAMs, and ROMs are left.
+///
+/// Deprecated.
 pub fn flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Computational16> {
     fn go(comp: Project05Component) -> Vec<Computational16> {
         match comp.expand() {
@@ -60,6 +164,44 @@ pub fn flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Computation
         intf: chip.reflect(),
         components: go(chip.into()),
     }
+}
+
+/// Recursively expand until only Nands, Registers, RAMs, and ROMs are left.
+pub fn flatten_t<C, Idx>(chip: C) -> IC<Computational16>
+where
+    C: Reflect,
+    Project05ComponentT: CoprodInjector<C, Idx>,
+{
+    flatten_g::<C, Project05ComponentT, Idx, Computational16, _>(
+        chip,
+        "flat",
+        hlist![
+            |c: Nand| Flat::Flat(Computational::Nand(c)),
+            |c: Buffer| Flat::Flat(Computational::Buffer(c)),
+            |c: Not| Flat::Continue(c.expand_t()),
+            |c: And| Flat::Continue(c.expand_t()),
+            |c: Or| Flat::Continue(c.expand_t()),
+            |c: Mux| Flat::Continue(c.expand_t()),
+            |c: Mux16| Flat::Continue(c.expand_t()),
+            |c: Not16| Flat::Continue(c.expand_t()),
+            |c: And16| Flat::Continue(c.expand_t()),
+            |c: HalfAdder| Flat::Continue(c.expand_t()),
+            |c: FullAdder| Flat::Continue(c.expand_t()),
+            |c: Inc16| Flat::Continue(c.expand_t()),
+            |c: Add16| Flat::Continue(c.expand_t()),
+            |c: Nand16Way| Flat::Continue(c.expand_t()),
+            |c: Zero16| Flat::Continue(c.expand_t()),
+            |c: Neg16| Flat::Continue(c.expand_t()),
+            |c: ALU| Flat::Continue(c.expand_t()),
+            |c: Register16| Flat::Flat(Computational::Register(WiredRegister::from(c))),
+            |c: PC| Flat::Continue(c.expand_t()),
+            |c: ROM16| Flat::Flat(Computational::ROM(c)),
+            |c: MemorySystem16| Flat::Flat(Computational::MemorySystem(c)),
+            |c: Decode| Flat::Continue(c.expand_t()),
+            |c: CPU| Flat::Continue(c.expand_t()),
+            |c: Computer| Flat::Continue(c.expand_t()),
+        ],
+    )
 }
 
 /// Like `flatten`, but replaces FullAdder with native Adder for efficient simulation.
@@ -235,21 +377,25 @@ impl Component for Decode {
     // Note: this only using Buffer, Not, and And, which are all only Combinational
     type Target = Project01Component;
 
-    expand! { |this| {
-        // TODO: buffers don't need to be named. Or declared in this way at all, maybe?
+    fn expand(&self) -> Option<IC<Self::Target>> {
+        Some(
+            self.expand_t::<Project01ComponentT, _, _, _>()
+                .map(Into::into),
+        )
+    }
+}
+
+impl Decode {
+    expand_t!([Buffer, Not, And], |this| {
         _is_c: Buffer { a: this.instr.bit(15), out: this.is_c },
 
         _is_a: Not { a: this.instr.bit(15), out: this.is_a },
 
-        // _14: unused/reserved
-        // _13: unused/reserved
-
-        // Note: CPU control signals all gated with is_c so they're false on A-instructions and this
-        // simplifies the logic in CPU
+        // CPU control signals all gated with is_c so they're false on A-instructions
 
         _12: And    { a: this.instr.bit(12), b: this.is_c.into(), out: this.read_m },
 
-        // ALU control lines: mostly just buffer them through because the ALU is dealt with separately
+        // ALU control lines: mostly just buffer them through
         _11: Buffer { a: this.instr.bit(11), out: this.zx },
         _10: Buffer { a: this.instr.bit(10), out: this.nx },
         _9:  Buffer { a: this.instr.bit( 9), out: this.zy },
@@ -264,7 +410,7 @@ impl Component for Decode {
         _2:  And    { a: this.instr.bit( 2), b: this.is_c.into(), out: this.jmp_lt },
         _1:  And    { a: this.instr.bit( 1), b: this.is_c.into(), out: this.jmp_eq },
         _0:  And    { a: this.instr.bit( 0), b: this.is_c.into(), out: this.jmp_gt },
-    }}
+    });
 }
 
 #[derive(Clone, Reflect, Chip)]
@@ -292,7 +438,16 @@ impl Component for CPU {
     // life simple if everything in this file flattens to the same type.
     type Target = Project05Component;
 
-    expand! { |this| {
+    fn expand(&self) -> Option<IC<Self::Target>> {
+        Some(
+            self.expand_t::<Project05ComponentT, _, _, _, _, _, _, _, _, _>()
+                .map(Into::into),
+        )
+    }
+}
+
+impl CPU {
+    expand_t!([Decode, Or, Mux16, ALU, Register16, Buffer, Not, And, PC], |this| {
         // Forward-declare register outputs:
         reg_a_out: forward Output16::new(),
         reg_d_out: forward Output16::new(),
@@ -386,7 +541,7 @@ impl Component for CPU {
             reset: this.reset.into(),
             out:   this.pc,
         },
-    }}
+    });
 }
 
 #[derive(Clone, Reflect, Chip)]
@@ -401,7 +556,16 @@ pub struct Computer {
 impl Component for Computer {
     type Target = Project05Component;
 
-    expand! { |this| {
+    fn expand(&self) -> Option<IC<Self::Target>> {
+        Some(
+            self.expand_t::<Project05ComponentT, _, _, _>()
+                .map(Into::into),
+        )
+    }
+}
+
+impl Computer {
+    expand_t!([ROM16, CPU, MemorySystem16], |this| {
         mem_out: forward Output16::new(),
 
         rom: ROM16 {
@@ -426,5 +590,5 @@ impl Component for Computer {
             data_in:  cpu.mem_data_out.into(),
             data_out: mem_out,
         },
-    }}
+    });
 }
