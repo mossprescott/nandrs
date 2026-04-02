@@ -1,66 +1,48 @@
-use crate::component::{Buffer, Combinational, Nand, Register, Sequential};
+use crate::component::{Buffer, Nand, Register};
 use crate::declare::{BusRef, Interface};
-use crate::nat::N8;
-use crate::{Chip, Component, Input, Input1, Output, OutputBus, Reflect, expand, fixed};
+use crate::nat::N1;
+use crate::{Chip, Input, Input1, Output, OutputBus, Reflect, expand_t, fixed, print_ic_graph};
+use frunk::Coprod;
 
-/// Really just about trivial component for testing the expand! macro.
-#[derive(Reflect, Chip)]
+/// Really just about trivial component for testing the expand_t! macro.
+#[derive(Clone, Reflect, Chip)]
 pub struct TestNot {
     pub a: Input1,
     pub out: Output,
 }
-
-impl Component for TestNot {
-    type Target = Combinational;
-
-    expand! { |this| {
+impl TestNot {
+    expand_t!([Nand], |this| {
         nand: Nand {
             a: this.a,
             b: this.a,  // also a
             out: this.out
         },
-    }}
+    });
 }
+
+type TestNotT = Coprod!(Nand);
 
 #[test]
 fn test_expand_not() {
     let chip = TestNot::chip();
-    let ic = chip.expand().unwrap();
-
-    assert_eq!(ic.name(), "TestNot");
-
-    assert_eq!(ic.intf.inputs.len(), 1);
-    let a = ic.intf.inputs["a"];
-
-    assert_eq!(ic.intf.outputs.len(), 1);
-    let out = ic.intf.outputs["out"];
+    let ic = chip.expand_t::<TestNotT, _>();
 
     assert_eq!(ic.components.len(), 1);
-    let Combinational::Nand(ref nand) = ic.components[0] else {
-        panic!("expected Nand")
-    };
-
-    let nand_a = BusRef::from_input(nand.a);
-    let nand_b = BusRef::from_input(nand.b);
-    let nand_out = BusRef::from_output(nand.out);
-
-    assert_eq!(nand_a.id, a.id);
-    assert_eq!(nand_b.id, a.id); // b is tied to a (it's a NOT: a NAND a)
-    assert_eq!(nand_out.id, out.id);
+    assert_eq!(
+        print_ic_graph(&ic),
+        "TestNot:\n  nand_0.a <- a\n  nand_0.b <- a\n  out <- nand_0.out"
+    );
 }
 
 /// Almost as trivial, but uses a second Nand.
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct TestAnd {
     pub a: Input1,
     pub b: Input1,
     pub out: Output,
 }
-
-impl Component for TestAnd {
-    type Target = Combinational;
-
-    expand! { |this| {
+impl TestAnd {
+    expand_t!([Nand], |this| {
         nand: Nand {
             a: this.a,
             b: this.b,
@@ -71,90 +53,67 @@ impl Component for TestAnd {
             b: nand.out.into(),
             out: this.out,
         }
-    }}
+    });
 }
+
+type TestAndT = Coprod!(Nand);
 
 #[test]
 fn test_expand_and() {
     let chip = TestAnd::chip();
-    let ic = chip.expand().unwrap();
-
-    assert_eq!(ic.name(), "TestAnd");
-
-    assert_eq!(ic.intf.inputs.len(), 2);
-    let a = ic.intf.inputs["a"];
-    let b = ic.intf.inputs["b"];
-
-    assert_eq!(ic.intf.outputs.len(), 1);
-    let out = ic.intf.outputs["out"];
+    let ic = chip.expand_t::<TestAndT, _>();
 
     assert_eq!(ic.components.len(), 2);
-    let Combinational::Nand(ref nand) = ic.components[0] else {
-        panic!("expected Nand")
-    };
-    let nand_a = BusRef::from_input(nand.a);
-    let nand_b = BusRef::from_input(nand.b);
-    let nand_out = BusRef::from_output(nand.out);
-
-    let Combinational::Nand(ref not) = ic.components[1] else {
-        panic!("expected Nand")
-    };
-    let not_a = BusRef::from_input(not.a);
-    let not_b = BusRef::from_input(not.b);
-    let not_out = BusRef::from_output(not.out);
-
-    assert_eq!(nand_a.id, a.id);
-    assert_eq!(nand_b.id, b.id);
-
-    assert_eq!(not_a.id, nand_out.id);
-    assert_eq!(not_b.id, nand_out.id);
-
-    assert_eq!(not_out.id, out.id);
+    assert_eq!(
+        print_ic_graph(&ic),
+        "TestAnd:
+  nand_0.a <- a
+  nand_0.b <- b
+  nand_1.a <- nand_0.out
+  nand_1.b <- nand_0.out
+  out <- nand_1.out"
+    );
 }
 
 /// A simple, bit-parallel component, for an uncommon data size.
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct TestNand8 {
     pub a: Input<N8>,
     pub b: Input<N8>,
 
     pub out: OutputBus<N8>,
 }
-
-impl Component for TestNand8 {
-    type Target = Combinational;
-
-    expand! { |this| {
+impl TestNand8 {
+    expand_t!([Nand], |this| {
         for i in 0..8 {
             _nand: Nand { a: this.a.bit(i).into(), b: this.b.bit(i).into(), out: this.out.bit(i) },
         }
-    }}
+    });
 }
+
+use crate::nat::N8;
+type TestNand8T = Coprod!(Nand);
 
 #[test]
 fn test_expand_nand8() {
     let chip = TestNand8::chip();
-    let ic = chip.expand().unwrap();
+    let ic = chip.expand_t::<TestNand8T, _>();
 
     assert_eq!(ic.name(), "TestNand8");
-
     assert_eq!(ic.intf.inputs.len(), 2);
-
     assert_eq!(ic.intf.outputs.len(), 1);
-
     assert_eq!(ic.components.len(), 8);
 }
 
+type Register1 = Register<N1>;
+
 /// A circuit that needs to refer to an output before its component is declared.
-#[derive(Reflect, Chip)]
+#[derive(Clone, Reflect, Chip)]
 pub struct TestFlipFlop {
     pub out: Output,
 }
-
-impl Component for TestFlipFlop {
-    type Target = Sequential;
-
-    expand! { |this| {
+impl TestFlipFlop {
+    expand_t!([Nand, Buffer, Register1], |this| {
         // Declare the register's output so we can refer to it circularly
         reg_out: forward Output::new(),
 
@@ -163,21 +122,18 @@ impl Component for TestFlipFlop {
 
         // Now connect to the chip output also
         _out: Buffer { a: reg_out.into(), out: this.out },
-    }}
+    });
 }
+
+type TestFlipFlopT = Coprod!(Nand, Buffer, Register1);
 
 #[test]
 fn test_expand_flip_flop() {
     let chip = TestFlipFlop::chip();
-    let ic = chip.expand().unwrap();
+    let ic = chip.expand_t::<TestFlipFlopT, _, _, _>();
 
     assert_eq!(ic.name(), "TestFlipFlop");
-
     assert_eq!(ic.intf.inputs.len(), 0);
-
     assert_eq!(ic.intf.outputs.len(), 1);
-    let _out = ic.intf.outputs["out"];
-
     assert_eq!(ic.components.len(), 3);
-    // TODO: verify wiring...
 }
