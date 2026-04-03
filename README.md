@@ -29,7 +29,7 @@ get translated to "native" components that the simulator can handle more efficie
 - single-bit-slice `Adder`: reduces 9 gates to one simple operation; also exposes the structure of
 adder carry-chains to the simulator so that *entire* add/inc operations can be done in one
 operation. This is the big win. Note: adders of any bit width with one or two operands are supported
-equally well. See, for example, `Inc16` and the more exotic `Inc2`.
+equally well. See, for example, `Inc16` and the more exotic `IncBy2`.
 
 Focus on *processor* design considerations. Overall system design issues like bus timing, memory
 hierarchies, etc. are beside the point. I want to play with different ISAs, functional unit
@@ -48,7 +48,7 @@ this that way. See the commit comments for a record of when Claude was helpful a
 
 Have a rust toolchain...
 
-`cargo run --release -p computer -- examples/Pong.asm --2x`
+`cargo run -p computer --release -- examples/Pong.asm --2x`
 
 
 ## Performance/Results
@@ -98,13 +98,12 @@ Combinational:
 - `fixed`: feeds a fixed set of bits to any input. No runtime cost.
 - `Buffer`: passes its single, single-bit input directly to its output. This is just a convenience
   components can use, often to connect inputs directly to outputs. No runtime cost.
-- `Mux`: two (multi-bit) inputs, and a `sel` input controlling which one is used. During simulation,
-  `sel` is evaluated first; then the simulator only evaluates as needed for the "active" input.
-- `FullAdder`: add three bits (left, right, and carry-in), producing `sum` and `carry` outputs.
 
 Sequential:
 - `Register`: multi-bit, latched, on-chip memory cell.
 
+TBD: arguably the right primitive is `DFF`, out of which registers of any size can be constructed,
+and at this point, we have the machinery to rewrite them for efficient simulation.
 
 ## Support Chips
 
@@ -157,9 +156,12 @@ Components are constructed and used in several separate phases:
 
 ### Definition
 
-Any novel components are defined as `struct`s with corresponding `Component` impls.
+Any novel components are defined as `struct`s with corresponding `expand()` impls.
 
-`fn expand()` specifies how the component behaves, in terms of more primitive components. The `expand!()` macro makes them somewhat easier to read.
+`fn expand<C>(&self) -> IC<C>` specifies how the component behaves, in terms of more primitive
+components. The `expand!()` macro makes them somewhat easier to read. The generated fn has a fancy
+type that allows it to emit each of the components that are used, into a potentially larger type for
+the overall circuit it's part of.
 
 For example, a simple circuit might consist of just two `Nand`s, with the output of one connected to
 the inputs of the other:
@@ -173,13 +175,11 @@ pub struct Unuseful {
     pub out: Output1,
 }
 
-impl Component for Unuseful {
-    type Target = Nand;
-
-    expand!{ |this| {
+impl Unuseful {
+    expand!([Nand], |this| {
         not_b: Nand { a: this.b, b: this.b, out: Output1::new() },
         nand:  Nand { a: this.a, b: not_b.out.into(), out: this.out },
-    }}
+    })
 }
 ```
 

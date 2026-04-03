@@ -1,24 +1,26 @@
-use crate::project_01::{And, And16, Dmux, Mux, Mux16, Nand, Not, Not16, Or, Xor, flatten};
+use crate::project_01::{
+    And, And16, Dmux, Mux, Mux16, Nand, Not, Not16, Or, Project01, Xor, flatten,
+};
 use simulator::Chip as _;
 use simulator::component::{Combinational, count_combinational};
 use simulator::eval::eval;
 use simulator::nat::{N1, N16};
 use simulator::word::Word;
-use simulator::{Component, IC, Input1, Output, Reflect, print_graph};
+use simulator::{IC, Input1, Output, Reflect, print_graph};
 use std::collections::HashMap;
 
 fn eval1<'a>(
     chip: &IC<Combinational>,
     inputs: impl IntoIterator<Item = (&'a str, Word<N1>)>,
 ) -> HashMap<String, Word<N1>> {
-    eval(chip, inputs)
+    eval(&chip, inputs)
 }
 
 fn eval16<'a>(
     chip: &IC<Combinational>,
     inputs: impl IntoIterator<Item = (&'a str, Word<N16>)>,
 ) -> HashMap<String, Word<N16>> {
-    eval(chip, inputs)
+    eval(&chip, inputs)
 }
 
 #[test]
@@ -153,17 +155,7 @@ fn xor_optimal() {
 
 #[test]
 fn mux_truth_table() {
-    let mux = Mux::chip();
-    let ic = mux.expand().unwrap();
-    let chip = IC {
-        name: ic.name,
-        intf: ic.intf,
-        components: ic
-            .components
-            .into_iter()
-            .flat_map(|c| flatten(c).components)
-            .collect(),
-    };
+    let chip = flatten(Mux::chip());
     assert_eq!(
         eval1(
             &chip,
@@ -419,7 +411,7 @@ fn mux16_optimal() {
 fn and_graph() {
     let chip = And::chip();
     assert_eq!(
-        print_graph(&chip),
+        print_graph(&chip.expand::<Project01, _, _>()),
         "And:
   nand_0.a <- a
   nand_0.b <- b

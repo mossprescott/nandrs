@@ -245,15 +245,22 @@ pub type Output = OutputBus<N1>;
 /// A multi-bit output signal; that is, an outgoing 16-bit bus.
 pub type Output16 = OutputBus<N16>;
 
+/// Simplified expansion: by a single level and into a single, pre-defined target type.
+///
+/// Note: this seems to be of pretty dubious value at this point.
 pub trait Component {
+    /// A default type for expansion; it must include the types needed by `expand()`. This is useful
+    /// when a consumer of the component doesn't have a preconceived notion of what type of
+    /// components it can handle. See `print_component_graph()`.
     type Target;
 
-    /// Define the semantics of a certain Component type, by expanding it on demand, usually to
-    /// a larger number of "more primitive" components. When this expansion is applied recursively,
-    /// it ultimately produces a completely "flat" set of interconnected primitives.
+    /// Expand once, into the most convenient target type. This is just `expand()` without the need
+    /// to choose a type for the result.
     ///
-    /// If the component is already primitive, then None.
-    fn expand(&self) -> Option<IC<Self::Target>>;
+    /// For each implementing type there will be a corresponding `fn expand()` with a flexible type
+    /// allowing it to inject the components into any circuit with compatible contents. This is just
+    /// a simpified wrapper making the result type concrete.
+    fn define(&self) -> IC<Self::Target>;
 }
 
 /// Enumerate the inputs and outputs of a component for reference from the outside.
@@ -261,8 +268,11 @@ pub trait Component {
 ///
 /// Typically derived.
 pub trait Reflect {
-    fn reflect(&self) -> Interface;
+    /// Human-readable short name. Typically the name of the defining struct.
     fn name(&self) -> String;
+
+    /// Inputs and ouputs for inspection at runtime.
+    fn reflect(&self) -> Interface;
 }
 
 /// Construct a fresh instance of a chip struct with new Input/Output buses on every port.
@@ -270,6 +280,7 @@ pub trait Reflect {
 ///
 /// Typically derived.
 pub trait Chip {
+    /// A fresh instance with unconnected inputs and outputs. Mostly useful for testing.
     fn chip() -> Self;
 }
 
@@ -345,11 +356,14 @@ pub struct IC<C> {
 }
 
 impl<C> IC<C> {
-    pub fn map<D>(self, f: impl FnMut(C) -> D) -> IC<D> {
+    pub fn map<D>(&self, f: impl FnMut(C) -> D) -> IC<D>
+    where
+        C: Clone,
+    {
         IC {
-            name: self.name,
-            intf: self.intf,
-            components: self.components.into_iter().map(f).collect(),
+            name: self.name.clone(),
+            intf: self.intf.clone(),
+            components: self.components.iter().cloned().map(f).collect(),
         }
     }
 }
@@ -364,72 +378,79 @@ impl<C> Reflect for IC<C> {
     }
 }
 
-/// Generate a `fn expand` body from a record of `name: StructType { fields }` entries.
+/// Blanket `Reflect` for frunk `Coproduct`/`CNil`: delegates to whichever variant is active.
+impl Reflect for frunk::coproduct::CNil {
+    fn reflect(&self) -> Interface {
+        unreachable!()
+    }
+    fn name(&self) -> String {
+        unreachable!()
+    }
+}
+
+impl<Head: Reflect, Tail: Reflect> Reflect for frunk::Coproduct<Head, Tail> {
+    fn reflect(&self) -> Interface {
+        match self {
+            frunk::Coproduct::Inl(h) => h.reflect(),
+            frunk::Coproduct::Inr(t) => t.reflect(),
+        }
+    }
+    fn name(&self) -> String {
+        match self {
+            frunk::Coproduct::Inl(h) => h.name(),
+            frunk::Coproduct::Inr(t) => t.name(),
+        }
+    }
+}
+
+/// Generate a typed `expand` method for a chip.
+///
+/// Takes a bracketed list of target component types and a body. Generates a
+/// generic method `expand<C, T1Idx, T2Idx, ...>(&self) -> IC<C>` with one `CoprodInjector`
+/// bound per listed type, and uses `C::inject(component)` to build the result.
 ///
 /// ```ignore
-/// expand! { |this| {
-///     nand: Nand { a: this.a, b: this.b, out: this.out },
-/// }}
-/// ```
-///
-/// Use `forward` to declare a wire that can be referenced before its source component:
-/// ```ignore
-/// expand! { |this| {
-///     wire: forward Output::new(),
-///     user: Foo { a: wire.into(), out: Output::new() },
-///     source: Bar { out: wire },
-/// }}
-/// ```
-///
-/// Forward declarations produce a `let` binding but are not pushed as components.
-///
-/// Use `for` to generate components in a loop (range must use literals):
-/// ```ignore
-/// expand! { |this| {
-///     for i in 0..16 {
-///         _not: Nand { a: this.a.bit(i).into(), b: this.a.bit(i).into(), out: this.out.bit(i) },
-///     }
-/// }}
+/// expand!([Nand, Not], |this| {
+///     nand: Nand { a: this.a, b: this.b, out: Output::new() },
+///     not:  Not  { a: nand.out.into(),   out: this.out },
+/// });
 /// ```
 #[macro_export]
 macro_rules! expand {
-    // Entry point: two passes — all `let` bindings first, then all `push`es.
-    // `components` is declared up front so that for-loops and folds can push during @lets.
-    ( |$this:ident| { $($body:tt)* } ) => {
-        fn expand(&self) -> Option<$crate::IC<Self::Target>> {
-            let $this = self;
-            let mut components = vec![];
-            $crate::expand!(@lets components; $($body)*);
-            $crate::expand!(@pushes components; $($body)*);
-            Some($crate::IC {
-                name: $crate::Reflect::name(self),
-                intf: $crate::Reflect::reflect(self),
-                components,
-            })
+    // Entry point: generate the fn signature via paste, then the body.
+    ([$($T:ident),+], |$this:ident| { $($body:tt)* }) => {
+        $crate::paste::paste! {
+            pub fn expand<C, $([<$T Idx>]),+>(&self) -> $crate::IC<C>
+            where
+                $(C: ::frunk::coproduct::CoprodInjector<$T, [<$T Idx>]>,)+
+            {
+                let $this = self;
+                let mut __components = vec![];
+                $crate::expand!(@lets __components; $($body)*);
+                $crate::expand!(@pushes __components; $($body)*);
+                $crate::IC {
+                    name: $crate::Reflect::name(self),
+                    intf: $crate::Reflect::reflect(self),
+                    components: __components,
+                }
+            }
         }
     };
 
-    // --- Phase 1: emit `let` bindings; for-loops and folds also push here ---
+    // --- Phase 1: emit `let` bindings ---
 
-    (@lets $components:ident;) => {};
-    (@lets $components:ident; $var:ident : forward $expr:expr, $($rest:tt)*) => {
-        let $var = $expr;
-        $crate::expand!(@lets $components; $($rest)*);
-    };
-    (@lets $components:ident; $var:ident : forward $expr:expr) => {
-        let $var = $expr;
-    };
+    (@lets $c:ident;) => {};
     // For loops: construct and push during @lets (while bindings are alive)
-    (@lets $components:ident; for $i:ident in $start:literal .. $end:literal { $($inner:tt)* } $($rest:tt)*) => {
+    (@lets $c:ident; for $i:ident in $start:literal .. $end:literal { $($inner:tt)* } $($rest:tt)*) => {
         for $i in $start..$end {
-            $crate::expand!(@for_body $components; $($inner)*);
+            $crate::expand!(@for_body $c; $($inner)*);
         }
-        $crate::expand!(@lets $components; $($rest)*);
+        $crate::expand!(@lets $c; $($rest)*);
     };
-    // Fold: collect components into a saved vec during @lets; extend during @pushes.
-    (@lets $components:ident; $var:ident : ($start:literal .. $end:literal) . fold ($init:expr, | $acc:ident, $i:ident | { $($body:tt)* }) , $($rest:tt)*) => {
+    // Fold: collect injected components into a saved vec; extend into $c during @pushes.
+    (@lets $c:ident; $var:ident : ($start:literal .. $end:literal) . fold ($init:expr, | $acc:ident, $i:ident | { $($body:tt)* }) , $($rest:tt)*) => {
         let $var = {
-            let mut __fold_tmp: Vec<_> = vec![];
+            let mut __fold_tmp = vec![];
             let _ = ($start..$end).fold($init, |$acc, $i| {
                 $crate::expand!(@fold_bind $($body)*);
                 let __fold_next = { $crate::expand!(@fold_accum $($body)*) };
@@ -438,11 +459,11 @@ macro_rules! expand {
             });
             __fold_tmp
         };
-        $crate::expand!(@lets $components; $($rest)*);
+        $crate::expand!(@lets $c; $($rest)*);
     };
-    (@lets $components:ident; $var:ident : ($start:literal .. $end:literal) . fold ($init:expr, | $acc:ident, $i:ident | { $($body:tt)* })) => {
+    (@lets $c:ident; $var:ident : ($start:literal .. $end:literal) . fold ($init:expr, | $acc:ident, $i:ident | { $($body:tt)* })) => {
         let $var = {
-            let mut __fold_tmp: Vec<_> = vec![];
+            let mut __fold_tmp = vec![];
             let _ = ($start..$end).fold($init, |$acc, $i| {
                 $crate::expand!(@fold_bind $($body)*);
                 let __fold_next = { $crate::expand!(@fold_accum $($body)*) };
@@ -452,96 +473,79 @@ macro_rules! expand {
             __fold_tmp
         };
     };
-    (@lets $components:ident; $var:ident : $W:ident($T:ident { $($fields:tt)* }), $($rest:tt)*) => {
-        let $var = $W($T { $($fields)* });
-        $crate::expand!(@lets $components; $($rest)*);
+    (@lets $c:ident; $var:ident : forward $expr:expr, $($rest:tt)*) => {
+        let $var = $expr;
+        $crate::expand!(@lets $c; $($rest)*);
     };
-    (@lets $components:ident; $var:ident : $W:ident($T:ident { $($fields:tt)* })) => {
-        let $var = $W($T { $($fields)* });
+    (@lets $c:ident; $var:ident : forward $expr:expr) => {
+        let $var = $expr;
     };
-    (@lets $components:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+    (@lets $c:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
         let $var = $T { $($fields)* };
-        $crate::expand!(@lets $components; $($rest)*);
+        $crate::expand!(@lets $c; $($rest)*);
     };
-    (@lets $components:ident; $var:ident : $T:ident { $($fields:tt)* }) => {
+    (@lets $c:ident; $var:ident : $T:ident { $($fields:tt)* }) => {
         let $var = $T { $($fields)* };
     };
 
-    // --- Phase 2: emit `push` for component entries (skip forwards, for-loops, folds) ---
+    // --- Phase 2: push via C::inject (skip for loops and folds, already handled during @lets) ---
 
-    (@pushes $components:ident;) => {};
-    (@pushes $components:ident; $var:ident : forward $expr:expr, $($rest:tt)*) => {
-        $crate::expand!(@pushes $components; $($rest)*);
+    (@pushes $c:ident;) => {};
+    (@pushes $c:ident; $var:ident : forward $expr:expr, $($rest:tt)*) => {
+        $crate::expand!(@pushes $c; $($rest)*);
     };
-    (@pushes $components:ident; $var:ident : forward $expr:expr) => {};
-    // For loops: already pushed during @lets
-    (@pushes $components:ident; for $i:ident in $start:literal .. $end:literal { $($inner:tt)* } $($rest:tt)*) => {
-        $crate::expand!(@pushes $components; $($rest)*);
+    (@pushes $c:ident; $var:ident : forward $expr:expr) => {};
+    (@pushes $c:ident; for $i:ident in $start:literal .. $end:literal { $($inner:tt)* } $($rest:tt)*) => {
+        $crate::expand!(@pushes $c; $($rest)*);
     };
     // Folds: extend with saved vec (collected during @lets)
-    (@pushes $components:ident; $var:ident : ($start:literal .. $end:literal) . fold ($init:expr, | $acc:ident, $i:ident | { $($inner:tt)* }) , $($rest:tt)*) => {
-        $components.extend($var);
-        $crate::expand!(@pushes $components; $($rest)*);
+    (@pushes $c:ident; $var:ident : ($start:literal .. $end:literal) . fold ($init:expr, | $acc:ident, $i:ident | { $($inner:tt)* }) , $($rest:tt)*) => {
+        $c.extend($var);
+        $crate::expand!(@pushes $c; $($rest)*);
     };
-    (@pushes $components:ident; $var:ident : ($start:literal .. $end:literal) . fold ($init:expr, | $acc:ident, $i:ident | { $($inner:tt)* })) => {
-        $components.extend($var);
+    (@pushes $c:ident; $var:ident : ($start:literal .. $end:literal) . fold ($init:expr, | $acc:ident, $i:ident | { $($inner:tt)* })) => {
+        $c.extend($var);
     };
-    (@pushes $components:ident; $var:ident : $W:ident($T:ident { $($fields:tt)* }), $($rest:tt)*) => {
-        $components.push($var.into());
-        $crate::expand!(@pushes $components; $($rest)*);
+    (@pushes $c:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+        $c.push(C::inject($var));
+        $crate::expand!(@pushes $c; $($rest)*);
     };
-    (@pushes $components:ident; $var:ident : $W:ident($T:ident { $($fields:tt)* })) => {
-        $components.push($var.into());
-    };
-    (@pushes $components:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
-        $components.push($var.into());
-        $crate::expand!(@pushes $components; $($rest)*);
-    };
-    (@pushes $components:ident; $var:ident : $T:ident { $($fields:tt)* }) => {
-        $components.push($var.into());
+    (@pushes $c:ident; $var:ident : $T:ident { $($fields:tt)* }) => {
+        $c.push(C::inject($var));
     };
 
-    // --- For loop body: construct, clone+push, repeat (clone keeps binding alive for later entries) ---
+    // --- For loop body: construct, clone+inject, repeat ---
 
-    (@for_body $components:ident;) => {};
-    (@for_body $components:ident; $var:ident : $W:ident($T:ident { $($fields:tt)* }), $($rest:tt)*) => {
-        let $var = $W($T { $($fields)* });
-        $components.push($var.clone().into());
-        $crate::expand!(@for_body $components; $($rest)*);
-    };
-    (@for_body $components:ident; $var:ident : $W:ident($T:ident { $($fields:tt)* })) => {
-        let $var = $W($T { $($fields)* });
-        $components.push($var.into());
-    };
-    (@for_body $components:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+    (@for_body $c:ident;) => {};
+    (@for_body $c:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
         let $var = $T { $($fields)* };
-        $components.push($var.clone().into());
-        $crate::expand!(@for_body $components; $($rest)*);
+        $c.push(C::inject($var.clone()));
+        $crate::expand!(@for_body $c; $($rest)*);
     };
-    (@for_body $components:ident; $var:ident : $T:ident { $($fields:tt)* }) => {
+    (@for_body $c:ident; $var:ident : $T:ident { $($fields:tt)* }) => {
         let $var = $T { $($fields)* };
-        $components.push($var.into());
+        $c.push(C::inject($var));
     };
 
-    // --- Fold sub-phases: bind entries, extract accumulator, push entries ---
+    // --- Fold sub-phases ---
 
-    // @fold_bind: create let bindings for each entry, skip the final accumulator expression
+    // @fold_bind: create let bindings for each component entry, skip the final accumulator
     (@fold_bind $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
         let $var = $T { $($fields)* };
         $crate::expand!(@fold_bind $($rest)*);
     };
     (@fold_bind $next:expr) => {};
 
-    // @fold_accum: skip entries, return the final accumulator expression
+    // @fold_accum: skip component entries, return the final accumulator expression
     (@fold_accum $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
         $crate::expand!(@fold_accum $($rest)*)
     };
     (@fold_accum $next:expr) => { $next };
 
-    // @fold_push: push each entry in order, skip the final accumulator expression
-    (@fold_push $components:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
-        $components.push($var.into());
-        $crate::expand!(@fold_push $components; $($rest)*);
+    // @fold_push: inject each component entry, skip the final accumulator
+    (@fold_push $c:ident; $var:ident : $T:ident { $($fields:tt)* }, $($rest:tt)*) => {
+        $c.push(C::inject($var));
+        $crate::expand!(@fold_push $c; $($rest)*);
     };
-    (@fold_push $components:ident; $next:expr) => {};
+    (@fold_push $c:ident; $next:expr) => {};
 }

@@ -1,4 +1,4 @@
-use crate::project_03::{PC, flatten};
+use crate::project_03::{PC, Project03, flatten};
 use simulator::component::{Sequential, count_sequential};
 use simulator::declare::Chip as _;
 use simulator::nat::N16;
@@ -10,7 +10,7 @@ fn pc_behavior() {
     let chip = PC::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    print!("{}", print_graph(&chip));
+    println!("{}", print_graph(&chip.expand::<Project03, _, _, _>()));
 
     let chip = flatten(chip);
 

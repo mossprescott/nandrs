@@ -2,14 +2,18 @@ use std::fs;
 
 use clap::Parser;
 
-use assignments::project_02::Project02Component;
-use assignments::project_03::Project03Component;
-use assignments::project_05::{self, Computer, Project05Component, find_rom, memory_system};
+use assignments::project_01::{And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, Or};
+use assignments::project_02::{ALU, Add16, FullAdder, HalfAdder, Inc16, Nand16Way, Neg16, Zero16};
+use assignments::project_03::PC;
+use assignments::project_05::{self, CPU, Computer, Decode, Project05, find_rom, memory_system};
 use assignments::project_06::{Program, assemble};
+use frunk::coproduct::CoprodInjector;
+use frunk::hlist;
+use simulator::component::{MemorySystem16, ROM16, Register16};
 use simulator::declare::Chip as _;
 use simulator::simulate::{initialize, synthesize};
 use simulator::word::Word16;
-use simulator::{Component, IC, flatten, print_ic_graph};
+use simulator::{Flat, IC, Reflect, flatten_g, print_graph};
 
 use computer::cli::Args;
 use computer::disasm::disassemble;
@@ -36,7 +40,7 @@ fn main() {
     let computer = Computer::chip();
     if args.print {
         let simple = simplify(Computer::chip());
-        println!("{}", print_ic_graph(&simple));
+        println!("{}", print_graph(&simple));
     }
 
     let Program {
@@ -45,6 +49,7 @@ fn main() {
     } = program;
 
     let wiring = if args.precise {
+        eprintln!("WARNING!!! Simulating individual logic gates! Expect 20x slower simulation.");
         let chip = project_05::flatten(computer);
         synthesize(&chip, memory_system())
     } else {
@@ -73,23 +78,57 @@ fn main() {
     run(&args, state, &symbols, &fmt_instr);
 }
 
+macro_rules! preserve {
+    ($c:expr) => {
+        Flat::Done(vec![CoprodInjector::inject($c)])
+    };
+}
+
+macro_rules! eliminate {
+    ($c:expr) => {
+        Flat::Continue($c.expand())
+    };
+}
+
 /// Recursively expand high-level components (projects 3 and 5, essentially), until only primitives
-/// and simple logic are left (projects 1 and 2, except the ALU). Note that the result remains in
-/// the "project_05" type, because it conveniently embeds the project 1 and 2 components, as well as
-/// the Computational primitives.
-fn simplify<C: Into<Project05Component>>(chip: C) -> IC<Project05Component> {
-    flatten(chip.into(), "simple", &|c| match c {
-        Project05Component::Project03(Project03Component::Project02(
-            Project02Component::Project01(_),
-        )) => None,
-        Project05Component::Project03(Project03Component::Project02(ref p2)) => match p2 {
-            Project02Component::ALU(_) => c.expand(),
-            _ => None,
-        },
-        Project05Component::Project03(ref p3) => match p3 {
-            Project03Component::PC(_) => c.expand(),
-            _ => None,
-        },
-        _ => c.expand(),
-    })
+/// and simple logic are left (projects 1 and 2, except the ALU).
+fn simplify<C, Idx>(chip: C) -> IC<Project05>
+where
+    C: Reflect,
+    Project05: CoprodInjector<C, Idx>,
+{
+    flatten_g::<C, Project05, Idx, Project05, _>(
+        chip,
+        "simple",
+        hlist![
+            // Project 01: stop
+            |c: Nand| preserve!(c),
+            |c: Buffer| preserve!(c),
+            |c: Not| preserve!(c),
+            |c: And| preserve!(c),
+            |c: Or| preserve!(c),
+            |c: Mux| preserve!(c),
+            |c: Mux16| preserve!(c),
+            |c: Not16| preserve!(c),
+            |c: And16| preserve!(c),
+            // Project 02: stop, except ALU which expands
+            |c: HalfAdder| preserve!(c),
+            |c: FullAdder| preserve!(c),
+            |c: Inc16| preserve!(c),
+            |c: Add16| preserve!(c),
+            |c: Nand16Way| preserve!(c),
+            |c: Zero16| preserve!(c),
+            |c: Neg16| preserve!(c),
+            |c: ALU| eliminate!(c),
+            // Project 03+: stop registers, expand PC
+            |c: Register16| preserve!(c),
+            |c: PC| eliminate!(c),
+            |c: ROM16| preserve!(c),
+            |c: MemorySystem16| preserve!(c),
+            // Project 05+: expand
+            |c: Decode| eliminate!(c),
+            |c: CPU| eliminate!(c),
+            |c: Computer| eliminate!(c),
+        ],
+    )
 }

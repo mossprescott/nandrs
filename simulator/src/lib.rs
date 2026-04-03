@@ -17,27 +17,59 @@ pub use declare::{
     Reflect, fixed,
 };
 
+pub use paste;
 pub use simulator_derive::{Chip, Component, Reflect};
 
-/// Expand a sub-set of components, recursively.
+/// Either terminal results already in `T`, or an `IC<S>` whose components need further flattening.
 ///
-/// Note: this is essentially flatten() as seen in each project, but:
-/// - instead of using Component::expand, you supply the fn (and therefore, can decide what gets
-///   expanded)
-/// - the resulting IC contains components in the original type (because in principle any component
-///   might be left as is)
-/// - and therefore, this result can't be handled by the generic simulator/evaluator.
-pub fn flatten<C: Reflect + Clone>(chip: C, label: &str, f: &dyn Fn(C) -> Option<IC<C>>) -> IC<C> {
-    fn go<C: Clone>(comp: C, f: &dyn Fn(C) -> Option<IC<C>>) -> Vec<C> {
-        match f(comp.clone()) {
-            None => vec![comp],
-            Some(ic) => ic.components.into_iter().flat_map(|c| go(c, f)).collect(),
+/// Note: there's a middle case where a result `IC` already has components in the target type, but
+/// there seems to be no harm in using `Continue` for that case, at least for current purposes.
+///
+/// TODO: is `IC<S>` sensible here? Probably never used at this point, but it's what `expand`
+/// gives you, and in theory we would want to capture some info from it. On the other hand, `Done`
+/// *usually* contains a single component that isn't an `IC` in any sense.
+pub enum Flat<S, T> {
+    /// Intermediate result, still in the source type; components need further flattening.
+    Continue(IC<S>),
+    /// Fully resolved target values; no further flattening needed.
+    Done(Vec<T>),
+}
+
+/// Flatten to an arbitrary result type using a folder hlist. For each coproduct variant, the folder
+/// produces either a value already in `T`, or an `IC<S>` whose components recurse through `go`.
+///
+/// Note: the types here are stronger; if it terminates, everything is reduced. To make that work,
+/// every term in `S` has a well-defined expansion in that type. However, there's no structural
+/// guarantee that expansion actually makes progress. We know that it does, because in practice each
+/// `expand`'s type is smaller than `S` — it's at least missing the component being expanded.
+/// Strictly speaking, nothing stops you from expanding A → B, then B → A, etc. Probably not worth
+/// trying to bake that kind of guarantee into these types.
+pub fn flatten_g<C, S, Idx, T, F>(chip: C, label: &str, folder: F) -> IC<T>
+where
+    C: Reflect,
+    S: frunk::coproduct::CoprodInjector<C, Idx>,
+    S: frunk::coproduct::CoproductFoldable<F, Flat<S, T>>,
+    F: Clone,
+{
+    fn go<S, T, F>(folder: F, comp: S) -> Vec<T>
+    where
+        S: frunk::coproduct::CoproductFoldable<F, Flat<S, T>>,
+        F: Clone,
+    {
+        match comp.fold(folder.clone()) {
+            Flat::Continue(ic) => ic
+                .components
+                .into_iter()
+                .flat_map(|c| go(folder.clone(), c))
+                .collect(),
+            Flat::Done(vs) => vs,
         }
     }
+
     IC {
         name: format!("{} ({})", chip.name(), label),
         intf: chip.reflect(),
-        components: go(chip.into(), f),
+        components: go(folder, S::inject(chip)),
     }
 }
 
@@ -81,43 +113,35 @@ fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
 
 /// Show the connections of a chip after one level of expansion.
 ///
-/// Each line is `source -> sink`. Chip inputs are sources; chip outputs are sinks.
-/// Sub-component ports are labelled `{typename}{index}.{port}`.
-///
 /// ```ignore
 /// let chip = And { a: Input1::new(), b: Input1::new(), out: Output::new() };
-/// assert_eq!(print_graph(&chip), "And:\nnand0.a <- a\nnand0.b <- b\nnot1.a <- nand0.out\nout <- not1.out");
+/// assert_eq!(print_component_graph(&chip), "And:\nnand0.a <- a\nnand0.b <- b\nnot1.a <- nand0.out\nout <- not1.out");
 /// ```
-///
-/// Note: Claude has been given full latitude here as long as the output looks right,
-/// and it's elected to sort strings at the end.
-pub fn print_graph<C>(chip: &C) -> String
+pub fn print_component_graph<C: Component>(chip: &C) -> String
 where
-    C: Component + Reflect,
-    C::Target: Component<Target = C::Target> + Reflect,
+    C::Target: Reflect,
 {
-    let intf = chip.reflect();
-    let subs = match chip.expand() {
-        None => return format!("{}:\n  (primitive)", chip.name()),
-        Some(s) => s,
-    };
-    print_ic_graph_named(&chip.name(), &intf, &subs.components)
+    let ic = chip.define();
+    print_graph(&ic)
 }
 
 /// Show the components making up this IC, with no additional expansion.
-pub fn print_ic_graph<C>(ic: &IC<C>) -> String
-where
-    C: Reflect,
-{
-    print_ic_graph_named(&ic.name, &ic.intf, &ic.components)
-}
-
-fn print_ic_graph_named<C>(name: &str, intf: &Interface, components: &[C]) -> String
+///
+/// Each line is `source -> sink`. Chip inputs are sources; chip outputs are sinks. Sub-component
+/// ports are labelled `{typename}{index}.{port}`.
+///
+/// Note: Claude has been given full latitude here as long as the output looks right, and it's
+/// elected to sort strings at the end.
+pub fn print_graph<C>(ic: &IC<C>) -> String
 where
     C: Reflect,
 {
     use crate::declare::BusRef;
     use std::collections::HashMap;
+
+    let name = &ic.name;
+    let intf = &ic.intf;
+    let components = &ic.components;
 
     let wire_id = |b: &BusRef| b.id.0;
 

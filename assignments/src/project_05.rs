@@ -1,96 +1,127 @@
-#![allow(unused_variables, dead_code, unused_imports)]
-
-use crate::project_01::{And, Mux16, Not, Or, Project01Component};
-use crate::project_02::{ALU, Project02Component};
-use crate::project_03::{PC, Project03Component};
-use simulator::Chip as _;
-use simulator::Reflect as _;
+use crate::project_01::{And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, Or};
+use crate::project_02::{ALU, Add16, FullAdder, HalfAdder, Inc16, Nand16Way, Neg16, Zero16};
+use crate::project_03::PC;
+use frunk::coproduct::CoprodInjector;
+use frunk::{Coprod, hlist};
 use simulator::component::native;
 use simulator::component::{
-    Buffer, Computational, Computational16, MemorySystem16, Nand, RAM16, ROM16, Register16,
-    Sequential,
+    Computational, Computational16, MemorySystem16, ROM16, Register16, WiredRegister,
 };
 use simulator::declare::{BusRef, Interface};
 use simulator::nat::N16;
 use simulator::simulate::{
-    BusResident, ChipState, MemoryMap, RAMHandle, RAMMap, ROMHandle, ROMMap, RegionMap,
-    SerialHandle, SerialMap,
+    BusResident, ChipState, MemoryMap, RAMHandle, RAMMap, ROMHandle, RegionMap, SerialHandle,
+    SerialMap,
 };
-use simulator::word::Word16;
 use simulator::{
-    self, Chip, Component, IC, Input1, Input16, Output, Output16, Reflect, expand, fixed,
+    self, Chip, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand, fixed, flatten_g,
 };
 
-#[derive(Clone, Reflect, Component)]
-pub enum Project05Component {
-    #[delegate]
-    Project03(Project03Component),
-    #[primitive]
-    ROM(ROM16),
-    #[primitive]
-    MemorySystem(MemorySystem16),
-    Decode(Decode),
-    CPU(CPU),
-    Computer(Computer),
-}
+pub type Project05 = Coprod!(
+    Nand,
+    Buffer,
+    Not,
+    And,
+    Or,
+    Mux,
+    Mux16,
+    Not16,
+    And16,
+    HalfAdder,
+    FullAdder,
+    Inc16,
+    Add16,
+    Nand16Way,
+    Zero16,
+    Neg16,
+    ALU,
+    Register16,
+    PC,
+    ROM16,
+    MemorySystem16,
+    Decode,
+    CPU,
+    Computer
+);
 
 /// Recursively expand until only Nands, Registers, RAMs, and ROMs are left.
-pub fn flatten<C: Reflect + Into<Project05Component>>(chip: C) -> IC<Computational16> {
-    fn go(comp: Project05Component) -> Vec<Computational16> {
-        match comp.expand() {
-            None => match comp {
-                Project05Component::Project03(p) => crate::project_03::flatten(p)
-                    .components
-                    .into_iter()
-                    .map(|s| match s {
-                        Sequential::Nand(n) => Computational::Nand(n),
-                        Sequential::Buffer(c) => Computational::Buffer(c),
-                        Sequential::Register(r) => Computational::Register(r),
-                    })
-                    .collect(),
-                Project05Component::ROM(r) => vec![Computational::ROM(r)],
-                Project05Component::MemorySystem(m) => vec![Computational::MemorySystem(m)],
-                _ => panic!("Did not reduce to primitive: {:?}", comp.name()),
-            },
-            Some(ic) => ic.components.into_iter().flat_map(go).collect(),
-        }
-    }
-    IC {
-        name: format!("{} (flat)", chip.name()),
-        intf: chip.reflect(),
-        components: go(chip.into()),
-    }
+pub fn flatten<C, Idx>(chip: C) -> IC<Computational16>
+where
+    C: Reflect,
+    Project05: CoprodInjector<C, Idx>,
+{
+    flatten_g::<C, Project05, Idx, Computational16, _>(
+        chip,
+        "flat",
+        hlist![
+            |c: Nand| Flat::Done(vec![Computational::Nand(c)]),
+            |c: Buffer| Flat::Done(vec![Computational::Buffer(c)]),
+            |c: Not| Flat::Continue(c.expand()),
+            |c: And| Flat::Continue(c.expand()),
+            |c: Or| Flat::Continue(c.expand()),
+            |c: Mux| Flat::Continue(c.expand()),
+            |c: Mux16| Flat::Continue(c.expand()),
+            |c: Not16| Flat::Continue(c.expand()),
+            |c: And16| Flat::Continue(c.expand()),
+            |c: HalfAdder| Flat::Continue(c.expand()),
+            |c: FullAdder| Flat::Continue(c.expand()),
+            |c: Inc16| Flat::Continue(c.expand()),
+            |c: Add16| Flat::Continue(c.expand()),
+            |c: Nand16Way| Flat::Continue(c.expand()),
+            |c: Zero16| Flat::Continue(c.expand()),
+            |c: Neg16| Flat::Continue(c.expand()),
+            |c: ALU| Flat::Continue(c.expand()),
+            |c: Register16| Flat::Done(vec![Computational::Register(WiredRegister::from(c))]),
+            |c: PC| Flat::Continue(c.expand()),
+            |c: ROM16| Flat::Done(vec![Computational::ROM(c)]),
+            |c: MemorySystem16| Flat::Done(vec![Computational::MemorySystem(c)]),
+            |c: Decode| Flat::Continue(c.expand()),
+            |c: CPU| Flat::Continue(c.expand()),
+            |c: Computer| Flat::Continue(c.expand()),
+        ],
+    )
 }
 
-/// Like `flatten`, but replaces FullAdder with native Adder for efficient simulation.
-pub fn flatten_for_simulation<C: Reflect + Into<Project05Component>>(
-    chip: C,
-) -> IC<native::Simulational<N16, N16>> {
-    fn go(comp: Project05Component) -> Vec<native::Simulational<N16, N16>> {
-        // Delegate to lower-level flatten_for_simulation as soon as possible:
-        match comp {
-            Project05Component::Project03(Project03Component::Project02(p)) => {
-                return crate::project_02::flatten_for_simulation(p).components;
-            }
-            Project05Component::Project03(Project03Component::Register(r)) => {
-                return vec![Computational::Register(r.into()).into()];
-            }
-            Project05Component::ROM(r) => return vec![Computational::ROM(r).into()],
-            Project05Component::MemorySystem(m) => {
-                return vec![Computational::MemorySystem(m).into()];
-            }
-            _ => {}
-        }
-        match comp.expand() {
-            Some(ic) => ic.components.into_iter().flat_map(go).collect(),
-            None => panic!("Did not reduce to primitive: {:?}", comp.name()),
-        }
-    }
-    IC {
-        name: format!("{} (flat/sim)", chip.name()),
-        intf: chip.reflect(),
-        components: go(chip.into()),
-    }
+/// Like `flatten`, but replaces adders and muxes with native versions for efficient simulation.
+pub fn flatten_for_simulation<C, Idx>(chip: C) -> IC<native::Simulational<N16, N16>>
+where
+    C: Reflect,
+    Project05: CoprodInjector<C, Idx>,
+{
+    flatten_g::<C, Project05, Idx, native::Simulational<N16, N16>, _>(
+        chip,
+        "flat/sim",
+        hlist![
+            // Delegate all Project02 types to project_02::flatten_for_simulation:
+            |c: Nand| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: Buffer| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: Not| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: And| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: Or| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: Mux| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: Mux16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: Not16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: And16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: HalfAdder| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: FullAdder| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: Inc16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: Add16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: Nand16Way| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: Zero16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: Neg16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            |c: ALU| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
+            // Project05-specific types:
+            |c: Register16| Flat::Done(vec![
+                Computational::Register(WiredRegister::from(c)).into()
+            ]),
+            |c: PC| Flat::Continue(c.expand()),
+            |c: ROM16| Flat::Done(vec![Computational::ROM(c).into()]),
+            |c: MemorySystem16| Flat::Done(vec![Computational::MemorySystem(c).into()]),
+            |c: Decode| Flat::Continue(c.expand()),
+            |c: CPU| Flat::Continue(c.expand()),
+            |c: Computer| Flat::Continue(c.expand()),
+        ],
+    )
 }
 
 pub const RAM_BASE: u16 = 0 * 1024;
@@ -231,25 +262,17 @@ pub struct Decode {
     pub jmp_gt: Output,
 }
 
-impl Component for Decode {
-    // Note: this only using Buffer, Not, and And, which are all only Combinational
-    type Target = Project01Component;
-
-    expand! { |this| {
-        // TODO: buffers don't need to be named. Or declared in this way at all, maybe?
+impl Decode {
+    expand!([Buffer, Not, And], |this| {
         _is_c: Buffer { a: this.instr.bit(15), out: this.is_c },
 
         _is_a: Not { a: this.instr.bit(15), out: this.is_a },
 
-        // _14: unused/reserved
-        // _13: unused/reserved
-
-        // Note: CPU control signals all gated with is_c so they're false on A-instructions and this
-        // simplifies the logic in CPU
+        // CPU control signals all gated with is_c so they're false on A-instructions
 
         _12: And    { a: this.instr.bit(12), b: this.is_c.into(), out: this.read_m },
 
-        // ALU control lines: mostly just buffer them through because the ALU is dealt with separately
+        // ALU control lines: mostly just buffer them through
         _11: Buffer { a: this.instr.bit(11), out: this.zx },
         _10: Buffer { a: this.instr.bit(10), out: this.nx },
         _9:  Buffer { a: this.instr.bit( 9), out: this.zy },
@@ -264,7 +287,7 @@ impl Component for Decode {
         _2:  And    { a: this.instr.bit( 2), b: this.is_c.into(), out: this.jmp_lt },
         _1:  And    { a: this.instr.bit( 1), b: this.is_c.into(), out: this.jmp_eq },
         _0:  And    { a: this.instr.bit( 0), b: this.is_c.into(), out: this.jmp_gt },
-    }}
+    });
 }
 
 #[derive(Clone, Reflect, Chip)]
@@ -287,12 +310,8 @@ pub struct CPU {
     pub mem_data_in: Input16,
 }
 
-impl Component for CPU {
-    // Note: in fact, this doesn't need the MemorySystem, but it keeps
-    // life simple if everything in this file flattens to the same type.
-    type Target = Project05Component;
-
-    expand! { |this| {
+impl CPU {
+    expand!([Decode, Or, Mux16, ALU, Register16, Buffer, Not, And, PC], |this| {
         // Forward-declare register outputs:
         reg_a_out: forward Output16::new(),
         reg_d_out: forward Output16::new(),
@@ -386,7 +405,7 @@ impl Component for CPU {
             reset: this.reset.into(),
             out:   this.pc,
         },
-    }}
+    });
 }
 
 #[derive(Clone, Reflect, Chip)]
@@ -398,10 +417,8 @@ pub struct Computer {
     pub pc: Output16,
 }
 
-impl Component for Computer {
-    type Target = Project05Component;
-
-    expand! { |this| {
+impl Computer {
+    expand!([ROM16, CPU, MemorySystem16], |this| {
         mem_out: forward Output16::new(),
 
         rom: ROM16 {
@@ -426,5 +443,5 @@ impl Component for Computer {
             data_in:  cpu.mem_data_out.into(),
             data_out: mem_out,
         },
-    }}
+    });
 }

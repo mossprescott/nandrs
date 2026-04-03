@@ -81,7 +81,7 @@ where
 }
 
 /// Topological sort of components by wire dependencies.
-fn topo_sort(components: &[Combinational]) -> Vec<usize> {
+fn topo_sort<C: Reflect>(components: &[C]) -> Vec<usize> {
     // Map output bus id → component index.
     let mut producers: HashMap<usize, usize> = HashMap::new();
     for (i, comp) in components.iter().enumerate() {
@@ -94,9 +94,9 @@ fn topo_sort(components: &[Combinational]) -> Vec<usize> {
     let mut visited = vec![false; n];
     let mut sorted = Vec::with_capacity(n);
 
-    fn visit(
+    fn visit<C: Reflect>(
         i: usize,
-        components: &[Combinational],
+        components: &[C],
         producers: &HashMap<usize, usize>,
         visited: &mut [bool],
         sorted: &mut Vec<usize>,

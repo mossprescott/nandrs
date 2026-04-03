@@ -1,7 +1,7 @@
 //! Combinational primitives: `Nand` and `Buffer`, plus the `Combinational` enum that wraps them.
 
 use crate::declare::BusRef;
-use crate::{Chip, Component, IC, Input1, Interface, Output, Reflect};
+use crate::{Chip, Input1, Interface, Output, Reflect};
 
 /// The single primitive: true if either input is false.
 #[derive(Clone, Reflect, Chip)]
@@ -22,19 +22,10 @@ pub struct Buffer {
     pub out: Output,
 }
 
-/// Nothing to expand; Buffer is primitive.
-impl Component for Buffer {
-    type Target = Buffer;
-
-    fn expand(&self) -> Option<IC<Buffer>> {
-        None
-    }
-}
-
 /// Type of components that participate in "combinational" circuits:
 /// - most importantly `Nand`
 /// - `Buffer` for pass-through connections
-#[derive(Reflect)]
+#[derive(Clone, Reflect)]
 pub enum Combinational {
     Nand(Nand),
     Buffer(Buffer),
