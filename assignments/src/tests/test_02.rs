@@ -1,6 +1,6 @@
-use crate::project_01::Project01ComponentT;
+use crate::project_01::Project01;
 use crate::project_02::{
-    ALU, Add16, FullAdder, HalfAdder, Inc16, Neg16, Project02ComponentT, Zero16, flatten,
+    ALU, Add16, FullAdder, HalfAdder, Inc16, Neg16, Project02, Zero16, flatten,
 };
 use simulator::component::{Combinational, count_combinational};
 use simulator::eval::eval;
@@ -122,7 +122,7 @@ fn inc16_truth_table() {
     // When it breaks, it's nice to see what it tried to do
     print!(
         "{}",
-        print_ic_graph(&chip.expand::<Project02ComponentT, _, _>())
+        print_ic_graph(&chip.expand::<Project02, _, _>())
     );
 
     let chip = flatten(chip);
@@ -150,7 +150,7 @@ fn add16_truth_table() {
     // When it breaks, it's nice to see what it tried to do
     print!(
         "{}",
-        print_ic_graph(&chip.expand::<Project02ComponentT, _>())
+        print_ic_graph(&chip.expand::<Project02, _>())
     );
 
     let chip = flatten(chip);
@@ -196,7 +196,7 @@ fn zero16_truth_table() {
     // When it breaks, it's nice to see what it tried to do
     print!(
         "{}",
-        print_ic_graph(&chip.expand::<Project02ComponentT, _, _, _>())
+        print_ic_graph(&chip.expand::<Project02, _, _, _>())
     );
 
     let chip = flatten(chip);
@@ -229,7 +229,7 @@ fn neg16_truth_table() {
     // When it breaks, it's nice to see what it tried to do
     print!(
         "{}",
-        print_ic_graph(&chip.expand::<Project02ComponentT, _>())
+        print_ic_graph(&chip.expand::<Project02, _>())
     );
 
     let chip = flatten(chip);
@@ -263,7 +263,7 @@ fn alu_truth_table() {
     // When it breaks, it's nice to see what it tried to do
     print!(
         "{}",
-        print_ic_graph(&chip.expand::<Project02ComponentT, _, _, _, _, _, _, _, _, _>())
+        print_ic_graph(&chip.expand::<Project02, _, _, _, _, _, _, _, _, _>())
     );
 
     let chip = flatten(chip);
@@ -442,7 +442,7 @@ fn alu_optimal() {
 fn alu_graph() {
     let chip = ALU::chip();
     assert_eq!(
-        print_ic_graph(&chip.expand::<Project02ComponentT, _, _, _, _, _, _, _, _, _>()),
+        print_ic_graph(&chip.expand::<Project02, _, _, _, _, _, _, _, _, _>()),
         "ALU:
   mux16_0.a0[0..15] <- x[0..15]
   mux16_0.a1[0..15] <- 0

@@ -1,5 +1,5 @@
 use crate::project_05::{
-    CPU, Computer, Decode, KEYBOARD, Project05ComponentT, SCREEN_BASE, find_keyboard, find_ram,
+    CPU, Computer, Decode, KEYBOARD, Project05, SCREEN_BASE, find_keyboard, find_ram,
     find_rom, find_screen, flatten, flatten_for_simulation, memory_system,
 };
 use crate::project_06::parse_statement;
@@ -84,7 +84,7 @@ fn decode_truth_table() {
     // When it breaks, it's nice to see what it tried to do
     println!(
         "{}",
-        print_ic_graph(&chip.expand::<Project05ComponentT, _, _, _>())
+        print_ic_graph(&chip.expand::<Project05, _, _, _>())
     );
 
     let chip = flatten(chip);
@@ -108,7 +108,7 @@ fn decode_strict_truth_table() {
     // When it breaks, it's nice to see what it tried to do
     println!(
         "{}",
-        print_ic_graph(&chip.expand::<Project05ComponentT, _, _, _>())
+        print_ic_graph(&chip.expand::<Project05, _, _, _>())
     );
 
     let chip = flatten(chip);
@@ -145,7 +145,7 @@ fn cpu_behavior() {
     // When it breaks, it's nice to see what it tried to do
     println!(
         "{}",
-        print_ic_graph(&chip.expand::<Project05ComponentT, _, _, _, _, _, _, _, _, _>())
+        print_ic_graph(&chip.expand::<Project05, _, _, _, _, _, _, _, _, _>())
     );
 
     let chip = flatten(chip);
@@ -197,7 +197,7 @@ fn computer_add_behavior() {
     // When it breaks, it's nice to see what it tried to do
     print!(
         "{}",
-        print_ic_graph(&chip.expand::<Project05ComponentT, _, _, _>())
+        print_ic_graph(&chip.expand::<Project05, _, _, _>())
     );
 
     let chip = flatten(chip);
@@ -240,7 +240,7 @@ pub fn computer_max_behavior() {
     // When it breaks, it's nice to see what it tried to do
     println!(
         "{}",
-        print_ic_graph(&chip.expand::<Project05ComponentT, _, _, _>())
+        print_ic_graph(&chip.expand::<Project05, _, _, _>())
     );
 
     let flat = flatten(chip);
@@ -266,7 +266,7 @@ pub fn computer_max_behavior_fast() {
     // When it breaks, it's nice to see what it tried to do
     println!(
         "{}",
-        print_ic_graph(&chip.expand::<Project05ComponentT, _, _, _>())
+        print_ic_graph(&chip.expand::<Project05, _, _, _>())
     );
 
     let flat = flatten_for_simulation(Computer::chip());

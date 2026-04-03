@@ -9,7 +9,7 @@ use simulator::{Chip, Flat, IC, Input1, Input16, Output, Output16, Reflect, expa
 pub use simulator::component::{Buffer, Nand};
 
 /// Components used and implemented in this project: simple, logical components for 1 and 16 bits.
-pub type Project01ComponentT = Coprod!(
+pub type Project01 = Coprod!(
     Nand, Buffer, Not, And, Or, Xor, Mux, Dmux, Not16, And16, Mux16
 );
 
@@ -17,9 +17,9 @@ pub type Project01ComponentT = Coprod!(
 pub fn flatten<C, Idx>(chip: C) -> IC<Combinational>
 where
     C: Reflect,
-    Project01ComponentT: CoprodInjector<C, Idx>,
+    Project01: CoprodInjector<C, Idx>,
 {
-    flatten_g::<C, Project01ComponentT, Idx, Combinational, _>(
+    flatten_g::<C, Project01, Idx, Combinational, _>(
         chip,
         "flat",
         hlist![

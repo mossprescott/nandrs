@@ -17,7 +17,7 @@ use simulator::{
     self, Chip, Flat, IC, Input1, Input16, Output, Output16, Reflect, expand, fixed, flatten_g,
 };
 
-pub type Project05ComponentT = Coprod!(
+pub type Project05 = Coprod!(
     Nand,
     Buffer,
     Not,
@@ -48,9 +48,9 @@ pub type Project05ComponentT = Coprod!(
 pub fn flatten<C, Idx>(chip: C) -> IC<Computational16>
 where
     C: Reflect,
-    Project05ComponentT: CoprodInjector<C, Idx>,
+    Project05: CoprodInjector<C, Idx>,
 {
-    flatten_g::<C, Project05ComponentT, Idx, Computational16, _>(
+    flatten_g::<C, Project05, Idx, Computational16, _>(
         chip,
         "flat",
         hlist![
@@ -86,9 +86,9 @@ where
 pub fn flatten_for_simulation<C, Idx>(chip: C) -> IC<native::Simulational<N16, N16>>
 where
     C: Reflect,
-    Project05ComponentT: CoprodInjector<C, Idx>,
+    Project05: CoprodInjector<C, Idx>,
 {
-    flatten_g::<C, Project05ComponentT, Idx, native::Simulational<N16, N16>, _>(
+    flatten_g::<C, Project05, Idx, native::Simulational<N16, N16>, _>(
         chip,
         "flat/sim",
         hlist![

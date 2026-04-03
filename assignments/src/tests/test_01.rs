@@ -1,5 +1,5 @@
 use crate::project_01::{
-    And, And16, Dmux, Mux, Mux16, Nand, Not, Not16, Or, Project01ComponentT, Xor, flatten,
+    And, And16, Dmux, Mux, Mux16, Nand, Not, Not16, Or, Project01, Xor, flatten,
 };
 use simulator::Chip as _;
 use simulator::component::{Combinational, count_combinational};
@@ -411,7 +411,7 @@ fn mux16_optimal() {
 fn and_graph() {
     let chip = And::chip();
     assert_eq!(
-        print_ic_graph(&chip.expand::<Project01ComponentT, _, _>()),
+        print_ic_graph(&chip.expand::<Project01, _, _>()),
         "And:
   nand_0.a <- a
   nand_0.b <- b

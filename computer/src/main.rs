@@ -6,7 +6,7 @@ use assignments::project_01::{And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, 
 use assignments::project_02::{ALU, Add16, FullAdder, HalfAdder, Inc16, Nand16Way, Neg16, Zero16};
 use assignments::project_03::PC;
 use assignments::project_05::{
-    self, CPU, Computer, Decode, Project05ComponentT, find_rom, memory_system,
+    self, CPU, Computer, Decode, Project05, find_rom, memory_system,
 };
 use assignments::project_06::{Program, assemble};
 use frunk::coproduct::CoprodInjector;
@@ -93,12 +93,12 @@ macro_rules! eliminate {
 
 /// Recursively expand high-level components (projects 3 and 5, essentially), until only primitives
 /// and simple logic are left (projects 1 and 2, except the ALU).
-fn simplify<C, Idx>(chip: C) -> IC<Project05ComponentT>
+fn simplify<C, Idx>(chip: C) -> IC<Project05>
 where
     C: Reflect,
-    Project05ComponentT: CoprodInjector<C, Idx>,
+    Project05: CoprodInjector<C, Idx>,
 {
-    flatten_g::<C, Project05ComponentT, Idx, Project05ComponentT, _>(
+    flatten_g::<C, Project05, Idx, Project05, _>(
         chip,
         "simple",
         hlist![

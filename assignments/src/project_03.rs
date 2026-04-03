@@ -8,7 +8,7 @@ use simulator::{
     self, Chip, Flat, IC, Input1, Input16, Output16, Reflect, expand, fixed, flatten_g,
 };
 
-pub type Project03ComponentT = Coprod!(
+pub type Project03 = Coprod!(
     Nand, Buffer, Not, And, Mux, Mux16, Not16, And16, HalfAdder, FullAdder, Inc16, Add16,
     Nand16Way, Zero16, Neg16, ALU, Register16, PC
 );
@@ -17,9 +17,9 @@ pub type Project03ComponentT = Coprod!(
 pub fn flatten<C, Idx>(chip: C) -> IC<Sequential>
 where
     C: Reflect,
-    Project03ComponentT: CoprodInjector<C, Idx>,
+    Project03: CoprodInjector<C, Idx>,
 {
-    flatten_g::<C, Project03ComponentT, Idx, Sequential, _>(
+    flatten_g::<C, Project03, Idx, Sequential, _>(
         chip,
         "flat",
         hlist![
