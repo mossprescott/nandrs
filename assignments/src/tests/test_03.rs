@@ -10,7 +10,7 @@ fn pc_behavior() {
     let chip = PC::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    print!("{}", print_graph(&chip.expand::<Project03, _, _, _>()));
+    println!("{}", print_graph(&chip.expand::<Project03, _, _, _>()));
 
     let chip = flatten(chip);
 

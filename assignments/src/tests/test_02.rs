@@ -145,7 +145,7 @@ fn add16_truth_table() {
     let chip = Add16::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    print!("{}", print_graph(&chip.expand::<Project02, _>()));
+    println!("{}", print_graph(&chip.expand::<Project02, _>()));
 
     let chip = flatten(chip);
 
@@ -188,7 +188,7 @@ fn zero16_truth_table() {
     let chip = Zero16::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    print!("{}", print_graph(&chip.expand::<Project02, _, _, _>()));
+    println!("{}", print_graph(&chip.expand::<Project02, _, _, _>()));
 
     let chip = flatten(chip);
 
@@ -218,7 +218,7 @@ fn neg16_truth_table() {
     let chip = Neg16::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    print!("{}", print_graph(&chip.expand::<Project02, _>()));
+    println!("{}", print_graph(&chip.expand::<Project02, _>()));
 
     let chip = flatten(chip);
 
@@ -249,7 +249,7 @@ fn alu_truth_table() {
     let chip = ALU::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    print!(
+    println!(
         "{}",
         print_graph(&chip.expand::<Project02, _, _, _, _, _, _, _, _, _>())
     );

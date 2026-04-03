@@ -189,7 +189,7 @@ fn computer_add_behavior() {
     let chip = Computer::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    print!("{}", print_graph(&chip.expand::<Project05, _, _, _>()));
+    println!("{}", print_graph(&chip.expand::<Project05, _, _, _>()));
 
     let chip = flatten(chip);
 
