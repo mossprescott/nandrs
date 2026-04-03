@@ -102,10 +102,8 @@ Combinational:
 Sequential:
 - `Register`: multi-bit, latched, on-chip memory cell.
 
-Optimized:
-- `Mux`: two (multi-bit) inputs, and a `sel` input controlling which one is used. During simulation,
-  `sel` is evaluated first; then the simulator only evaluates as needed for the "active" input.
-- `Adder`: add three bits (left, right, and carry-in), producing `sum` and `carry` outputs.
+TBD: arguably the right primitive is `DFF`, out of which registers of any size can be constructed,
+and at this point, we have the machinery to rewrite them for efficient simulation.
 
 ## Support Chips
 
