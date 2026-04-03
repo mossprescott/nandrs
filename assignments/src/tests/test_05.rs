@@ -1,12 +1,12 @@
 use crate::project_05::{
-    CPU, Computer, Decode, KEYBOARD, Project05, SCREEN_BASE, find_keyboard, find_ram,
-    find_rom, find_screen, flatten, flatten_for_simulation, memory_system,
+    CPU, Computer, Decode, KEYBOARD, Project05, SCREEN_BASE, find_keyboard, find_ram, find_rom,
+    find_screen, flatten, flatten_for_simulation, memory_system,
 };
 use crate::project_06::parse_statement;
 use simulator::component::{Computational, Computational16, MemorySystem16, count_computational};
 use simulator::declare::{Chip as _, IC};
 use simulator::nat::N16;
-use simulator::print_ic_graph;
+use simulator::print_graph;
 use simulator::simulate::{ChipState, MemoryMap, simulate};
 use simulator::word::Word16;
 
@@ -82,10 +82,7 @@ fn decode_truth_table() {
     let chip = Decode::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    println!(
-        "{}",
-        print_ic_graph(&chip.expand::<Project05, _, _, _>())
-    );
+    println!("{}", print_graph(&chip.expand::<Project05, _, _, _>()));
 
     let chip = flatten(chip);
 
@@ -106,10 +103,7 @@ fn decode_strict_truth_table() {
     let chip = Decode::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    println!(
-        "{}",
-        print_ic_graph(&chip.expand::<Project05, _, _, _>())
-    );
+    println!("{}", print_graph(&chip.expand::<Project05, _, _, _>()));
 
     let chip = flatten(chip);
 
@@ -145,7 +139,7 @@ fn cpu_behavior() {
     // When it breaks, it's nice to see what it tried to do
     println!(
         "{}",
-        print_ic_graph(&chip.expand::<Project05, _, _, _, _, _, _, _, _, _>())
+        print_graph(&chip.expand::<Project05, _, _, _, _, _, _, _, _, _>())
     );
 
     let chip = flatten(chip);
@@ -195,10 +189,7 @@ fn computer_add_behavior() {
     let chip = Computer::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    print!(
-        "{}",
-        print_ic_graph(&chip.expand::<Project05, _, _, _>())
-    );
+    print!("{}", print_graph(&chip.expand::<Project05, _, _, _>()));
 
     let chip = flatten(chip);
 
@@ -238,14 +229,11 @@ pub fn computer_max_behavior() {
     let chip = Computer::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    println!(
-        "{}",
-        print_ic_graph(&chip.expand::<Project05, _, _, _>())
-    );
+    println!("{}", print_graph(&chip.expand::<Project05, _, _, _>()));
 
     let flat = flatten(chip);
 
-    println!("{}", print_ic_graph(&flat));
+    println!("{}", print_graph(&flat));
 
     let state = simulate(&flat, memory_system());
 
@@ -264,14 +252,11 @@ pub fn computer_max_behavior_fast() {
     let chip = Computer::chip();
 
     // When it breaks, it's nice to see what it tried to do
-    println!(
-        "{}",
-        print_ic_graph(&chip.expand::<Project05, _, _, _>())
-    );
+    println!("{}", print_graph(&chip.expand::<Project05, _, _, _>()));
 
     let flat = flatten_for_simulation(Computer::chip());
 
-    println!("{}", print_ic_graph(&flat));
+    println!("{}", print_graph(&flat));
 
     let state = simulate(&flat, memory_system());
 

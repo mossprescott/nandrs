@@ -251,7 +251,7 @@ pub type Output16 = OutputBus<N16>;
 pub trait Component {
     /// A default type for expansion; it must include the types needed by `expand()`. This is useful
     /// when a consumer of the component doesn't have a preconceived notion of what type of
-    /// components it can handle. See `print_graph()`.
+    /// components it can handle. See `print_component_graph()`.
     type Target;
 
     /// Expand once, into the most convenient target type. This is just `expand()` without the need

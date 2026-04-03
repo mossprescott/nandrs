@@ -5,9 +5,7 @@ use clap::Parser;
 use assignments::project_01::{And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, Or};
 use assignments::project_02::{ALU, Add16, FullAdder, HalfAdder, Inc16, Nand16Way, Neg16, Zero16};
 use assignments::project_03::PC;
-use assignments::project_05::{
-    self, CPU, Computer, Decode, Project05, find_rom, memory_system,
-};
+use assignments::project_05::{self, CPU, Computer, Decode, Project05, find_rom, memory_system};
 use assignments::project_06::{Program, assemble};
 use frunk::coproduct::CoprodInjector;
 use frunk::hlist;
@@ -15,7 +13,7 @@ use simulator::component::{MemorySystem16, ROM16, Register16};
 use simulator::declare::Chip as _;
 use simulator::simulate::{initialize, synthesize};
 use simulator::word::Word16;
-use simulator::{Flat, IC, Reflect, flatten_g, print_ic_graph};
+use simulator::{Flat, IC, Reflect, flatten_g, print_graph};
 
 use computer::cli::Args;
 use computer::disasm::disassemble;
@@ -42,7 +40,7 @@ fn main() {
     let computer = Computer::chip();
     if args.print {
         let simple = simplify(Computer::chip());
-        println!("{}", print_ic_graph(&simple));
+        println!("{}", print_graph(&simple));
     }
 
     let Program {

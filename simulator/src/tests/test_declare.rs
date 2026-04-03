@@ -2,7 +2,7 @@ use crate::component::{Buffer, Nand, Register};
 use crate::declare::{BusRef, Component, Interface};
 use crate::nat::N1;
 use crate::{
-    Chip, IC, Input, Input1, Output, OutputBus, Reflect, expand, fixed, print_graph, print_ic_graph,
+    Chip, IC, Input, Input1, Output, OutputBus, Reflect, expand, fixed, print_component_graph,
 };
 use frunk::Coprod;
 
@@ -35,7 +35,7 @@ fn test_expand_not() {
 
     assert_eq!(chip.define().components.len(), 1);
     assert_eq!(
-        print_graph(&chip),
+        print_component_graph(&chip),
         "TestNot:\n  nand_0.a <- a\n  nand_0.b <- a\n  out <- nand_0.out"
     );
 }
@@ -75,7 +75,7 @@ fn test_expand_and() {
 
     assert_eq!(chip.define().components.len(), 2);
     assert_eq!(
-        print_graph(&chip),
+        print_component_graph(&chip),
         "TestAnd:
   nand_0.a <- a
   nand_0.b <- b

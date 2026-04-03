@@ -19,7 +19,7 @@ use frunk::hlist;
 use simulator::component::{MemorySystem16, ROM16};
 use simulator::simulate::{initialize, synthesize};
 use simulator::word::Word16;
-use simulator::{Chip, Flat, IC, Reflect, flatten_g, print_ic_graph};
+use simulator::{Chip, Flat, IC, Reflect, flatten_g, print_graph};
 
 fn main() {
     let args = Args::parse();
@@ -42,7 +42,7 @@ fn main() {
     let computer = Computer::chip();
     if args.print {
         let simple = simplify(Computer::chip());
-        println!("{}", print_ic_graph(&simple));
+        println!("{}", print_graph(&simple));
     }
 
     let Program {

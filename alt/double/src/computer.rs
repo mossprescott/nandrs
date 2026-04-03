@@ -458,7 +458,7 @@ mod test {
     use assignments::tests::test_05;
     use simulator::Chip;
     use simulator::component::Computational;
-    use simulator::print_ic_graph;
+    use simulator::print_graph;
     use simulator::simulate::simulate;
 
     use crate::computer::{Computer, DoubleComponentT, find_roms, flatten};
@@ -470,7 +470,7 @@ mod test {
         // When it breaks, it's nice to see what it tried to do
         println!(
             "{}",
-            print_ic_graph(&chip.expand::<DoubleComponentT, _, _, _>())
+            print_graph(&chip.expand::<DoubleComponentT, _, _, _>())
         );
 
         let flat = flatten(chip);

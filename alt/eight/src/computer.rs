@@ -716,7 +716,7 @@ mod test {
     use simulator::nat::N16;
     use simulator::simulate::{MemoryMap, simulate, synthesize};
     use simulator::word::Word;
-    use simulator::{Chip as _, eval, print_ic_graph};
+    use simulator::{Chip as _, eval, print_graph};
 
     // Note: the ALU and related components are all 8-bit, but end up embedded in a 16-bit circuit, so for simplicity,
     // treat values as 16-bits
@@ -734,7 +734,7 @@ mod test {
         // When it breaks, it's nice to see what it tried to do
         print!(
             "{}",
-            print_ic_graph(&chip.expand::<Combinational8T, _, _, _, _, _, _, _, _, _>())
+            print_graph(&chip.expand::<Combinational8T, _, _, _, _, _, _, _, _, _>())
         );
 
         let chip = flatteno_nands(chip);
@@ -967,7 +967,7 @@ mod test {
         // When it breaks, it's nice to see what it tried to do
         println!(
             "{}",
-            print_ic_graph(&chip.expand::<EightComponentT, _, _, _, _, _, _, _, _, _>())
+            print_graph(&chip.expand::<EightComponentT, _, _, _, _, _, _, _, _, _>())
         );
 
         let chip = flatten_for_simulation(chip);

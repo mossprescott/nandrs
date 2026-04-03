@@ -113,47 +113,35 @@ fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
 
 /// Show the connections of a chip after one level of expansion.
 ///
-/// Each line is `source -> sink`. Chip inputs are sources; chip outputs are sinks. Sub-component
-/// ports are labelled `{typename}{index}.{port}`.
-///
 /// ```ignore
 /// let chip = And { a: Input1::new(), b: Input1::new(), out: Output::new() };
-/// assert_eq!(print_graph(&chip), "And:\nnand0.a <- a\nnand0.b <- b\nnot1.a <- nand0.out\nout <- not1.out");
+/// assert_eq!(print_component_graph(&chip), "And:\nnand0.a <- a\nnand0.b <- b\nnot1.a <- nand0.out\nout <- not1.out");
 /// ```
-///
-/// Note: Claude has been given full latitude here as long as the output looks right, and it's
-/// elected to sort strings at the end.
-///
-/// TODO: nobody can actually use this anymore, because every `expand` fn has a flexible type, and
-/// there's no Component impl to supply a canonical type. But there could be, just to make this work
-/// again.
-pub fn print_graph<C>(chip: &C) -> String
+pub fn print_component_graph<C: Component>(chip: &C) -> String
 where
-    C: Component + Reflect,
-    C::Target: Component<Target = C::Target> + Reflect,
+    C::Target: Reflect,
 {
-    let intf = chip.reflect();
-    let subs = match chip.expand() {
-        None => return format!("{}:\n  (primitive)", chip.name()),
-        Some(s) => s,
-    };
-    print_ic_graph_named(&chip.name(), &intf, &subs.components)
+    let ic = chip.define();
+    print_graph(&ic)
 }
 
 /// Show the components making up this IC, with no additional expansion.
-pub fn print_ic_graph<C>(ic: &IC<C>) -> String
-where
-    C: Reflect,
-{
-    print_ic_graph_named(&ic.name, &ic.intf, &ic.components)
-}
-
-fn print_ic_graph_named<C>(name: &str, intf: &Interface, components: &[C]) -> String
+///
+/// Each line is `source -> sink`. Chip inputs are sources; chip outputs are sinks. Sub-component
+/// ports are labelled `{typename}{index}.{port}`.
+///
+/// Note: Claude has been given full latitude here as long as the output looks right, and it's
+/// elected to sort strings at the end.
+pub fn print_graph<C>(ic: &IC<C>) -> String
 where
     C: Reflect,
 {
     use crate::declare::BusRef;
     use std::collections::HashMap;
+
+    let name = &ic.name;
+    let intf = &ic.intf;
+    let components = &ic.components;
 
     let wire_id = |b: &BusRef| b.id.0;
 
