@@ -1,7 +1,9 @@
 use crate::component::{Buffer, Nand, Register};
-use crate::declare::{BusRef, Interface};
+use crate::declare::{BusRef, Component, Interface};
 use crate::nat::N1;
-use crate::{Chip, Input, Input1, Output, OutputBus, Reflect, expand, fixed, print_ic_graph};
+use crate::{
+    Chip, IC, Input, Input1, Output, OutputBus, Reflect, expand, fixed, print_graph, print_ic_graph,
+};
 use frunk::Coprod;
 
 /// Really just about trivial component for testing the expand! macro.
@@ -9,6 +11,13 @@ use frunk::Coprod;
 pub struct TestNot {
     pub a: Input1,
     pub out: Output,
+}
+impl Component for TestNot {
+    type Target = Coprod!(Nand);
+
+    fn define(&self) -> IC<Self::Target> {
+        self.expand()
+    }
 }
 impl TestNot {
     expand!([Nand], |this| {
@@ -20,16 +29,13 @@ impl TestNot {
     });
 }
 
-type TestNotT = Coprod!(Nand);
-
 #[test]
 fn test_expand_not() {
     let chip = TestNot::chip();
-    let ic = chip.expand::<TestNotT, _>();
 
-    assert_eq!(ic.components.len(), 1);
+    assert_eq!(chip.define().components.len(), 1);
     assert_eq!(
-        print_ic_graph(&ic),
+        print_graph(&chip),
         "TestNot:\n  nand_0.a <- a\n  nand_0.b <- a\n  out <- nand_0.out"
     );
 }
@@ -40,6 +46,13 @@ pub struct TestAnd {
     pub a: Input1,
     pub b: Input1,
     pub out: Output,
+}
+impl Component for TestAnd {
+    type Target = Coprod!(Nand);
+
+    fn define(&self) -> IC<Self::Target> {
+        self.expand()
+    }
 }
 impl TestAnd {
     expand!([Nand], |this| {
@@ -56,16 +69,13 @@ impl TestAnd {
     });
 }
 
-type TestAndT = Coprod!(Nand);
-
 #[test]
 fn test_expand_and() {
     let chip = TestAnd::chip();
-    let ic = chip.expand::<TestAndT, _>();
 
-    assert_eq!(ic.components.len(), 2);
+    assert_eq!(chip.define().components.len(), 2);
     assert_eq!(
-        print_ic_graph(&ic),
+        print_graph(&chip),
         "TestAnd:
   nand_0.a <- a
   nand_0.b <- b
