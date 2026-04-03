@@ -733,7 +733,7 @@ mod test {
         // When it breaks, it's nice to see what it tried to do
         print!(
             "{}",
-            print_ic_graph(&chip.expand::<EightComponentT, _, _, _, _, _, _, _, _, _>())
+            print_ic_graph(&chip.expand::<Combinational8T, _, _, _, _, _, _, _, _, _>())
         );
 
         let chip = flatteno_nands(chip);
@@ -964,12 +964,12 @@ mod test {
         let chip = PC::chip();
 
         // When it breaks, it's nice to see what it tried to do
-        print!(
+        println!(
             "{}",
             print_ic_graph(&chip.expand::<EightComponentT, _, _, _, _, _, _, _, _, _>())
         );
 
-        let chip = flatten(chip);
+        let chip = flatten_for_simulation(chip);
 
         let no_ram = MemoryMap::empty();
         let mut state = simulate::<_, N16, N16>(&chip, no_ram);
