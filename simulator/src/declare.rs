@@ -268,8 +268,11 @@ pub trait Component {
 ///
 /// Typically derived.
 pub trait Reflect {
-    fn reflect(&self) -> Interface;
+    /// Human-readable short name. Typically the name of the defining struct.
     fn name(&self) -> String;
+
+    /// Inputs and ouputs for inspection at runtime.
+    fn reflect(&self) -> Interface;
 }
 
 /// Construct a fresh instance of a chip struct with new Input/Output buses on every port.
@@ -277,6 +280,7 @@ pub trait Reflect {
 ///
 /// Typically derived.
 pub trait Chip {
+    /// A fresh instance with unconnected inputs and outputs. Mostly useful for testing.
     fn chip() -> Self;
 }
 
