@@ -708,7 +708,8 @@ mod test {
     use std::collections::HashMap;
 
     use crate::computer::{
-        ALU, CPU, Computer, EightComponentT, PC, flatten, flatten_for_simulation, flatteno_nands,
+        ALU, CPU, Combinational8T, Computer, EightComponentT, PC, flatten, flatten_for_simulation,
+        flatteno_nands,
     };
     use assignments::tests::test_05;
     use simulator::component::{Combinational, count_combinational, count_computational};
