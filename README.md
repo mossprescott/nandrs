@@ -29,7 +29,7 @@ get translated to "native" components that the simulator can handle more efficie
 - single-bit-slice `Adder`: reduces 9 gates to one simple operation; also exposes the structure of
 adder carry-chains to the simulator so that *entire* add/inc operations can be done in one
 operation. This is the big win. Note: adders of any bit width with one or two operands are supported
-equally well. See, for example, `Inc16` and the more exotic `Inc2`.
+equally well. See, for example, `Inc16` and the more exotic `IncBy2`.
 
 Focus on *processor* design considerations. Overall system design issues like bus timing, memory
 hierarchies, etc. are beside the point. I want to play with different ISAs, functional unit

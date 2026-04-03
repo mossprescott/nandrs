@@ -254,12 +254,12 @@ pub struct DoublePC {
 }
 
 impl DoublePC {
-    expand!([Inc16, Inc2, Mux16, Register16], |this| {
+    expand!([Inc16, IncBy2, Mux16, Register16], |this| {
         inc1: Inc16 { a: this.out0.into(), out: Output16::new() },
-        inc2: Inc2 { a: this.out0.into(), out: Output16::new() },
+        IncBy2: IncBy2 { a: this.out0.into(), out: Output16::new() },
 
         // skip=0 → inc by 1; skip=1 → inc by 2
-        next0: Mux16 { a0: inc1.out.into(), a1: inc2.out.into(), sel: this.skip, out: Output16::new() },
+        next0: Mux16 { a0: inc1.out.into(), a1: IncBy2.out.into(), sel: this.skip, out: Output16::new() },
 
         // load overrides inc/skip
         next1: Mux16 { a0: next0.out.into(), a1: this.addr, sel: this.load, out: Output16::new() },
@@ -284,12 +284,12 @@ impl DoublePC {
 
 /// Add with the constant 2.
 #[derive(Clone, Reflect, Chip)]
-pub struct Inc2 {
+pub struct IncBy2 {
     a: Input16,
     out: Output16,
 }
 
-impl Inc2 {
+impl IncBy2 {
     expand!([Buffer, Not, FullAdder], |this| {
         // the low bit is unaffected:
         low: Buffer { a: this.a.bit(0).into(), out: this.out.bit(0) },
@@ -336,7 +336,7 @@ pub type DoubleComponentT = Coprod!(
     CPU,
     Computer,
     DoublePC,
-    Inc2
+    IncBy2
 );
 
 /// Find the two ROMs (rom0 at pc, rom1 at pc+1) in the chip state.
@@ -394,7 +394,7 @@ where
             |c: CPU| Flat::Continue(c.expand()),
             |c: Computer| Flat::Continue(c.expand()),
             |c: DoublePC| Flat::Continue(c.expand()),
-            |c: Inc2| Flat::Continue(c.expand()),
+            |c: IncBy2| Flat::Continue(c.expand()),
         ],
     )
 }
@@ -447,7 +447,7 @@ where
             |c: CPU| Flat::Continue(c.expand()),
             |c: Computer| Flat::Continue(c.expand()),
             |c: DoublePC| Flat::Continue(c.expand()),
-            |c: Inc2| Flat::Continue(c.expand()),
+            |c: IncBy2| Flat::Continue(c.expand()),
         ],
     )
 }

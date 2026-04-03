@@ -10,7 +10,7 @@ use assignments::project_06::{Program, assemble};
 use computer::cli::Args;
 use computer::disasm::disassemble;
 use double::computer::{
-    CPU, Computer, DoubleComponentT, DoublePC, Inc2, find_roms, flatten as flatten_double,
+    CPU, Computer, DoubleComponentT, DoublePC, IncBy2, find_roms, flatten as flatten_double,
     flatten_for_simulation as flatten_double_sim,
 };
 use frunk::coproduct::CoprodInjector;
@@ -143,7 +143,7 @@ where
             |c: CPU| eliminate!(c),
             |c: Computer| eliminate!(c),
             |c: DoublePC| eliminate!(c),
-            |c: Inc2| eliminate!(c),
+            |c: IncBy2| preserve!(c),
         ],
     )
 }
