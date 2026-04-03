@@ -51,6 +51,7 @@ fn main() {
     } = program;
 
     let wiring = if args.precise {
+        eprintln!("WARNING!!! Simulating individual logic gates! Expect 20x slower simulation.");
         let chip = project_05::flatten(computer);
         synthesize(&chip, memory_system())
     } else {
