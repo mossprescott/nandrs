@@ -245,15 +245,22 @@ pub type Output = OutputBus<N1>;
 /// A multi-bit output signal; that is, an outgoing 16-bit bus.
 pub type Output16 = OutputBus<N16>;
 
+/// Simplified expansion: by a single level and into a single, pre-defined target type.
+///
+/// Note: this seems to be of pretty dubious value at this point.
 pub trait Component {
+    /// A default type for expansion; it must include the types needed by `expand()`. This is useful
+    /// when a consumer of the component doesn't have a preconceived notion of what type of
+    /// components it can handle. See `print_graph()`.
     type Target;
 
-    /// Define the semantics of a certain Component type, by expanding it on demand, usually to
-    /// a larger number of "more primitive" components. When this expansion is applied recursively,
-    /// it ultimately produces a completely "flat" set of interconnected primitives.
+    /// Expand once, into the most convenient target type. This is just `expand()` without the need
+    /// to choose a type for the result.
     ///
-    /// If the component is already primitive, then None.
-    fn expand(&self) -> Option<IC<Self::Target>>;
+    /// For each implementing type there will be a corresponding `fn expand()` with a flexible type
+    /// allowing it to inject the components into any circuit with compatible contents. This is just
+    /// a simpified wrapper making the result type concrete.
+    fn define(&self) -> IC<Self::Target>;
 }
 
 /// Enumerate the inputs and outputs of a component for reference from the outside.
