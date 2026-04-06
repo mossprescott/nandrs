@@ -4,12 +4,12 @@ use clap::Parser;
 
 use assignments::project_01::{And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, Or};
 use assignments::project_02::{ALU, Add16, FullAdder, HalfAdder, Inc16, Nand16Way, Neg16, Zero16};
-use assignments::project_03::PC;
+use assignments::project_03::{PC, Register16};
 use assignments::project_05::{self, CPU, Computer, Decode, Project05, find_rom, memory_system};
 use assignments::project_06::{Program, assemble};
 use frunk::coproduct::CoprodInjector;
 use frunk::hlist;
-use simulator::component::{MemorySystem16, ROM16, Register16};
+use simulator::component::{DFF, MemorySystem16, ROM16};
 use simulator::declare::Chip as _;
 use simulator::simulate::{initialize, synthesize};
 use simulator::word::Word16;
@@ -121,6 +121,7 @@ where
             |c: Neg16| preserve!(c),
             |c: ALU| eliminate!(c),
             // Project 03+: stop registers, expand PC
+            |c: DFF| preserve!(c),
             |c: Register16| preserve!(c),
             |c: PC| eliminate!(c),
             |c: ROM16| preserve!(c),
