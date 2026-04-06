@@ -5,7 +5,7 @@ use crate::declare::BusRef;
 use crate::nat::{N16, Nat};
 use crate::{Chip, Input, Input1, Interface, OutputBus, Reflect};
 
-use super::{Buffer, Combinational, Nand, Sequential, WiredRegister};
+use super::{Buffer, Combinational, DFF, Nand, Sequential};
 
 /// Simple, writable memory. The simulator supplies an implementation when it finds one of these.
 #[derive(Clone, Reflect)]
@@ -92,7 +92,7 @@ pub struct MemorySystem<A: Nat, D: Nat> {
 pub enum Computational<A: Nat, D: Nat> {
     Nand(Nand),
     Buffer(Buffer),
-    Register(WiredRegister),
+    DFF(DFF),
     RAM(RAM<A, D>),
     ROM(ROM<A, D>),
     Serial(Serial<D>),
@@ -113,7 +113,7 @@ impl<A: Nat, D: Nat> From<Sequential> for Computational<A, D> {
         match s {
             Sequential::Nand(n) => Computational::Nand(n),
             Sequential::Buffer(n) => Computational::Buffer(n),
-            Sequential::Register(r) => Computational::Register(r),
+            Sequential::DFF(r) => Computational::DFF(r),
         }
     }
 }
@@ -127,7 +127,7 @@ pub type Computational16 = Computational<N16, N16>;
 pub struct ComputationalCounts {
     pub nands: usize,
     pub buffers: usize,
-    pub registers: usize,
+    pub dffs: usize,
     pub rams: usize,
     pub roms: usize,
     pub serials: usize,
@@ -140,7 +140,7 @@ pub fn count_computational<A: Nat, D: Nat>(
     let mut counts = ComputationalCounts {
         nands: 0,
         buffers: 0,
-        registers: 0,
+        dffs: 0,
         rams: 0,
         roms: 0,
         serials: 0,
@@ -150,7 +150,7 @@ pub fn count_computational<A: Nat, D: Nat>(
         match comp {
             Computational::Nand(_) => counts.nands += 1,
             Computational::Buffer(_) => counts.buffers += 1,
-            Computational::Register(_) => counts.registers += 1,
+            Computational::DFF(_) => counts.dffs += 1,
             Computational::RAM(_) => counts.rams += 1,
             Computational::ROM(_) => counts.roms += 1,
             Computational::Serial(_) => counts.serials += 1,

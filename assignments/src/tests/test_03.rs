@@ -1,9 +1,49 @@
-use crate::project_03::{PC, Project03, flatten};
+use crate::project_03::{Register16, PC, Project03, flatten};
 use simulator::component::{Sequential, count_sequential};
 use simulator::declare::Chip as _;
 use simulator::nat::N16;
 use simulator::print_graph;
 use simulator::simulate::{MemoryMap, simulate};
+
+#[test]
+fn register_behavior() {
+    let chip = Register16::chip();
+
+    // When it breaks, it's nice to see what it tried to do
+    println!("{}", print_graph(&chip.expand::<Project03, _, _>()));
+
+    let chip = flatten(chip);
+
+    let no_ram = MemoryMap::empty();
+    let mut state = simulate::<_, N16, N16>(&chip, no_ram);
+
+    assert_eq!(state.get("data_out"), 0u16.into());
+
+    state.ticktock();
+    assert_eq!(state.get("data_out"), 0u16.into());
+
+    state.set("data_in", 1234u16.into());
+    state.ticktock();
+    assert_eq!(state.get("data_out"), 0u16.into());
+
+    state.set("write", true.into());
+    state.ticktock();
+    assert_eq!(state.get("data_out"), 1234u16.into());
+
+    state.set("data_in", 2345u16.into());
+    state.set("write", false.into());
+    state.ticktock();
+    assert_eq!(state.get("data_out"), 1234u16.into());
+}
+
+
+#[test]
+fn register_optimal() {
+    let chip = flatten(Register16::chip());
+    let counts = count_sequential(&chip.components);
+    assert_eq!(counts.nands, 49);   // Basically, a Mux16
+    assert_eq!(counts.dffs, 16);
+}
 
 #[test]
 fn pc_behavior() {
@@ -72,6 +112,6 @@ fn pc_behavior() {
 fn pc_optimal() {
     let chip = flatten(PC::chip());
     let counts = count_sequential(&chip.components);
-    assert_eq!(counts.nands, 223);
-    assert_eq!(counts.registers, 1);
+    assert_eq!(counts.nands, 272);
+    assert_eq!(counts.dffs, 16);
 }

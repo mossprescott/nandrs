@@ -174,8 +174,8 @@ fn cpu_optimal() {
     // TODO: actually what?
     let chip = flatten(CPU::chip());
     let counts = count_computational(&chip.components);
-    assert_eq!(counts.nands, 1126);
-    assert_eq!(counts.registers, 3);
+    assert_eq!(counts.nands, 1273);
+    assert_eq!(counts.dffs, 48);  // 3*16
 }
 
 fn add_program() -> Vec<Word16> {
@@ -412,13 +412,13 @@ fn computer_read_keyboard() {
 fn computer_optimal() {
     let chip = flatten(Computer::chip());
     let counts = count_computational(&chip.components);
-    assert_eq!(counts.nands, 1126);
-    assert_eq!(counts.registers, 3);
+    assert_eq!(counts.nands, 1273);
+    assert_eq!(counts.dffs, 48);
     assert_eq!(counts.roms, 1);
     assert_eq!(counts.memory_systems, 1);
     assert_eq!(
         chip.components.len(),
-        counts.nands + counts.buffers + counts.registers + counts.roms + counts.memory_systems
+        counts.nands + counts.buffers + counts.dffs + counts.roms + counts.memory_systems
     );
 }
 
@@ -432,9 +432,10 @@ fn computer_graph_for_simulation() {
     let chip = flatten_for_simulation(Computer::chip());
     let counts = count_simulational(&chip.components);
     assert_eq!(counts.primitive.nands, 168);
-    assert_eq!(counts.primitive.registers, 3);
+    assert_eq!(counts.primitive.dffs, 0);
     assert_eq!(counts.primitive.roms, 1);
     assert_eq!(counts.primitive.memory_systems, 1);
     assert_eq!(counts.muxes, 16);
     assert_eq!(counts.adders, 31);
+    assert_eq!(counts.registers, 3);
 }

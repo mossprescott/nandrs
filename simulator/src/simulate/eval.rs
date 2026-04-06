@@ -241,6 +241,10 @@ impl<A: Nat + Storable, D: Nat + Storable> ChipState<A, D> {
 
         for comp in &self.wiring.component_wiring {
             match comp {
+                wiring::ComponentWiring::DFF(dff) => {
+                    let val = read_bit(&self.wire_state, dff.a);
+                    write_bit(&mut self.reg_state, dff.out, val);
+                }
                 wiring::ComponentWiring::Register(reg) => {
                     if read_bit(&self.wire_state, reg.write) {
                         self.reg_state[reg.data_out.0 as usize] =

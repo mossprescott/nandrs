@@ -96,6 +96,11 @@ fn fmt_component_tree(
             fmt_bit(n.b),
             fmt_bit(n.out)
         ),
+        wiring::ComponentWiring::DFF(d) => {
+            writeln!(f, "dff   a={} out={}",
+            fmt_bit(d.a),
+            fmt_bit(d.out))
+        },
         wiring::ComponentWiring::Mux(m) => {
             writeln!(f, "mux   sel={} out=w{}[..]", fmt_bit(m.sel), m.out.0)?;
             let c0 = count_components(&m.branch0);
@@ -355,6 +360,7 @@ impl<Width: Storable> fmt::Display for ChipWiring<Width> {
 #[derive(Debug, Default)]
 pub struct OpCounts {
     pub nands: usize,
+    pub dffs: usize,
     pub ands: usize,
     pub adders: usize,
     pub muxes: usize,
@@ -376,6 +382,7 @@ impl<Width: Storable> ChipWiring<Width> {
         for comp in &self.component_wiring {
             match comp {
                 wiring::ComponentWiring::Nand(_) => c.nands += 1,
+                wiring::ComponentWiring::DFF(_) => c.dffs += 1,
                 wiring::ComponentWiring::Mux(_) => c.muxes += 1,
                 wiring::ComponentWiring::Adder(_) => c.adders += 1,
                 wiring::ComponentWiring::Register(_) => c.registers += 1,
@@ -502,12 +509,17 @@ where
                     assign(WireID::from(&intf.outputs["sum"]));
                     assign(WireID::from(&intf.outputs["carry"]));
                 }
-
-                Simulational::Primitive(Computational::Register(c)) => {
+                Simulational::Register(c) => {
                     let intf = c.reflect();
-                    assign(WireID::from(&intf.inputs["write"]));
                     assign(WireID::from(&intf.inputs["data_in"]));
+                    assign(WireID::from(&intf.inputs["write"]));
                     assign(WireID::from(&intf.outputs["data_out"]));
+                }
+
+                Simulational::Primitive(Computational::DFF(c)) => {
+                    let intf = c.reflect();
+                    assign(WireID::from(&intf.inputs["a"]));
+                    assign(WireID::from(&intf.outputs["out"]));
                 }
                 Simulational::Primitive(Computational::RAM(c)) => {
                     let intf = c.reflect();
@@ -609,6 +621,13 @@ where
                         None // Full-bus buffer: handled by rename
                     }
                 }
+                Simulational::Primitive(Computational::DFF(c)) => {
+                    let intf = c.reflect();
+                    Some(CW::DFF(wiring::DFFWiring {
+                        a: ref_for(&intf.inputs["a"]),
+                        out: ref_for(&intf.outputs["out"]),
+                    }))
+                }
                 Simulational::Mux(c) => {
                     let intf = c.reflect();
                     Some(CW::Mux(wiring::MuxWiring {
@@ -630,7 +649,7 @@ where
                         carry: ref_for(&intf.outputs["carry"]),
                     }))
                 }
-                Simulational::Primitive(Computational::Register(c)) => {
+                Simulational::Register(c) => {
                     let intf = c.reflect();
                     Some(CW::Register(wiring::RegisterWiring {
                         write: ref_for(&intf.inputs["write"]),
@@ -789,6 +808,12 @@ fn peephole_nand_not(
                     .insert(i);
                 wire_consumers
                     .entry((n.b.id.0, n.b.offset))
+                    .or_default()
+                    .insert(i);
+            }
+            CW::DFF(d) => {
+                wire_consumers
+                    .entry((d.a.id.0, d.a.offset))
                     .or_default()
                     .insert(i);
             }
@@ -960,6 +985,9 @@ fn eliminate_dead_gates(
                 CW::Nand(n) => {
                     consumed_bits.insert((n.a.id.0, n.a.offset));
                     consumed_bits.insert((n.b.id.0, n.b.offset));
+                }
+                CW::DFF(d) => {
+                    consumed_bits.insert((d.a.id.0, d.a.offset));
                 }
                 CW::And(n) => {
                     consumed_bits.insert((n.a.id.0, n.a.offset));
@@ -1520,11 +1548,14 @@ fn populate_mux_branches(
         consumers.entry(w).or_default().insert(j);
     };
     for (j, comp) in components.iter().enumerate() {
-        // TODO: user reflect()?
+        // TODO: use reflect()?
         match comp {
             CW::Nand(n) => {
                 add_consumer(n.a.id, j);
                 add_consumer(n.b.id, j);
+            }
+            CW::DFF(d) => {
+                add_consumer(d.a.id, j);
             }
             CW::And(n) => {
                 add_consumer(n.a.id, j);
@@ -1611,7 +1642,8 @@ fn populate_mux_branches(
         // TODO: use reflect()?
         match comp {
             CW::Nand(n) => vec![n.a.id, n.b.id],
-            CW::And(n) => vec![n.a.id, n.b.id],
+            CW::DFF(d) => vec![d.a.id],
+            CW::And(a) => vec![a.a.id, a.b.id],
             CW::ParallelNand(n) => vec![n.a, n.b],
             CW::RippleAdder(a) => vec![a.a, a.b, a.carry_in.id],
             CW::ManyWayAnd(m) => vec![m.a],

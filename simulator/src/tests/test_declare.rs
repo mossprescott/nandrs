@@ -1,8 +1,7 @@
-use crate::component::{Buffer, Nand, Register};
+use crate::component::{Buffer, Nand, DFF};
 use crate::declare::{BusRef, Component, Interface};
-use crate::nat::N1;
 use crate::{
-    Chip, IC, Input, Input1, Output, OutputBus, Reflect, expand, fixed, print_component_graph,
+    Chip, IC, Input, Input1, Output, OutputBus, Reflect, expand, print_component_graph,
 };
 use frunk::Coprod;
 
@@ -115,27 +114,25 @@ fn test_expand_nand8() {
     assert_eq!(ic.components.len(), 8);
 }
 
-type Register1 = Register<N1>;
-
 /// A circuit that needs to refer to an output before its component is declared.
 #[derive(Clone, Reflect, Chip)]
 pub struct TestFlipFlop {
     pub out: Output,
 }
 impl TestFlipFlop {
-    expand!([Nand, Buffer, Register1], |this| {
+    expand!([Nand, Buffer, DFF], |this| {
         // Declare the register's output so we can refer to it circularly
-        reg_out: forward Output::new(),
+        dff_out: forward Output::new(),
 
-        not: Nand { a: reg_out.into(), b: this.out.into(), out: Output::new() },
-        reg: Register { data_in: not.out.into(), write: fixed(1), data_out: reg_out },
+        not: Nand { a: dff_out.into(), b: this.out.into(), out: Output::new() },
+        dff: DFF { a: not.out.into(), out: dff_out },
 
         // Now connect to the chip output also
-        _out: Buffer { a: reg_out.into(), out: this.out },
+        _out: Buffer { a: dff_out.into(), out: this.out },
     });
 }
 
-type TestFlipFlopT = Coprod!(Nand, Buffer, Register1);
+type TestFlipFlopT = Coprod!(Nand, Buffer, DFF);
 
 #[test]
 fn test_expand_flip_flop() {
