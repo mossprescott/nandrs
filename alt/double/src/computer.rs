@@ -33,13 +33,11 @@
 //! a second ROM which we'll load with the same binary.
 use assignments::project_01::{And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, Or};
 use assignments::project_02::{ALU, Add16, FullAdder, HalfAdder, Inc16, Nand16Way, Neg16, Zero16};
-use assignments::project_03::PC;
+use assignments::project_03::{PC, Register16};
 use assignments::project_05::Decode;
 use frunk::coproduct::CoprodInjector;
 use frunk::{Coprod, hlist};
-use simulator::component::{
-    Computational, Computational16, MemorySystem16, ROM16, Register16, WiredRegister,
-};
+use simulator::component::{Computational, Computational16, DFF, MemorySystem16, ROM16};
 use simulator::declare::{BusRef, Interface};
 use simulator::nat::N16;
 use simulator::simulate::{BusResident, ChipState, ROMHandle};
@@ -256,10 +254,10 @@ pub struct DoublePC {
 impl DoublePC {
     expand!([Inc16, IncBy2, Mux16, Register16], |this| {
         inc1: Inc16 { a: this.out0.into(), out: Output16::new() },
-        IncBy2: IncBy2 { a: this.out0.into(), out: Output16::new() },
+        inc2: IncBy2 { a: this.out0.into(), out: Output16::new() },
 
         // skip=0 → inc by 1; skip=1 → inc by 2
-        next0: Mux16 { a0: inc1.out.into(), a1: IncBy2.out.into(), sel: this.skip, out: Output16::new() },
+        next0: Mux16 { a0: inc1.out.into(), a1: inc2.out.into(), sel: this.skip, out: Output16::new() },
 
         // load overrides inc/skip
         next1: Mux16 { a0: next0.out.into(), a1: this.addr, sel: this.load, out: Output16::new() },
@@ -328,6 +326,7 @@ pub type DoubleComponentT = Coprod!(
     Zero16,
     Neg16,
     ALU,
+    DFF,
     Register16,
     PC,
     ROM16,
@@ -386,7 +385,8 @@ where
             |c: Zero16| Flat::Continue(c.expand()),
             |c: Neg16| Flat::Continue(c.expand()),
             |c: ALU| Flat::Continue(c.expand()),
-            |c: Register16| Flat::Done(vec![Computational::Register(WiredRegister::from(c))]),
+            |c: DFF| Flat::Done(vec![Computational::DFF(c)]),
+            |c: Register16| Flat::Continue(c.expand()),
             |c: PC| Flat::Continue(c.expand()),
             |c: ROM16| Flat::Done(vec![Computational::ROM(c)]),
             |c: MemorySystem16| Flat::Done(vec![Computational::MemorySystem(c)]),
@@ -436,10 +436,11 @@ where
             |c: Zero16| Flat::Done(assignments::project_02::flatten_for_simulation(c).components),
             |c: Neg16| Flat::Done(assignments::project_02::flatten_for_simulation(c).components),
             |c: ALU| Flat::Done(assignments::project_02::flatten_for_simulation(c).components),
-            // Project05/Double-specific types:
-            |c: Register16| Flat::Done(vec![
-                Computational::Register(WiredRegister::from(c)).into()
-            ]),
+            // Project03:
+            |c: DFF| Flat::Done(assignments::project_05::flatten_for_simulation(c).components),
+            |c: Register16| Flat::Done(
+                assignments::project_05::flatten_for_simulation(c).components
+            ),
             |c: PC| Flat::Continue(c.expand()),
             |c: ROM16| Flat::Done(vec![Computational::ROM(c).into()]),
             |c: MemorySystem16| Flat::Done(vec![Computational::MemorySystem(c).into()]),
@@ -457,7 +458,7 @@ mod test {
     use assignments::project_05::memory_system;
     use assignments::tests::test_05;
     use simulator::Chip;
-    use simulator::component::Computational;
+    use simulator::component::count_computational;
     use simulator::print_graph;
     use simulator::simulate::simulate;
 
@@ -487,26 +488,10 @@ mod test {
 
     #[test]
     fn computer_optimal() {
-        let components = flatten(Computer::chip()).components;
-        let memsys = components
-            .iter()
-            .filter(|c| matches!(c, Computational::MemorySystem(_)))
-            .count();
-        let roms = components
-            .iter()
-            .filter(|c| matches!(c, Computational::ROM(_)))
-            .count();
-        let nands = components
-            .iter()
-            .filter(|c| matches!(c, Computational::Nand(_)))
-            .count();
-        let registers = components
-            .iter()
-            .filter(|c| matches!(c, Computational::Register(_)))
-            .count();
-        assert_eq!(memsys, 1);
-        assert_eq!(roms, 2); // Compare to 1
-        assert_eq!(nands, 1385); // Compare to 1126
-        assert_eq!(registers, 4); // Compare to 3
+        let counts = count_computational(&flatten(Computer::chip()).components);
+        assert_eq!(counts.memory_systems, 1);
+        assert_eq!(counts.roms, 2); // Compare to 1
+        assert_eq!(counts.nands, 1581); // Compare to 1273
+        assert_eq!(counts.dffs, 4 * 16); // Compare to 3*16
     }
 }
