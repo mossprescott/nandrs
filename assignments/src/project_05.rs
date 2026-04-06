@@ -81,7 +81,7 @@ where
     )
 }
 
-/// Like `flatten`, but replaces adders and muxes with native versions for efficient simulation.
+/// Like `flatten`, but replaces Mux/Adder/Registers with native versions for efficient simulation.
 pub fn flatten_for_simulation<C, Idx>(chip: C) -> IC<native::Simulational<N16, N16>>
 where
     C: Reflect,

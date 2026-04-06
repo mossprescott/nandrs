@@ -399,7 +399,7 @@ where
     )
 }
 
-/// Like `flatten`, but uses native Mux/Adder components for efficient simulation.
+/// Like `flatten`, but uses native Mux/Adder/Register components for efficient simulation.
 pub fn flatten_for_simulation<C, Idx>(
     chip: C,
 ) -> IC<simulator::component::native::Simulational<N16, N16>>
