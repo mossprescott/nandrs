@@ -288,7 +288,7 @@ pub type Combinational8T = Coprod!(
 );
 
 /// Recursively expand until only Nands and Buffers are left (combinational only).
-pub fn flatteno_nands<C, Idx>(chip: C) -> IC<Combinational>
+pub fn flatten_to_nands<C, Idx>(chip: C) -> IC<Combinational>
 where
     C: Reflect,
     Combinational8T: CoprodInjector<C, Idx>,
@@ -709,7 +709,7 @@ mod test {
 
     use crate::computer::{
         ALU, CPU, Combinational8T, Computer, EightComponentT, PC, flatten, flatten_for_simulation,
-        flatteno_nands,
+        flatten_to_nands,
     };
     use assignments::tests::test_05;
     use simulator::component::{Combinational, count_combinational, count_computational};
@@ -737,7 +737,7 @@ mod test {
             print_graph(&chip.expand::<Combinational8T, _, _, _, _, _, _, _, _, _>())
         );
 
-        let chip = flatteno_nands(chip);
+        let chip = flatten_to_nands(chip);
 
         // 0 = 0 + 0
         let r = eval16(
@@ -956,7 +956,7 @@ mod test {
 
     #[test]
     fn alu_optimal() {
-        let chip = flatteno_nands(ALU::chip());
+        let chip = flatten_to_nands(ALU::chip());
         assert_eq!(count_combinational(&chip.components).nands, 368); // Compare to 720
     }
 
