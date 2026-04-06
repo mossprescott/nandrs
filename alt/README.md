@@ -38,7 +38,7 @@ Running examples/Pong.asm:
 |------------------------------------------------|-------------|--------------|-----------------|
 | [project_05](../assignments/src/project_05.rs) | 1273        | 3.9m         | 2.0 MHz, 30 fps |
 | [double](double/src/computer.rs)               | 1581 (+24%) | 2.8m  (-28%) | 1.4 MHz, 30 fps |
-| [eight](eight/src/computer.rs)                 |  ? (-25%) | 7.8m (+100%) | 1.3 MHz, 20 fps |
+| [eight](eight/src/computer.rs)                 |  995 (-22%) | 7.8m (+100%) | 1.3 MHz, 20 fps |
 
 - *gates*: number of Nands, including flattened adders and muxes, but not registers and the whole memory system.
 - *init*: number of cycles to reach the "main.main" label

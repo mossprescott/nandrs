@@ -160,6 +160,12 @@ impl<A: Nat, D: Nat, Width: Nat> From<Mux<Width>> for Simulational<A, D> {
     }
 }
 
+impl<A: Nat, D: Nat, Width: Nat> From<Register<Width>> for Simulational<A, D> {
+    fn from(c: Register<Width>) -> Self {
+        Simulational::Register(c.into())
+    }
+}
+
 impl<A: Nat, D: Nat> From<Adder> for Simulational<A, D> {
     fn from(c: Adder) -> Self {
         Simulational::Adder(c)

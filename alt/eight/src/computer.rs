@@ -8,15 +8,17 @@ use assignments::project_02::{FullAdder, HalfAdder};
 use assignments::project_05::Decode;
 use frunk::coproduct::CoprodInjector;
 use frunk::{Coprod, hlist};
-use simulator::component::{Buffer, Computational, WiredRegister, native};
+use simulator::{Input, OutputBus};
+use simulator::component::{Buffer, Computational, DFF, native};
 use simulator::component::{Combinational, Computational16, MemorySystem16, ROM16};
-use simulator::nat::N16;
+use simulator::nat::{N8, N16};
 use simulator::{
     Chip, Flat, IC, Input1, Input16, Interface, Output, Output16, Reflect, declare::BusRef, expand,
     fixed, flatten_g,
 };
 
-use crate::component::{Input8, Latch1, Latch8, Output8, Register8};
+type Input8 = Input<N8>;
+type Output8 = OutputBus<N8>;
 
 /// Selects between two 8-bit inputs bit-by-bit, using a single sel bit.
 #[derive(Clone, Reflect, Chip)]
@@ -321,6 +323,39 @@ where
     )
 }
 
+
+/// 8-bit wide register made out of DFFs and a Mux8 for the write-enable.
+#[derive(Clone, Reflect, Chip)]
+pub struct Register8 {
+    pub data_in: Input8,
+    pub write: Input1,
+    pub data_out: Output8,
+}
+
+impl Register8 {
+    expand!([Mux8, DFF], |this| {
+        next: Mux8 { a0: this.data_out.into(), a1: this.data_in, sel: this.write, out: Output8::new() },
+        for i in 0..8 {
+            dff: DFF { a: next.out.bit(i).into(), out: this.data_out.bit(i) },
+        }
+    });
+}
+
+/// An 8-bit latch which is just 8 DFFs; rewritten with a "native" register for fast simulation.
+#[derive(Clone, Reflect, Chip)]
+pub struct DFF8 {
+    pub a: Input8,
+    pub out: Output8,
+}
+impl DFF8 {
+    expand!([DFF], |this| {
+        for i in 0..8 {
+            dff: DFF { a: this.a.bit(i).into(), out: this.out.bit(i) },
+        }
+    });
+}
+
+
 /// PC maintaining a 16-bit instruction address which is actually stored in a pair of 8-bit
 /// registers, using an 8-bit increment unit to compute the new address across 2 cycles when `inc`
 /// is asserted.
@@ -350,7 +385,7 @@ pub struct PC {
 }
 
 impl PC {
-    expand!([Mux8, Not, And, Or, Inc8, Split, Join, Register8, Latch8], |this| {
+    expand!([Mux8, Not, And, Or, Inc8, Split, Join, Register8, DFF8], |this| {
         lo_out: forward Output8::new(),
         hi_out: forward Output8::new(),
         latch_out: forward Output8::new(),
@@ -380,7 +415,7 @@ impl PC {
         hi: Register8 { data_in: next2_hi.out.into(), write: write.out.into(), data_out: hi_out },
 
         // Latch Inc result for next cycle.
-        latch: Latch8 { data_in: inc.out.into(), data_out: latch_out },
+        latch: DFF8 { a: inc.out.into(), out: latch_out },
     });
 }
 
@@ -405,7 +440,7 @@ pub struct CPU {
 }
 
 impl CPU {
-    expand!([Decode, Mux8, Or, And, Nand, Not, ALU, Split, Join, PC, Latch8, Latch1, Register8, Mux], |this| {
+    expand!([Decode, Mux8, Or, And, Nand, Not, ALU, Split, Join, PC, DFF8, DFF, Register8, Mux], |this| {
         top_half: forward Output::new(),
         bottom_half: forward Output::new(),
 
@@ -518,9 +553,9 @@ impl CPU {
 
         // Finally, all the registers and latches:
 
-        alu_latch: Latch8 { data_in: alu.out.into(), data_out: alu_latch_out },
-        zr_latch: Latch1 { data_in: alu.zr.into(), data_out: zr_latch_out },
-        carry_latch: Latch1 { data_in: alu.carry_out.into(), data_out: carry_latch_out },
+        alu_latch: DFF8 { a: alu.out.into(), out: alu_latch_out },
+        zr_latch: DFF { a: alu.zr.into(), out: zr_latch_out },
+        carry_latch: DFF { a: alu.carry_out.into(), out: carry_latch_out },
 
         reg_a_lo: Register8 { data_in: a_data_lo.out.into(), write: load_a.out.into(), data_out: reg_a_lo_out },
         reg_a_hi: Register8 { data_in: a_data_hi.out.into(), write: load_a.out.into(), data_out: reg_a_hi_out },
@@ -532,7 +567,7 @@ impl CPU {
         // Note: reset forces top_half, so only it only has to be asserted for a single cycle
         not_top: Not { a: top_half.into(), out: bottom_half },
         next_cycle: Or { a: not_top.out.into(), b: this.reset, out: Output::new() },
-        cycle_dff: Latch1 { data_in: next_cycle.out.into(), data_out: top_half },
+        cycle_dff: DFF { a: next_cycle.out.into(), out: top_half },
     });
 }
 
@@ -596,8 +631,8 @@ pub type EightComponentT = Coprod!(
     Join,
     Decode,
     Register8,
-    Latch8,
-    Latch1,
+    DFF8,
+    DFF,
     ROM16,
     MemorySystem16,
     PC,
@@ -635,9 +670,9 @@ where
             |c: Split| Flat::Continue(c.expand()),
             |c: Join| Flat::Continue(c.expand()),
             |c: Decode| Flat::Continue(c.expand()),
-            |c: Register8| Flat::Done(vec![Computational::Register(WiredRegister::from(c))]),
-            |c: Latch8| Flat::Continue(c.expand()),
-            |c: Latch1| Flat::Done(vec![Computational::Register(WiredRegister::from(c))]),
+            |c: Register8| Flat::Continue(c.expand()),
+            |c: DFF8| Flat::Continue(c.expand()),
+            |c: DFF| Flat::Done(vec![Computational::DFF(c)]),
             |c: ROM16| Flat::Done(vec![Computational::ROM(c)]),
             |c: MemorySystem16| Flat::Done(vec![Computational::MemorySystem(c)]),
             |c: PC| Flat::Continue(c.expand()),
@@ -691,9 +726,21 @@ where
             |c: Split| Flat::Continue(c.expand()),
             |c: Join| Flat::Continue(c.expand()),
             |c: Decode| Flat::Continue(c.expand()),
-            |c: Register8| Flat::Done(vec![Computational::Register(WiredRegister::from(c)).into()]),
-            |c: Latch8| Flat::Continue(c.expand()),
-            |c: Latch1| Flat::Done(vec![Computational::Register(WiredRegister::from(c)).into()]),
+            |c: Register8| Flat::Done(vec![
+                native::Register {
+                    data_in: c.data_in,
+                    write: c.write,
+                    data_out: c.data_out,
+                }.into()
+            ]),
+            |c: DFF8| Flat::Done(vec![
+                native::Register {
+                    data_in: c.a,
+                    write: fixed(1),
+                    data_out: c.out,
+                }.into()
+            ]),
+            |c: DFF| Flat::Done(vec![Computational::DFF(c).into()]),
             |c: ROM16| Flat::Done(vec![Computational::ROM(c).into()]),
             |c: MemorySystem16| Flat::Done(vec![Computational::MemorySystem(c).into()]),
             |c: PC| Flat::Continue(c.expand()),
@@ -1060,16 +1107,16 @@ mod test {
         let chip = flatten(PC::chip());
         // Note: flattening to computational for simplicity, even though only register is needed
         let counts = count_computational(&chip.components);
-        assert_eq!(counts.nands, 224); // Compare to 223
-        assert_eq!(counts.registers, 3); // 3x8 bits; compare to 1x16
+        assert_eq!(counts.nands, 274); // Compare to 272 (project_03 PC)
+        assert_eq!(counts.dffs, 3 * 8); // 2 8-bit registers and a latch; compare to 1x16
     }
 
     #[test]
     fn cpu_optimal() {
         let chip = flatten(CPU::chip());
         let counts = count_computational(&chip.components);
-        assert_eq!(counts.nands, 845); // Compare to 1126
-        assert_eq!(counts.registers, 11); // 6 8-bit registers, 2 8-bit latches (ALU and PC), and a couple of 1-bit latches for carries and the zr condition
+        assert_eq!(counts.nands, 995); // Compare to 1273
+        assert_eq!(counts.dffs, 67); // 6 8-bit registers, 2 8-bit latches (ALU and PC), and 3 1-bit latches for carries and the zr condition; compare to 48 (3x16)
     }
 
     #[test]
@@ -1091,8 +1138,8 @@ mod test {
     fn computer_optimal() {
         let chip = flatten(Computer::chip());
         let counts = count_computational(&chip.components);
-        assert_eq!(counts.nands, 845); // Compare to 1126
-        assert_eq!(counts.registers, 11);
+        assert_eq!(counts.nands, 995); // Compare to 1273
+        assert_eq!(counts.dffs, 67);
         assert_eq!(counts.roms, 1);
         assert_eq!(counts.memory_systems, 1);
     }

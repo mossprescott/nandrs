@@ -9,14 +9,13 @@ use assignments::project_05::memory_system;
 use assignments::project_06::{Program, assemble};
 use computer::cli::Args;
 use computer::disasm::disassemble;
-use eight::component::{Latch1, Latch8, Register8};
 use eight::computer::{
-    ALU, Add8, And8, CPU, Computer, EightComponentT, Inc8, Join, Mux8, Nand8Way, Neg8, Not8, PC,
-    Split, Zero8, flatten_for_simulation as flatten_eight,
+    ALU, Add8, And8, CPU, Computer, DFF8, EightComponentT, Inc8, Join, Mux8, Nand8Way, Neg8, Not8,
+    PC, Register8, Split, Zero8, flatten_for_simulation as flatten_eight,
 };
 use frunk::coproduct::CoprodInjector;
 use frunk::hlist;
-use simulator::component::{MemorySystem16, ROM16};
+use simulator::component::{DFF, MemorySystem16, ROM16};
 use simulator::simulate::{initialize, synthesize};
 use simulator::word::Word16;
 use simulator::{Chip, Flat, IC, Reflect, flatten_g, print_graph};
@@ -125,8 +124,8 @@ where
             // Project 03+: stop registers, expand PC
             |c: Decode| preserve!(c),
             |c: Register8| preserve!(c),
-            |c: Latch8| eliminate!(c),
-            |c: Latch1| preserve!(c),
+            |c: DFF8| preserve!(c),
+            |c: DFF| preserve!(c),
             |c: ROM16| preserve!(c),
             |c: MemorySystem16| preserve!(c),
             |c: PC| eliminate!(c),
