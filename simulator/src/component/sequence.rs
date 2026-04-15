@@ -1,7 +1,5 @@
-//! Sequential primitives: `Register`, plus the `Sequential` enum combining registers with
+//! Sequential primitives: `DFF`, plus the `Sequential` enum combining registers with
 //! combinational components.
-
-// use std::collections::HashMap;
 
 use crate::declare::BusRef;
 use crate::{Chip, Input1, Interface, Output, Reflect};
