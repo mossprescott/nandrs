@@ -13,23 +13,19 @@ fn dff_behavior() {
     };
     let mut state = simulate::<_, N16, N16>(&chip, MemoryMap::empty());
 
-    assert_eq!(state.get("data_out"), 0u16.into());
+    assert_eq!(state.get("out"), false.into());
+
+    state.set("a", true.into());
+    assert_eq!(state.get("out"), false.into()); // still latched
 
     state.ticktock();
-    assert_eq!(state.get("data_out"), 0u16.into()); // write=0, no change
+    assert_eq!(state.get("out"), true.into()); // latched on tick
 
-    state.set("data_in", 42u16.into());
-    state.set("write", true.into());
-    assert_eq!(state.get("data_out"), 0u16.into()); // still latched, no change
-
-    state.ticktock();
-    assert_eq!(state.get("data_out"), 42u16.into());
-
-    state.set("data_in", 99u16.into());
-    state.set("write", false.into());
+    state.set("a", false.into());
+    assert_eq!(state.get("out"), true.into()); // still latched
 
     state.ticktock();
-    assert_eq!(state.get("data_out"), 42u16.into()); // retained
+    assert_eq!(state.get("out"), false.into());
 }
 
 /// Test RAM's behavior vis-a-vis its inputs and outputs.
