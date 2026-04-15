@@ -58,7 +58,6 @@ impl Register16 {
     expand!([Mux16, DFF], |this| {
         next: Mux16 { a0: this.data_out.into(), a1: this.data_in, sel: this.write, out: Output16::new() },
         for i in 0..16 {
-            // next: Mux { a0: this.data_out.bit(i).into(), a1: this.data_in.bit(i).into(), sel: this.write, out: Output::new() },
             dff: DFF { a: next.out.bit(i).into(), out: this.data_out.bit(i) },
         }
     });
