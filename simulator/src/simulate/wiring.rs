@@ -29,16 +29,8 @@ pub(super) struct WireRef {
 pub(super) enum ComponentWiring {
     // primitve:
     Nand(NandWiring),
-    DFF(DFFWiring),
     Mux(MuxWiring),
     Adder(AdderWiring),
-
-    // external:
-    Register(RegisterWiring),
-    ROM(ROMWiring),
-    RAM(RAMWiring),
-    Serial(SerialWiring),
-    MemorySystem(MemorySystemWiring),
 
     // synthetic:
     And(AndWiring),
@@ -46,6 +38,20 @@ pub(super) enum ComponentWiring {
     RippleAdder(RippleAdderWiring),
     ManyWayAnd(ManyWayAndWiring),
     ShiftWiring(ShiftWiring),
+
+    // stateful
+    Stateful(StatefulWiring),
+}
+
+/// Components that latch values across cycles.
+#[derive(Clone)]
+pub(super) enum StatefulWiring {
+    DFF(DFFWiring),
+    Register(RegisterWiring),
+    ROM(ROMWiring),
+    RAM(RAMWiring),
+    Serial(SerialWiring),
+    MemorySystem(MemorySystemWiring),
 }
 
 //

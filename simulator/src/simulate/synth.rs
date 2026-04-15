@@ -96,11 +96,6 @@ fn fmt_component_tree(
             fmt_bit(n.b),
             fmt_bit(n.out)
         ),
-        wiring::ComponentWiring::DFF(d) => {
-            writeln!(f, "dff   a={} out={}",
-            fmt_bit(d.a),
-            fmt_bit(d.out))
-        },
         wiring::ComponentWiring::Mux(m) => {
             writeln!(f, "mux   sel={} out=w{}[..]", fmt_bit(m.sel), m.out.0)?;
             let c0 = count_components(&m.branch0);
@@ -142,46 +137,6 @@ fn fmt_component_tree(
             fmt_bit(a.c),
             fmt_bit(a.sum),
             fmt_bit(a.carry)
-        ),
-
-        wiring::ComponentWiring::Register(r) => writeln!(
-            f,
-            "reg   write={} in=w{}[..] out=w{}[..]",
-            fmt_bit(r.write),
-            r.data_in.0,
-            r.data_out.0
-        ),
-
-        wiring::ComponentWiring::RAM(r) => writeln!(
-            f,
-            "ram[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
-            r.device_slot,
-            r.addr.0,
-            fmt_bit(r.write),
-            r.data_in.0,
-            r.out.0
-        ),
-        wiring::ComponentWiring::ROM(r) => writeln!(
-            f,
-            "rom[{}]  addr=w{}[..] out=w{}[..]",
-            r.device_slot, r.addr.0, r.out.0
-        ),
-        wiring::ComponentWiring::Serial(s) => writeln!(
-            f,
-            "serial[{}]  write={} in=w{}[..] out=w{}[..]",
-            s.device_slot,
-            fmt_bit(s.write),
-            s.data_in.0,
-            s.out.0
-        ),
-        wiring::ComponentWiring::MemorySystem(m) => writeln!(
-            f,
-            "mem[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
-            m.device_slot,
-            m.addr.0,
-            fmt_bit(m.write),
-            m.data_in.0,
-            m.out.0
         ),
 
         // synthetic:
@@ -229,6 +184,52 @@ fn fmt_component_tree(
             "shift a=w{}[..] offset={} mask={:#06x} out=w{}[..]",
             s.a.0, s.offset, s.mask, s.out.0
         ),
+
+        wiring::ComponentWiring::Stateful(sw) => match sw {
+            wiring::StatefulWiring::DFF(d) => {
+                writeln!(f, "dff   a={} out={}", fmt_bit(d.a), fmt_bit(d.out))
+            }
+
+            wiring::StatefulWiring::Register(r) => writeln!(
+                f,
+                "reg   write={} in=w{}[..] out=w{}[..]",
+                fmt_bit(r.write),
+                r.data_in.0,
+                r.data_out.0
+            ),
+
+            wiring::StatefulWiring::RAM(r) => writeln!(
+                f,
+                "ram[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
+                r.device_slot,
+                r.addr.0,
+                fmt_bit(r.write),
+                r.data_in.0,
+                r.out.0
+            ),
+            wiring::StatefulWiring::ROM(r) => writeln!(
+                f,
+                "rom[{}]  addr=w{}[..] out=w{}[..]",
+                r.device_slot, r.addr.0, r.out.0
+            ),
+            wiring::StatefulWiring::Serial(s) => writeln!(
+                f,
+                "serial[{}]  write={} in=w{}[..] out=w{}[..]",
+                s.device_slot,
+                fmt_bit(s.write),
+                s.data_in.0,
+                s.out.0
+            ),
+            wiring::StatefulWiring::MemorySystem(m) => writeln!(
+                f,
+                "mem[{}]  addr=w{}[..] write={} in=w{}[..] out=w{}[..]",
+                m.device_slot,
+                m.addr.0,
+                fmt_bit(m.write),
+                m.data_in.0,
+                m.out.0
+            ),
+        },
     }
 }
 
@@ -276,7 +277,9 @@ impl<Width: Storable> fmt::Display for ChipWiring<Width> {
         for comp in &self.component_wiring {
             match comp {
                 wiring::ComponentWiring::Mux(_) => muxes += 1,
-                wiring::ComponentWiring::Register(_) => registers += 1,
+                wiring::ComponentWiring::Stateful(wiring::StatefulWiring::Register(_)) => {
+                    registers += 1
+                }
                 _ => {}
             }
         }
@@ -382,19 +385,25 @@ impl<Width: Storable> ChipWiring<Width> {
         for comp in &self.component_wiring {
             match comp {
                 wiring::ComponentWiring::Nand(_) => c.nands += 1,
-                wiring::ComponentWiring::DFF(_) => c.dffs += 1,
                 wiring::ComponentWiring::Mux(_) => c.muxes += 1,
                 wiring::ComponentWiring::Adder(_) => c.adders += 1,
-                wiring::ComponentWiring::Register(_) => c.registers += 1,
-                wiring::ComponentWiring::ROM(_) => c.roms += 1,
-                wiring::ComponentWiring::RAM(_) => c.rams += 1,
-                wiring::ComponentWiring::Serial(_) => c.serials += 1,
-                wiring::ComponentWiring::MemorySystem(_) => c.memory_systems += 1,
                 wiring::ComponentWiring::And(_) => c.ands += 1,
                 wiring::ComponentWiring::ParallelNand(_) => c.parallel_nands += 1,
                 wiring::ComponentWiring::RippleAdder(_) => c.ripple_adders += 1,
                 wiring::ComponentWiring::ManyWayAnd(_) => c.many_way_ands += 1,
                 wiring::ComponentWiring::ShiftWiring(_) => c.shifts += 1,
+                wiring::ComponentWiring::Stateful(wiring::StatefulWiring::DFF(_)) => c.dffs += 1,
+                wiring::ComponentWiring::Stateful(wiring::StatefulWiring::Register(_)) => {
+                    c.registers += 1
+                }
+                wiring::ComponentWiring::Stateful(wiring::StatefulWiring::ROM(_)) => c.roms += 1,
+                wiring::ComponentWiring::Stateful(wiring::StatefulWiring::RAM(_)) => c.rams += 1,
+                wiring::ComponentWiring::Stateful(wiring::StatefulWiring::Serial(_)) => {
+                    c.serials += 1
+                }
+                wiring::ComponentWiring::Stateful(wiring::StatefulWiring::MemorySystem(_)) => {
+                    c.memory_systems += 1
+                }
             }
         }
         c
@@ -601,6 +610,7 @@ where
         .enumerate()
         .flat_map(|(idx, comp)| {
             use wiring::ComponentWiring as CW;
+            use wiring::StatefulWiring as SW;
             match comp {
                 Simulational::Primitive(Computational::Nand(c)) => {
                     let intf = c.reflect();
@@ -623,10 +633,10 @@ where
                 }
                 Simulational::Primitive(Computational::DFF(c)) => {
                     let intf = c.reflect();
-                    Some(CW::DFF(wiring::DFFWiring {
+                    Some(CW::Stateful(SW::DFF(wiring::DFFWiring {
                         a: ref_for(&intf.inputs["a"]),
                         out: ref_for(&intf.outputs["out"]),
-                    }))
+                    })))
                 }
                 Simulational::Mux(c) => {
                     let intf = c.reflect();
@@ -651,47 +661,47 @@ where
                 }
                 Simulational::Register(c) => {
                     let intf = c.reflect();
-                    Some(CW::Register(wiring::RegisterWiring {
+                    Some(CW::Stateful(SW::Register(wiring::RegisterWiring {
                         write: ref_for(&intf.inputs["write"]),
                         data_in: wire_indexes[&intf.inputs["data_in"].id],
                         data_out: wire_indexes[&intf.outputs["data_out"].id],
-                    }))
+                    })))
                 }
                 Simulational::Primitive(Computational::RAM(c)) => {
                     let slot = ram_specs.len();
                     ram_specs.push(RAMSpec { size: c.size });
 
                     let intf = c.reflect();
-                    Some(CW::RAM(wiring::RAMWiring {
+                    Some(CW::Stateful(SW::RAM(wiring::RAMWiring {
                         device_slot: slot,
                         out: wire_indexes[&intf.outputs["data_out"].id],
                         addr: wire_indexes[&intf.inputs["addr"].id],
                         write: ref_for(&intf.inputs["write"]),
                         data_in: wire_indexes[&intf.inputs["data_in"].id],
-                    }))
+                    })))
                 }
                 Simulational::Primitive(Computational::ROM(c)) => {
                     let slot = rom_specs.len();
                     rom_specs.push(ROMSpec { size: c.size });
 
                     let intf = c.reflect();
-                    Some(CW::ROM(wiring::ROMWiring {
+                    Some(CW::Stateful(SW::ROM(wiring::ROMWiring {
                         device_slot: slot,
                         out: wire_indexes[&intf.outputs["out"].id],
                         addr: wire_indexes[&intf.inputs["addr"].id],
-                    }))
+                    })))
                 }
                 Simulational::Primitive(Computational::Serial(c)) => {
                     let slot = serial_specs.len();
                     serial_specs.push(SerialSpec);
 
                     let intf = c.reflect();
-                    Some(CW::Serial(wiring::SerialWiring {
+                    Some(CW::Stateful(SW::Serial(wiring::SerialWiring {
                         device_slot: slot,
                         out: wire_indexes[&intf.outputs["data_out"].id],
                         write: ref_for(&intf.inputs["write"]),
                         data_in: wire_indexes[&intf.inputs["data_in"].id],
-                    }))
+                    })))
                 }
                 Simulational::Primitive(Computational::MemorySystem(c)) => {
                     let slot = ms_specs.len();
@@ -702,19 +712,18 @@ where
                     ms_specs.push(MemorySystemSpec { regions });
 
                     let intf = c.reflect();
-                    Some(CW::MemorySystem(wiring::MemorySystemWiring {
+                    Some(CW::Stateful(SW::MemorySystem(wiring::MemorySystemWiring {
                         device_slot: slot,
                         out: wire_indexes[&intf.outputs["data_out"].id],
                         addr: wire_indexes[&intf.inputs["addr"].id],
                         write: ref_for(&intf.inputs["write"]),
                         data_in: wire_indexes[&intf.inputs["data_in"].id],
-                    }))
+                    })))
                 }
             }
         })
         .collect();
 
-    // Peephole: collapse nand+not into and.
     let mut component_wiring = component_wiring;
     let output_wires: Vec<wiring::WireIndex> = chip
         .reflect()
@@ -722,6 +731,8 @@ where
         .values()
         .map(|b| wire_indexes[&b.id])
         .collect();
+
+    // Peephole: collapse nand+not into and.
     peephole_nand_not(&mut component_wiring, &output_wires);
 
     // Remove gates whose output is never consumed.
@@ -790,6 +801,7 @@ fn peephole_nand_not(
 ) {
     use std::collections::{HashMap as Map, HashSet};
     use wiring::ComponentWiring as CW;
+    use wiring::StatefulWiring as SW;
 
     // For each wire bit, track the set of distinct component indices that consume it.
     // Also track wires consumed as a bus (WireIndex) — those can't be optimized.
@@ -811,7 +823,7 @@ fn peephole_nand_not(
                     .or_default()
                     .insert(i);
             }
-            CW::DFF(d) => {
+            CW::Stateful(SW::DFF(d)) => {
                 wire_consumers
                     .entry((d.a.id.0, d.a.offset))
                     .or_default()
@@ -864,14 +876,17 @@ fn peephole_nand_not(
                     .or_default()
                     .insert(i);
             }
-            CW::Register(r) => {
+            CW::ShiftWiring(s) => {
+                bus_consumed.insert(s.a.0);
+            }
+            CW::Stateful(SW::Register(r)) => {
                 wire_consumers
                     .entry((r.write.id.0, r.write.offset))
                     .or_default()
                     .insert(i);
                 bus_consumed.insert(r.data_in.0);
             }
-            CW::RAM(r) => {
+            CW::Stateful(SW::RAM(r)) => {
                 wire_consumers
                     .entry((r.write.id.0, r.write.offset))
                     .or_default()
@@ -879,26 +894,23 @@ fn peephole_nand_not(
                 bus_consumed.insert(r.data_in.0);
                 bus_consumed.insert(r.addr.0);
             }
-            CW::ROM(r) => {
+            CW::Stateful(SW::ROM(r)) => {
                 bus_consumed.insert(r.addr.0);
             }
-            CW::Serial(s) => {
+            CW::Stateful(SW::Serial(s)) => {
                 wire_consumers
                     .entry((s.write.id.0, s.write.offset))
                     .or_default()
                     .insert(i);
                 bus_consumed.insert(s.data_in.0);
             }
-            CW::MemorySystem(m) => {
+            CW::Stateful(SW::MemorySystem(m)) => {
                 wire_consumers
                     .entry((m.write.id.0, m.write.offset))
                     .or_default()
                     .insert(i);
                 bus_consumed.insert(m.data_in.0);
                 bus_consumed.insert(m.addr.0);
-            }
-            CW::ShiftWiring(s) => {
-                bus_consumed.insert(s.a.0);
             }
         }
     }
@@ -972,6 +984,7 @@ fn eliminate_dead_gates(
 ) {
     use std::collections::HashSet;
     use wiring::ComponentWiring as CW;
+    use wiring::StatefulWiring as SW;
 
     loop {
         // Collect all consumed wire bits and bus-consumed wires.
@@ -986,7 +999,7 @@ fn eliminate_dead_gates(
                     consumed_bits.insert((n.a.id.0, n.a.offset));
                     consumed_bits.insert((n.b.id.0, n.b.offset));
                 }
-                CW::DFF(d) => {
+                CW::Stateful(SW::DFF(d)) => {
                     consumed_bits.insert((d.a.id.0, d.a.offset));
                 }
                 CW::And(n) => {
@@ -1015,29 +1028,29 @@ fn eliminate_dead_gates(
                     consumed_bits.insert((a.b.id.0, a.b.offset));
                     consumed_bits.insert((a.c.id.0, a.c.offset));
                 }
-                CW::Register(r) => {
+                CW::ShiftWiring(s) => {
+                    bus_consumed.insert(s.a.0);
+                }
+                CW::Stateful(SW::Register(r)) => {
                     consumed_bits.insert((r.write.id.0, r.write.offset));
                     bus_consumed.insert(r.data_in.0);
                 }
-                CW::RAM(r) => {
+                CW::Stateful(SW::RAM(r)) => {
                     consumed_bits.insert((r.write.id.0, r.write.offset));
                     bus_consumed.insert(r.data_in.0);
                     bus_consumed.insert(r.addr.0);
                 }
-                CW::ROM(r) => {
+                CW::Stateful(SW::ROM(r)) => {
                     bus_consumed.insert(r.addr.0);
                 }
-                CW::Serial(s) => {
+                CW::Stateful(SW::Serial(s)) => {
                     consumed_bits.insert((s.write.id.0, s.write.offset));
                     bus_consumed.insert(s.data_in.0);
                 }
-                CW::MemorySystem(m) => {
+                CW::Stateful(SW::MemorySystem(m)) => {
                     consumed_bits.insert((m.write.id.0, m.write.offset));
                     bus_consumed.insert(m.data_in.0);
                     bus_consumed.insert(m.addr.0);
-                }
-                CW::ShiftWiring(s) => {
-                    bus_consumed.insert(s.a.0);
                 }
             }
         }
@@ -1541,6 +1554,7 @@ fn populate_mux_branches(
 ) {
     use std::collections::HashSet;
     use wiring::ComponentWiring as CW;
+    use wiring::StatefulWiring as SW;
 
     // For each wire, which component indices consume it?
     let mut consumers: HashMap<wiring::WireIndex, HashSet<usize>> = HashMap::new();
@@ -1553,9 +1567,6 @@ fn populate_mux_branches(
             CW::Nand(n) => {
                 add_consumer(n.a.id, j);
                 add_consumer(n.b.id, j);
-            }
-            CW::DFF(d) => {
-                add_consumer(d.a.id, j);
             }
             CW::And(n) => {
                 add_consumer(n.a.id, j);
@@ -1583,30 +1594,35 @@ fn populate_mux_branches(
                 add_consumer(a.b.id, j);
                 add_consumer(a.c.id, j);
             }
-            CW::Register(r) => {
-                add_consumer(r.write.id, j);
-                add_consumer(r.data_in, j);
-            }
-            CW::RAM(r) => {
-                add_consumer(r.write.id, j);
-                add_consumer(r.data_in, j);
-                add_consumer(r.addr, j);
-            }
-            CW::ROM(r) => {
-                add_consumer(r.addr, j);
-            }
-            CW::Serial(s) => {
-                add_consumer(s.write.id, j);
-                add_consumer(s.data_in, j);
-            }
-            CW::MemorySystem(m) => {
-                add_consumer(m.write.id, j);
-                add_consumer(m.data_in, j);
-                add_consumer(m.addr, j);
-            }
             CW::ShiftWiring(s) => {
                 add_consumer(s.a, j);
             }
+            CW::Stateful(sw) => match sw {
+                SW::DFF(d) => {
+                    add_consumer(d.a.id, j);
+                }
+                SW::Register(r) => {
+                    add_consumer(r.write.id, j);
+                    add_consumer(r.data_in, j);
+                }
+                SW::RAM(r) => {
+                    add_consumer(r.write.id, j);
+                    add_consumer(r.data_in, j);
+                    add_consumer(r.addr, j);
+                }
+                SW::ROM(r) => {
+                    add_consumer(r.addr, j);
+                }
+                SW::Serial(s) => {
+                    add_consumer(s.write.id, j);
+                    add_consumer(s.data_in, j);
+                }
+                SW::MemorySystem(m) => {
+                    add_consumer(m.write.id, j);
+                    add_consumer(m.data_in, j);
+                    add_consumer(m.addr, j);
+                }
+            },
         }
     }
     // Extra consumers (chip outputs) use a sentinel index that will never be claimed.
@@ -1633,7 +1649,7 @@ fn populate_mux_branches(
                 producers.entry(a.sum.id).or_default().push(j);
                 producers.entry(a.carry.id).or_default().push(j);
             }
-            _ => {}
+            CW::Stateful(_) => {}
         }
     }
 
@@ -1642,19 +1658,19 @@ fn populate_mux_branches(
         // TODO: use reflect()?
         match comp {
             CW::Nand(n) => vec![n.a.id, n.b.id],
-            CW::DFF(d) => vec![d.a.id],
             CW::And(a) => vec![a.a.id, a.b.id],
             CW::ParallelNand(n) => vec![n.a, n.b],
             CW::RippleAdder(a) => vec![a.a, a.b, a.carry_in.id],
             CW::ManyWayAnd(m) => vec![m.a],
             CW::Mux(m) => vec![m.sel.id, m.a0, m.a1],
             CW::Adder(a) => vec![a.a.id, a.b.id, a.c.id],
-            CW::Register(r) => vec![r.write.id, r.data_in],
-            CW::RAM(r) => vec![r.write.id, r.data_in, r.addr],
-            CW::ROM(r) => vec![r.addr],
-            CW::Serial(s) => vec![s.write.id, s.data_in],
-            CW::MemorySystem(m) => vec![m.write.id, m.data_in, m.addr],
             CW::ShiftWiring(s) => vec![s.a],
+            CW::Stateful(SW::DFF(d)) => vec![d.a.id],
+            CW::Stateful(SW::Register(r)) => vec![r.write.id, r.data_in],
+            CW::Stateful(SW::RAM(r)) => vec![r.write.id, r.data_in, r.addr],
+            CW::Stateful(SW::ROM(r)) => vec![r.addr],
+            CW::Stateful(SW::Serial(s)) => vec![s.write.id, s.data_in],
+            CW::Stateful(SW::MemorySystem(m)) => vec![m.write.id, m.data_in, m.addr],
         }
     }
 

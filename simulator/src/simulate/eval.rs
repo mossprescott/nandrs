@@ -239,62 +239,69 @@ impl<A: Nat + Storable, D: Nat + Storable> ChipState<A, D> {
         self.dirty = false;
         self.evaluate();
 
+        // Record values to be latched for future cycles:
         for comp in &self.wiring.component_wiring {
-            match comp {
-                wiring::ComponentWiring::DFF(dff) => {
-                    let val = read_bit(&self.wire_state, dff.a);
-                    write_bit(&mut self.reg_state, dff.out, val);
-                }
-                wiring::ComponentWiring::Register(reg) => {
-                    if read_bit(&self.wire_state, reg.write) {
-                        self.reg_state[reg.data_out.0 as usize] =
-                            self.wire_state[reg.data_in.0 as usize];
+            if let wiring::ComponentWiring::Stateful(sw) = comp {
+                match sw {
+                    wiring::StatefulWiring::DFF(dff) => {
+                        let val = read_bit(&self.wire_state, dff.a);
+                        write_bit(&mut self.reg_state, dff.out, val);
+                    }
+                    wiring::StatefulWiring::Register(reg) => {
+                        if read_bit(&self.wire_state, reg.write) {
+                            self.reg_state[reg.data_out.0 as usize] =
+                                self.wire_state[reg.data_in.0 as usize];
+                        }
+                    }
+                    wiring::StatefulWiring::RAM(ram) => {
+                        if read_bit(&self.wire_state, ram.write) {
+                            let _ = self.ram_devices[ram.device_slot]
+                                .borrow_mut()
+                                .write(Word::new(self.wire_state[ram.data_in.0 as usize]));
+                        }
+                    }
+                    wiring::StatefulWiring::ROM(_) => {
+                        // No writes to worry about
+                    }
+                    wiring::StatefulWiring::MemorySystem(ms) => {
+                        if read_bit(&self.wire_state, ms.write) {
+                            let _ = self.ms_devices[ms.device_slot]
+                                .borrow_mut()
+                                .write(Word::new(self.wire_state[ms.data_in.0 as usize]));
+                        }
+                    }
+                    wiring::StatefulWiring::Serial(s) => {
+                        if read_bit(&self.wire_state, s.write) {
+                            let word: Word<D> = Word::new(self.wire_state[s.data_in.0 as usize]);
+                            let _ = <device::Serial<D> as device::MemoryDevice<A, D>>::write(
+                                &mut *self.serial_devices[s.device_slot].borrow_mut(),
+                                word,
+                            );
+                        }
                     }
                 }
-                wiring::ComponentWiring::RAM(ram) => {
-                    if read_bit(&self.wire_state, ram.write) {
-                        let _ = self.ram_devices[ram.device_slot]
-                            .borrow_mut()
-                            .write(Word::new(self.wire_state[ram.data_in.0 as usize]));
-                    }
-                }
-                wiring::ComponentWiring::MemorySystem(ms) => {
-                    if read_bit(&self.wire_state, ms.write) {
-                        let _ = self.ms_devices[ms.device_slot]
-                            .borrow_mut()
-                            .write(Word::new(self.wire_state[ms.data_in.0 as usize]));
-                    }
-                }
-                wiring::ComponentWiring::Serial(s) => {
-                    if read_bit(&self.wire_state, s.write) {
-                        let word: Word<D> = Word::new(self.wire_state[s.data_in.0 as usize]);
-                        let _ = <device::Serial<D> as device::MemoryDevice<A, D>>::write(
-                            &mut *self.serial_devices[s.device_slot].borrow_mut(),
-                            word,
-                        );
-                    }
-                }
-                _ => {}
             }
         }
 
         // Latch RAM and MS addr from the initial wire_state so the re-evaluate below
         // shows the correct memory data.
         for comp in &self.wiring.component_wiring {
-            match comp {
-                wiring::ComponentWiring::RAM(ram) => {
-                    let _ = self.ram_devices[ram.device_slot]
-                        .borrow_mut()
-                        .set_addr(Word::new(self.wire_state[ram.addr.0 as usize]));
-                    self.ram_devices[ram.device_slot].borrow_mut().ticktock();
+            if let wiring::ComponentWiring::Stateful(sw) = comp {
+                match sw {
+                    wiring::StatefulWiring::RAM(ram) => {
+                        let _ = self.ram_devices[ram.device_slot]
+                            .borrow_mut()
+                            .set_addr(Word::new(self.wire_state[ram.addr.0 as usize]));
+                        self.ram_devices[ram.device_slot].borrow_mut().ticktock();
+                    }
+                    wiring::StatefulWiring::MemorySystem(ms) => {
+                        let _ = self.ms_devices[ms.device_slot]
+                            .borrow_mut()
+                            .set_addr(Word::new(self.wire_state[ms.addr.0 as usize]));
+                        self.ms_devices[ms.device_slot].borrow_mut().ticktock();
+                    }
+                    _ => {}
                 }
-                wiring::ComponentWiring::MemorySystem(ms) => {
-                    let _ = self.ms_devices[ms.device_slot]
-                        .borrow_mut()
-                        .set_addr(Word::new(self.wire_state[ms.addr.0 as usize]));
-                    self.ms_devices[ms.device_slot].borrow_mut().ticktock();
-                }
-                _ => {}
             }
         }
 
@@ -306,7 +313,7 @@ impl<A: Nat + Storable, D: Nat + Storable> ChipState<A, D> {
         // instruction, which lets the CPU's feed-forward next_addr_mux set the right MS
         // addr latch for the cycle after.
         for comp in &self.wiring.component_wiring {
-            if let wiring::ComponentWiring::ROM(rom) = comp {
+            if let wiring::ComponentWiring::Stateful(wiring::StatefulWiring::ROM(rom)) = comp {
                 let _ = self.rom_devices[rom.device_slot]
                     .borrow_mut()
                     .set_addr(Word::new(self.wire_state[rom.addr.0 as usize]));
@@ -323,41 +330,49 @@ impl<A: Nat + Storable, D: Nat + Storable> ChipState<A, D> {
             write_bus(&mut self.wire_state, wr, val);
         }
 
-        // Seed RAM/ROM/MS outputs from their current addr input.
+        // Seed RAM/ROM/MS outputs (using latched addr input.)
         // The addr wire is either an external chip input (seeded above) or a register output
         // (seeded from reg_state above), so it's available in wire_state before the Nand passes.
+        // TODO: only stateful components used here
         for comp in &self.wiring.component_wiring {
-            match comp {
-                wiring::ComponentWiring::RAM(ram) => {
-                    self.wire_state[ram.out.0 as usize] = self.ram_devices[ram.device_slot]
-                        .borrow()
-                        .read()
-                        .map(|w| w.unsigned())
-                        .unwrap_or(0);
+            if let wiring::ComponentWiring::Stateful(sw) = comp {
+                match sw {
+                    wiring::StatefulWiring::DFF(_) => {
+                        // DFFs handled separately in reg_state
+                    }
+                    wiring::StatefulWiring::Register(_) => {
+                        // Registers handled separately in reg_state
+                    }
+                    wiring::StatefulWiring::RAM(ram) => {
+                        self.wire_state[ram.out.0 as usize] = self.ram_devices[ram.device_slot]
+                            .borrow()
+                            .read()
+                            .map(|w| w.unsigned())
+                            .unwrap_or(0);
+                    }
+                    wiring::StatefulWiring::ROM(rom) => {
+                        self.wire_state[rom.out.0 as usize] = self.rom_devices[rom.device_slot]
+                            .borrow()
+                            .read()
+                            .map(|w| w.unsigned())
+                            .unwrap_or(0);
+                    }
+                    wiring::StatefulWiring::MemorySystem(ms) => {
+                        self.wire_state[ms.out.0 as usize] = self.ms_devices[ms.device_slot]
+                            .borrow()
+                            .read()
+                            .map(|w| w.unsigned())
+                            .unwrap_or(0);
+                    }
+                    wiring::StatefulWiring::Serial(s) => {
+                        self.wire_state[s.out.0 as usize] =
+                            <device::Serial<D> as device::MemoryDevice<A, D>>::read(
+                                &*self.serial_devices[s.device_slot].borrow(),
+                            )
+                            .map(|w| w.unsigned())
+                            .unwrap_or(0);
+                    }
                 }
-                wiring::ComponentWiring::ROM(rom) => {
-                    self.wire_state[rom.out.0 as usize] = self.rom_devices[rom.device_slot]
-                        .borrow()
-                        .read()
-                        .map(|w| w.unsigned())
-                        .unwrap_or(0);
-                }
-                wiring::ComponentWiring::MemorySystem(ms) => {
-                    self.wire_state[ms.out.0 as usize] = self.ms_devices[ms.device_slot]
-                        .borrow()
-                        .read()
-                        .map(|w| w.unsigned())
-                        .unwrap_or(0);
-                }
-                wiring::ComponentWiring::Serial(s) => {
-                    self.wire_state[s.out.0 as usize] =
-                        <device::Serial<D> as device::MemoryDevice<A, D>>::read(
-                            &*self.serial_devices[s.device_slot].borrow(),
-                        )
-                        .map(|w| w.unsigned())
-                        .unwrap_or(0);
-                }
-                _ => {}
             }
         }
 
