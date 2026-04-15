@@ -2,7 +2,7 @@ use crate::project_01::{And, And16, Buffer, Mux, Mux16, Nand, Not, Not16};
 use crate::project_02::{ALU, Add16, FullAdder, HalfAdder, Inc16, Nand16Way, Neg16, Zero16};
 use frunk::coproduct::CoprodInjector;
 use frunk::{Coprod, hlist};
-use simulator::component::{Register16, Sequential, WiredRegister};
+use simulator::component::{DFF, Sequential};
 use simulator::declare::{BusRef, Interface};
 use simulator::{
     self, Chip, Flat, IC, Input1, Input16, Output16, Reflect, expand, fixed, flatten_g,
@@ -10,7 +10,7 @@ use simulator::{
 
 pub type Project03 = Coprod!(
     Nand, Buffer, Not, And, Mux, Mux16, Not16, And16, HalfAdder, FullAdder, Inc16, Add16,
-    Nand16Way, Zero16, Neg16, ALU, Register16, PC
+    Nand16Way, Zero16, Neg16, ALU, DFF, Register16, PC
 );
 
 /// Recursively expand until only Nands and Registers are left.
@@ -39,10 +39,28 @@ where
             |c: Zero16| Flat::Continue(c.expand()),
             |c: Neg16| Flat::Continue(c.expand()),
             |c: ALU| Flat::Continue(c.expand()),
-            |c: Register16| Flat::Done(vec![Sequential::Register(WiredRegister::from(c))]),
+            |c: DFF| Flat::Done(vec![Sequential::DFF(c)]),
+            |c: Register16| Flat::Continue(c.expand()),
             |c: PC| Flat::Continue(c.expand()),
         ],
     )
+}
+
+/// 16-bit wide register made out of DFFs.
+#[derive(Clone, Reflect, Chip)]
+pub struct Register16 {
+    pub data_in: Input16,
+    pub write: Input1,
+    pub data_out: Output16,
+}
+
+impl Register16 {
+    expand!([Mux16, DFF], |this| {
+        next: Mux16 { a0: this.data_out.into(), a1: this.data_in, sel: this.write, out: Output16::new() },
+        for i in 0..16 {
+            dff: DFF { a: next.out.bit(i).into(), out: this.data_out.bit(i) },
+        }
+    });
 }
 
 /// Program counter component, including a register storing the current instruction address.

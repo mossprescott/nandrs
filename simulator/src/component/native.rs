@@ -78,6 +78,49 @@ pub struct Adder {
     pub carry: Output,
 }
 
+/// Arbitrary bit-width register, using a single word of state and a single operation to write.
+pub struct Register<Width: Nat> {
+    pub data_in: Input<Width>,
+    pub write: Input1,
+    pub data_out: OutputBus<Width>,
+}
+
+/// Runtime-width register, produced by converting a `Register<Width>`.  Used in `Simulational`.
+#[derive(Clone)]
+pub struct WiredRegister {
+    pub width: usize,
+
+    pub data_in: BusRef,
+    pub write: BusRef,
+    pub data_out: BusRef,
+}
+
+impl Reflect for WiredRegister {
+    fn name(&self) -> String {
+        "Register".to_string()
+    }
+
+    fn reflect(&self) -> Interface {
+        Interface {
+            inputs: HashMap::from([
+                ("data_in".to_string(), self.data_in),
+                ("write".to_string(), self.write),
+            ]),
+            outputs: HashMap::from([("data_out".to_string(), self.data_out)]),
+        }
+    }
+}
+
+impl<Width: Nat> From<Register<Width>> for WiredRegister {
+    fn from(c: Register<Width>) -> Self {
+        WiredRegister {
+            width: Width::as_int(),
+            data_in: BusRef::from_input(c.data_in),
+            write: BusRef::from_input(c.write),
+            data_out: BusRef::from_output(c.data_out),
+        }
+    }
+}
 /// The type of components that participate in computers for simulation purposes: this includes the
 /// native components here in addition to the actual primitives of the Computational type.
 #[derive(Clone, Reflect)]
@@ -85,6 +128,7 @@ pub enum Simulational<A: Nat, D: Nat> {
     Primitive(Computational<A, D>),
     Mux(WiredMux),
     Adder(Adder),
+    Register(WiredRegister),
 }
 
 impl<A: Nat, D: Nat> From<Computational<A, D>> for Simulational<A, D> {
@@ -99,7 +143,7 @@ impl<A: Nat, D: Nat> From<crate::component::Sequential> for Simulational<A, D> {
         Simulational::Primitive(match s {
             Sequential::Nand(n) => Computational::Nand(n),
             Sequential::Buffer(b) => Computational::Buffer(b),
-            Sequential::Register(r) => Computational::Register(r),
+            Sequential::DFF(r) => Computational::DFF(r),
         })
     }
 }
@@ -116,6 +160,12 @@ impl<A: Nat, D: Nat, Width: Nat> From<Mux<Width>> for Simulational<A, D> {
     }
 }
 
+impl<A: Nat, D: Nat, Width: Nat> From<Register<Width>> for Simulational<A, D> {
+    fn from(c: Register<Width>) -> Self {
+        Simulational::Register(c.into())
+    }
+}
+
 impl<A: Nat, D: Nat> From<Adder> for Simulational<A, D> {
     fn from(c: Adder) -> Self {
         Simulational::Adder(c)
@@ -126,6 +176,7 @@ pub struct SimulationalCounts {
     pub primitive: ComputationalCounts,
     pub muxes: usize,
     pub adders: usize,
+    pub registers: usize,
 }
 
 pub fn count_simulational<A: Nat, D: Nat>(components: &[Simulational<A, D>]) -> SimulationalCounts {
@@ -133,7 +184,7 @@ pub fn count_simulational<A: Nat, D: Nat>(components: &[Simulational<A, D>]) -> 
         primitive: ComputationalCounts {
             nands: 0,
             buffers: 0,
-            registers: 0,
+            dffs: 0,
             rams: 0,
             roms: 0,
             serials: 0,
@@ -141,13 +192,14 @@ pub fn count_simulational<A: Nat, D: Nat>(components: &[Simulational<A, D>]) -> 
         },
         muxes: 0,
         adders: 0,
+        registers: 0,
     };
     for comp in components {
         match comp {
             Simulational::Primitive(p) => match p {
                 Computational::Nand(_) => counts.primitive.nands += 1,
                 Computational::Buffer(_) => counts.primitive.buffers += 1,
-                Computational::Register(_) => counts.primitive.registers += 1,
+                Computational::DFF(_) => counts.primitive.dffs += 1,
                 Computational::RAM(_) => counts.primitive.rams += 1,
                 Computational::ROM(_) => counts.primitive.roms += 1,
                 Computational::Serial(_) => counts.primitive.serials += 1,
@@ -155,6 +207,7 @@ pub fn count_simulational<A: Nat, D: Nat>(components: &[Simulational<A, D>]) -> 
             },
             Simulational::Mux(_) => counts.muxes += 1,
             Simulational::Adder(_) => counts.adders += 1,
+            Simulational::Register(_) => counts.registers += 1,
         }
     }
     counts

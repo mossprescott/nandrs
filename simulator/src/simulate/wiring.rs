@@ -39,6 +39,7 @@ pub(super) struct WireRef {
 pub(super) enum ComponentWiring {
     // primitve:
     Nand(NandWiring),
+    DFF(DFFWiring),
     Mux(MuxWiring),
     Adder(AdderWiring),
 
@@ -67,6 +68,14 @@ pub(super) enum ComponentWiring {
 pub(super) struct NandWiring {
     pub(super) a: BitRef,
     pub(super) b: BitRef,
+    pub(super) out: BitRef,
+}
+
+/// Single-bit delay. Note that most uses are re-written as multiple-bit Registers, but this is here
+/// for the exceptions.
+#[derive(Clone)]
+pub(super) struct DFFWiring {
+    pub(super) a: BitRef,
     pub(super) out: BitRef,
 }
 

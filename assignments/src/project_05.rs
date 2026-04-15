@@ -1,12 +1,9 @@
 use crate::project_01::{And, And16, Buffer, Mux, Mux16, Nand, Not, Not16, Or};
 use crate::project_02::{ALU, Add16, FullAdder, HalfAdder, Inc16, Nand16Way, Neg16, Zero16};
-use crate::project_03::PC;
+use crate::project_03::{PC, Register16};
 use frunk::coproduct::CoprodInjector;
 use frunk::{Coprod, hlist};
-use simulator::component::native;
-use simulator::component::{
-    Computational, Computational16, MemorySystem16, ROM16, Register16, WiredRegister,
-};
+use simulator::component::{Computational, Computational16, DFF, MemorySystem16, ROM16, native};
 use simulator::declare::{BusRef, Interface};
 use simulator::nat::N16;
 use simulator::simulate::{
@@ -35,6 +32,7 @@ pub type Project05 = Coprod!(
     Zero16,
     Neg16,
     ALU,
+    DFF,
     Register16,
     PC,
     ROM16,
@@ -71,7 +69,8 @@ where
             |c: Zero16| Flat::Continue(c.expand()),
             |c: Neg16| Flat::Continue(c.expand()),
             |c: ALU| Flat::Continue(c.expand()),
-            |c: Register16| Flat::Done(vec![Computational::Register(WiredRegister::from(c))]),
+            |c: DFF| Flat::Done(vec![Computational::DFF(c)]),
+            |c: Register16| Flat::Continue(c.expand()),
             |c: PC| Flat::Continue(c.expand()),
             |c: ROM16| Flat::Done(vec![Computational::ROM(c)]),
             |c: MemorySystem16| Flat::Done(vec![Computational::MemorySystem(c)]),
@@ -82,7 +81,7 @@ where
     )
 }
 
-/// Like `flatten`, but replaces adders and muxes with native versions for efficient simulation.
+/// Like `flatten`, but replaces Mux/Adder/Registers with native versions for efficient simulation.
 pub fn flatten_for_simulation<C, Idx>(chip: C) -> IC<native::Simulational<N16, N16>>
 where
     C: Reflect,
@@ -110,11 +109,18 @@ where
             |c: Zero16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
             |c: Neg16| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
             |c: ALU| Flat::Done(crate::project_02::flatten_for_simulation(c).components),
-            // Project05-specific types:
-            |c: Register16| Flat::Done(vec![
-                Computational::Register(WiredRegister::from(c)).into()
-            ]),
+            // Project03:
+            |c: DFF| Flat::Done(vec![Computational::DFF(c).into()]),
+            |c: Register16| Flat::Done(vec![native::Simulational::Register(
+                native::Register {
+                    data_in: c.data_in,
+                    write: c.write,
+                    data_out: c.data_out
+                }
+                .into()
+            )]),
             |c: PC| Flat::Continue(c.expand()),
+            // Project05-specific types:
             |c: ROM16| Flat::Done(vec![Computational::ROM(c).into()]),
             |c: MemorySystem16| Flat::Done(vec![Computational::MemorySystem(c).into()]),
             |c: Decode| Flat::Continue(c.expand()),
