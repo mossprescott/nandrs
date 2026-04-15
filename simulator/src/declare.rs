@@ -7,7 +7,7 @@ use crate::nat::{N1, N16, Nat};
 static NEXT_ID: AtomicUsize = AtomicUsize::new(1);
 
 /// Unique identity of a wire (bus). Two bus ends with the same `WireId` are connected.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct WireId(pub usize);
 
 impl WireId {

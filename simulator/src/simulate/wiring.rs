@@ -1,22 +1,12 @@
 use std::collections::HashMap;
 
-use crate::declare::BusRef;
-
-/// Arbitrary (ptr) value identifying a wire's storage location. Used only during synthesis.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(super) struct WireID(usize);
-
-impl From<&BusRef> for WireID {
-    fn from(busref: &BusRef) -> Self {
-        WireID(busref.id.0)
-    }
-}
+use crate::declare::WireId;
 
 /// Index of a wire's storage slot within a flat buffer.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct WireIndex(pub(super) u32);
 
-pub(super) type Indexes = HashMap<WireID, WireIndex>;
+pub(super) type Indexes = HashMap<WireId, WireIndex>;
 
 /// Location of the storage for a single-bit wire, at a certain word index and bit offset within the word.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
