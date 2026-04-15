@@ -79,6 +79,7 @@ pub struct Adder {
 }
 
 /// Arbitrary bit-width register, using a single word of state and a single operation to write.
+#[derive(Reflect, Chip)]
 pub struct Register<Width: Nat> {
     pub data_in: Input<Width>,
     pub write: Input1,

@@ -1,4 +1,4 @@
-use crate::component::{Computational16, RAM16, DFF, Sequential, Serial16};
+use crate::component::{Computational16, RAM16, DFF, Sequential, Serial16, native};
 use crate::declare::{Chip as _, IC, Reflect as _};
 use crate::nat::N16;
 use crate::simulate::{BusResident, MemoryMap, simulate};
@@ -27,6 +27,39 @@ fn dff_behavior() {
     state.ticktock();
     assert_eq!(state.get("out"), false.into());
 }
+
+#[test]
+fn register_behavior() {
+    let reg: native::Register<N16> = native::Register::chip();
+    let chip: IC<native::Simulational<N16, N16>> = IC {
+        name: reg.name().to_string(),
+        intf: reg.reflect(),
+        components: vec![reg.into()],
+    };
+    let mut state = simulate::<_, N16, N16>(&chip, MemoryMap::empty());
+
+    assert_eq!(state.get("data_out"), 0u16.into());
+
+    state.ticktock();
+    assert_eq!(state.get("data_out"), 0u16.into()); // write=0, no change
+
+    state.set("data_in", 42u16.into());
+    state.set("write", true.into());
+    assert_eq!(state.get("data_out"), 0u16.into()); // still latched, no change
+
+    state.ticktock();
+    assert_eq!(state.get("data_out"), 42u16.into());
+
+    state.set("data_in", 99u16.into());
+    state.set("write", false.into());
+
+    state.ticktock();
+    assert_eq!(state.get("data_out"), 42u16.into()); // retained
+}
+
+
+// TODO: test each "native" component directly?
+
 
 /// Test RAM's behavior vis-a-vis its inputs and outputs.
 ///
@@ -129,5 +162,3 @@ fn serial_behavior() {
     assert_eq!(state.get("data_out"), 42u16.into());
     assert_eq!(handle.pull(), 5678u16.into()); // last chip write still available
 }
-
-// TODO: test each "native" component directly?
