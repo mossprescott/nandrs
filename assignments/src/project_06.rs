@@ -129,6 +129,25 @@ pub fn parse_statement(line: &str) -> Result<Option<Statement>, Error> {
         };
     }
 
+    // Data literal: #value (any 16-bit integer, signed or unsigned)
+    if let Some(rest) = line.strip_prefix('#') {
+        if rest.is_empty() {
+            return Err(Error::InvalidSymbolName);
+        }
+        if let Some(hex) = rest.strip_prefix("0x").or_else(|| rest.strip_prefix("0X")) {
+            return match u32::from_str_radix(hex, 16) {
+                Ok(n) if n <= 0xffff => Ok(Some(Statement::Literal(n as u16))),
+                Ok(_) => Err(Error::OutOfRange),
+                Err(_) => Err(Error::InvalidSymbolName),
+            };
+        }
+        return match rest.parse::<i32>() {
+            Ok(n) if (-0x8000..=0xffff).contains(&n) => Ok(Some(Statement::Literal(n as u16))),
+            Ok(_) => Err(Error::OutOfRange),
+            Err(_) => Err(Error::InvalidSymbolName),
+        };
+    }
+
     // C-instruction: [dest=]comp[;jump]
     let (dest, rest) = if let Some(eq) = line.find('=') {
         (&line[..eq], &line[eq + 1..])

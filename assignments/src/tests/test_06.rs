@@ -198,3 +198,24 @@ fn parse_hex_constants() {
 
     assert_eq!(parse_statement("@0x8000"), Err(Error::OutOfRange));
 }
+
+#[test]
+fn parse_data() {
+    use crate::project_06::Statement::Literal;
+
+    // Ordinary values:
+    assert_eq!(parse_statement("#0"), Ok(Some(Literal(0x0000))));
+    assert_eq!(parse_statement("#256"), Ok(Some(Literal(0x0100))));
+    assert_eq!(parse_statement("#32767"), Ok(Some(Literal(0x7fff))));
+
+    // Hex values:
+    assert_eq!(parse_statement("#0x0"), Ok(Some(Literal(0x0000))));
+    assert_eq!(parse_statement("#0x0100"), Ok(Some(Literal(0x0100))));
+    assert_eq!(parse_statement("#0x7ABC"), Ok(Some(Literal(0x7abc))));
+
+    // Not valid for "@-":
+    assert_eq!(parse_statement("#-1"), Ok(Some(Literal(0xffff))));
+    assert_eq!(parse_statement("#-32768"), Ok(Some(Literal(0x8000))));
+    assert_eq!(parse_statement("#0x8000"), Ok(Some(Literal(0x8000))));
+    assert_eq!(parse_statement("#0xFFFF"), Ok(Some(Literal(0xffff))));
+}
