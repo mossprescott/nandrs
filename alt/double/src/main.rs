@@ -30,7 +30,7 @@ fn main() {
         std::process::exit(1);
     });
 
-    let program = assemble(&src).unwrap_or_else(|(e, line)| {
+    let program = assemble(&src, 0).unwrap_or_else(|(e, line)| {
         eprintln!("assembly error on {:?}: {:?}", line, e);
         std::process::exit(1);
     });

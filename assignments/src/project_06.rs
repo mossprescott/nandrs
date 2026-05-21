@@ -214,7 +214,7 @@ pub struct Program {
 }
 
 /// Consume source text, producing a buffer of 16-bit instruction values.
-pub fn assemble(src: &str) -> Result<Program, (Error, String)> {
+pub fn assemble(src: &str, start_addr: u16) -> Result<Program, (Error, String)> {
     // Predefined symbols
     let mut symbols: HashMap<String, u16> = HashMap::new();
     for i in 0u16..=15 {
@@ -240,7 +240,7 @@ pub fn assemble(src: &str) -> Result<Program, (Error, String)> {
 
     // Pass 1: assign ROM addresses to labels.
     let mut labels: HashMap<String, u16> = HashMap::new();
-    let mut rom_addr: u16 = 0;
+    let mut rom_addr: u16 = start_addr;
     for stmt in &stmts {
         match stmt {
             Statement::Label(Label(name)) => {
